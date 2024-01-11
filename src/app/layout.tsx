@@ -1,6 +1,10 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
+// import 'bootstrap/dist/css/bootstrap.css';
+
 import './globals.css'
+import Navbar from '@/components/Navbar';
+import Script from 'next/script';
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -16,7 +20,22 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
-    </html>
+      <head>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossOrigin="anonymous" ></link>
+
+      </head >
+      <body className={inter.className} suppressHydrationWarning={true}>
+        <Navbar />
+        <main>
+          <div className='container'>
+            {children}
+          </div>
+        </main>
+
+
+        <Script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></Script>
+
+      </body>
+    </html >
   )
 }
