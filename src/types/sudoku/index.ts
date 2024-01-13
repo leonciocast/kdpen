@@ -6,12 +6,16 @@ export type SudokuType = Sudoku
 export type SudokuArraysType = {
     board: number[][];
     board_solution: number[][];
+
+    // showSolution: boolean;
 };
 export interface SudokuHookType {
-    loading: boolean;
-    error: string | null;
-    genSudoku: SudokuType | undefined;
-    genMatrix: SudokuArraysType,
-    fetchSudoku: () => void,
-    setSudokuMatrix: React.Dispatch<React.SetStateAction<SudokuArraysType>>
+    // loading: boolean;
+    // error: string | null;
+    // genSudoku: SudokuType | undefined;
+    // genMatrix: SudokuArraysType,
+    listOfPuzzles: SudokuArraysType[],
+    setListOfPuzzles: React.Dispatch<React.SetStateAction<SudokuArraysType[]>>
+    generateNumberOfPuzzles: (numberOfPuzzles: number) => void,
+    // setSudokuMatrix: React.Dispatch<React.SetStateAction<SudokuArraysType>>
 }
