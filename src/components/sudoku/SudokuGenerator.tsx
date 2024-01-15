@@ -34,12 +34,7 @@ const SudokuGenerator: React.FC<ComponentProps> = ({ styles }) => {
             ]
 
         })
-        // sudoku.setSudokuMatrix((prev) => {
-        //     return {
-        //         board_solution: prev.board_solution,
-        //         board: newBoard
-        //     }
-        // })
+
     };
     // const handleCellFocus = (
     //     row: number,
