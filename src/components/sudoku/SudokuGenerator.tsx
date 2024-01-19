@@ -1,8 +1,9 @@
 'use client';
 import React, { ChangeEvent, useEffect, useMemo } from 'react';
-import useSudoku from './useSudoku';
+
 import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
-import { SudokuHookType } from '@/types/sudoku';
+import useSudoku from './useSudoku';
+
 interface ComponentProps {
     styles: any
 }

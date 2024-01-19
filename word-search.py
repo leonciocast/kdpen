@@ -108,8 +108,10 @@ def generate_word_search(words):
 
 
 def print_word_search(grid):
+    # print(grid)
+
     for row in grid:
-        print(" ".join(row))
+        print(row)
 
 
 # Example usage:
@@ -123,23 +125,26 @@ words_to_find = [
     "PHP",
     "GOLANG",
     "RUBY",
-    "PYTHON",
-    "JAVA",
-    "C++",
-    "HTML",
-    "CSS",
-    "RUST",
-    "PHP",
-    "GOLANG",
-    "RUBY",
+    # "PYTHON",
+    # "JAVA",
+    # "C++",
+    # "HTML",
+    # "CSS",
+    # "RUST",
+    # "PHP",
+    # "GOLANG",
+    # "RUBY",
 ]
 
 
 i = 1
 
-while True:
-    print(i)
-    word_search_grid = generate_word_search(words_to_find)
-    print_word_search(word_search_grid)
+word_search_grid = generate_word_search(words_to_find)
+print_word_search(word_search_grid)
+# while True:
+#     print(i)
+#     word_search_grid = generate_word_search(words_to_find)
+#     print_word_search(word_search_grid)
 
-    i += 1
+#     i += 1
+#     break
