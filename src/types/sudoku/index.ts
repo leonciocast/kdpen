@@ -3,7 +3,7 @@ import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
 
 export type DifficultyType = Difficulty
 export type SudokuType = Sudoku
-export type SudokuArraysType = {
+export type PuzzleType = {
     board: number[][];
     board_solution: number[][];
 
@@ -14,8 +14,8 @@ export interface SudokuHookType {
     // error: string | null;
     // genSudoku: SudokuType | undefined;
     // genMatrix: SudokuArraysType,
-    listOfPuzzles: SudokuArraysType[],
-    setListOfPuzzles: React.Dispatch<React.SetStateAction<SudokuArraysType[]>>
+    listOfPuzzles: PuzzleType[],
+    setListOfPuzzles: React.Dispatch<React.SetStateAction<PuzzleType[]>>
     generateNumberOfPuzzles: (numberOfPuzzles: number) => void,
     // setSudokuMatrix: React.Dispatch<React.SetStateAction<SudokuArraysType>>
 }

@@ -1,5 +1,5 @@
 
-import { DifficultyType, SudokuArraysType, SudokuHookType, SudokuType } from '@/types/sudoku';
+import { DifficultyType, PuzzleType, SudokuHookType, SudokuType } from '@/types/sudoku';
 import { useEffect, useState } from 'react';
 import { getSudoku } from 'sudoku-gen';
 
@@ -7,10 +7,10 @@ import { getSudoku } from 'sudoku-gen';
 
 const useSudoku = (difficulty: DifficultyType = "easy"): SudokuHookType => {
 
-    const [listOfPuzzles, setListOfPuzzles] = useState<SudokuArraysType[]>([])
+    const [listOfPuzzles, setListOfPuzzles] = useState<PuzzleType[]>([])
 
 
-    const convertSudokuToArrays = (sudoku: SudokuType): SudokuArraysType => {
+    const convertSudokuToArrays = (sudoku: SudokuType): PuzzleType => {
 
         const convertStringToArray = (str: string): number[] => {
             return str.split('').map((char) => {
@@ -64,11 +64,6 @@ const useSudoku = (difficulty: DifficultyType = "easy"): SudokuHookType => {
 
         }
     }
-
-
-
-
-
 
 
     return { generateNumberOfPuzzles, listOfPuzzles, setListOfPuzzles };

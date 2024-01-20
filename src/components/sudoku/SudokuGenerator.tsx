@@ -1,80 +1,28 @@
 'use client';
-import React, { ChangeEvent, useEffect, useMemo } from 'react';
-
+import React, { ChangeEvent, useEffect, useMemo, useRef } from 'react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
 import useSudoku from './useSudoku';
+import { downloadPuzzlesAsPDF } from '@/utils';
+import { PuzzleType } from '@/types/sudoku';
 
-interface ComponentProps {
+interface SudokuGeneratorComponentProps {
     styles: any
+}
+interface SingleSudokuComponentProps {
+    styles: any,
+    puzzle: PuzzleType,
+    puzzleIndex: number
 }
 
 
-const SudokuGenerator: React.FC<ComponentProps> = ({ styles }) => {
-    const [showSolution, setShowSolution] = React.useState<boolean>(false)
+const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) => {
+
     const [numberOfPuzzles, setNumberOfPuzzles] = React.useState<number>(1)
     const [difficulty, setDifficulty] = React.useState<Difficulty>("easy")
 
     const sudoku = useSudoku(difficulty)
-    // const zippedArray = useMemo(() => zip(sudoku.genMatrix.board, sudoku.genMatrix.board_solution), [sudoku.genMatrix])
-    const handleCellChange = (
-        row: number,
-        col: number,
-        puzzleIndex: number,
-        event: ChangeEvent<HTMLInputElement>
-    ) => {
-        const value = event.target.value;
-        const newBoard = [...sudoku.listOfPuzzles[puzzleIndex].board];
-        newBoard[row][col] = value === "" ? 0 : parseInt(value, 10);
-        sudoku.setListOfPuzzles((prevListOfPuzzles) => {
-            return [
-                ...prevListOfPuzzles,
-                {
-                    board_solution: prevListOfPuzzles[puzzleIndex].board_solution,
-                    board: newBoard
-                }
-            ]
-
-        })
-
-    };
-    // const handleCellFocus = (
-    //     row: number,
-    //     col: number,
-    //     e: React.FocusEvent<HTMLInputElement>,
-    // ) => {
-    //     console.log(row, col, e.target.value)
-    //     // [row][col]
-    // }
-    function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
-        const result: [T, U][] = [];
-        const length = Math.min(arr1.length, arr2.length);
-
-        for (let i = 0; i < length; i++) {
-            result.push([arr1[i], arr2[i]]);
-        }
-
-        return result;
-    }
-
-
-    function render_cell_value(cell: number, solution_cell: number): number | string {
-
-        if (showSolution) {
-            return solution_cell
-        } else {
-            if (cell === 0) {
-                return ""
-            } else {
-                return cell
-            }
-        }
-    }
-
-    useEffect(() => {
-        sudoku.generateNumberOfPuzzles(numberOfPuzzles)
-
-    }, [])
-
 
     return (
         <>
@@ -106,13 +54,13 @@ const SudokuGenerator: React.FC<ComponentProps> = ({ styles }) => {
                 <button
                     className="btn btn-primary mx-1"
                     onClick={() => {
-                        setShowSolution(false)
+                        // setShowSolution(false)
                         sudoku.generateNumberOfPuzzles(numberOfPuzzles)
                     }}
                 >
                     Regenerate
                 </button>
-                {
+                {/* {
                     sudoku.listOfPuzzles.length !== 0 && (
                         <button
                             className="btn btn-primary mx-1"
@@ -121,7 +69,8 @@ const SudokuGenerator: React.FC<ComponentProps> = ({ styles }) => {
                             {showSolution ? "Hide" : "Show"} Solution
                         </button>
                     )
-                }
+                } */}
+
 
             </div>
             <div className="row row-cols-1 row-cols-md-3 g-4">
@@ -130,56 +79,118 @@ const SudokuGenerator: React.FC<ComponentProps> = ({ styles }) => {
 
                         return (
                             <div className="col" key={puzzleIndex}>
-                                <div className="card">
-                                    <div className="card-body">
-                                        <div id="sudoku1">
-
-                                            <table className={styles.sudoku_container}>
-                                                <tbody>
-                                                    {zip(puzzle.board, puzzle.board_solution).map(([row, solutionRow], rowIndex) => (
-                                                        <tr key={rowIndex}>
-                                                            {zip(row, solutionRow).map(([cell, solutionCell], colIndex) => (
-                                                                <td className="p-1" key={colIndex}>
-                                                                    <input
-                                                                        type="text"
-                                                                        maxLength={1}
-                                                                        // value={cell === 0 ? "" : cell !== 0 && showSolution ? solutionCell : cell}
-                                                                        value={render_cell_value(cell, solutionCell)}
-                                                                        readOnly={cell === solutionCell}
-                                                                        disabled={showSolution}
-                                                                        onChange={(e) => handleCellChange(rowIndex, colIndex, puzzleIndex, e)}
-                                                                        className={`form-control`}
-                                                                        // onFocus={(e) => handleCellFocus(rowIndex, colIndex, e)}
-
-                                                                        style={{
-                                                                            color: "black",
-                                                                            // width: "3rem",
-                                                                            // height: "3rem",
-                                                                            // fontSize: "2rem",
-                                                                            // textAlign: "center",
-                                                                            background: cell === 0 ? "white" : cell !== 0 && cell !== solutionCell ? "red" : "darkseagreen"
-                                                                        }}
-                                                                    />
-                                                                </td>
-                                                            ))}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-
-
-                                        </div>
-                                    </div>
-                                </div>
+                                <SingleSudoku puzzle={puzzle} styles={styles} key={puzzleIndex} puzzleIndex={puzzleIndex} />
                             </div>
                         )
                     })
 
                 }
             </div>
-
         </>
     )
 }
 
 export default SudokuGenerator;
+
+const downloadPDF = (id: number) => {
+    const componentRef = document.getElementById(`sudoku_${id}`) as HTMLElement;
+
+    html2canvas(componentRef).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+
+        });
+
+        const imgWidth = 100;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        pdf.text(`Sudoku ${id + 1}`, imgWidth / 2, imgHeight / 5)
+
+        pdf.addImage(imgData, 'PNG', imgWidth / 2, imgHeight / 4, imgWidth, imgHeight);
+        pdf.save(`Sudoku ${id + 1}.pdf`);
+    });
+};
+const SingleSudoku: React.FC<SingleSudokuComponentProps> = ({ puzzle, styles, puzzleIndex }) => {
+    const [showSolution, setShowSolution] = React.useState<boolean>(false)
+
+    function render_cell_value(cell: number, solution_cell: number): number | string {
+
+        if (showSolution) {
+            return solution_cell
+        } else {
+            if (cell === 0) {
+                return ""
+            } else {
+                return cell
+            }
+        }
+    }
+    function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
+        const result: [T, U][] = [];
+        const length = Math.min(arr1.length, arr2.length);
+
+        for (let i = 0; i < length; i++) {
+            result.push([arr1[i], arr2[i]]);
+        }
+
+        return result;
+    }
+
+
+    return (
+        <>
+            <div className="card">
+                <div className="card-body">
+                    <div id={`sudoku_${puzzleIndex}`}>
+
+                        <table className={styles.sudoku_container}>
+                            <tbody>
+                                {zip(puzzle.board, puzzle.board_solution).map(([row, solutionRow], rowIndex) => (
+                                    <tr key={rowIndex}>
+                                        {zip(row, solutionRow).map(([cell, solutionCell], colIndex) => (
+                                            <td className="p-1" key={colIndex}>
+                                                <input
+                                                    type="text"
+                                                    maxLength={1}
+                                                    // value={cell === 0 ? "" : cell !== 0 && showSolution ? solutionCell : cell}
+                                                    value={render_cell_value(cell, solutionCell)}
+                                                    readOnly={true}
+                                                    disabled={showSolution}
+                                                    // onChange={(e) => handleCellChange(rowIndex, colIndex, puzzleIndex, e)}
+                                                    className={`form-control`}
+                                                    // onFocus={(e) => handleCellFocus(rowIndex, colIndex, e)}
+
+                                                    style={{
+                                                        color: "black",
+                                                        // width: "3rem",
+                                                        // height: "3rem",
+                                                        // fontSize: "2rem",
+                                                        // textAlign: "center",
+                                                        background: cell === 0 ? "white" : cell !== 0 && cell !== solutionCell ? "red" : "darkseagreen"
+                                                    }}
+                                                />
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+
+
+                    </div>
+                </div>
+            </div>
+
+            <button
+                className="btn btn-primary mx-1"
+                onClick={() => setShowSolution(!showSolution)}
+            >
+                {showSolution ? "Hide" : "Show"} Solution
+            </button>
+            <button className="btn btn-primary mx-1" onClick={() => downloadPDF(puzzleIndex)}>Download</button>
+        </>
+    )
+}
+
