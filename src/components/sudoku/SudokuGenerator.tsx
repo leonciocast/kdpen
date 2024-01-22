@@ -1,11 +1,11 @@
 'use client';
 import React, { ChangeEvent, useEffect, useMemo, useRef } from 'react';
 import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
 import useSudoku from './useSudoku';
 import { downloadPuzzlesAsPDF } from '@/utils';
 import { PuzzleType } from '@/types/sudoku';
+import { jsPDF } from "jspdf";
 
 interface SudokuGeneratorComponentProps {
     styles: any
@@ -97,7 +97,7 @@ const downloadPDF = (id: number) => {
 
     html2canvas(componentRef).then(canvas => {
         const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF({
+        const pdf = new jsPDF ({
             orientation: 'portrait',
             unit: 'mm',
             format: 'a4',

@@ -21,6 +21,9 @@ const Navbar = () => {
                             <li className="nav-item">
                                 <Link className="nav-link" href="/sudoku">Sudoku Puzzle</Link>
                             </li>
+                            <li className="nav-item">
+                                <Link className="nav-link" href="/carousel">Carousel</Link>
+                            </li>
 
                         </ul>
                         <form className="d-flex" role="search">
