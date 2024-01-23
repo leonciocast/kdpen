@@ -1,5 +1,7 @@
-"use client"
+"use client";
 import React, { useState } from "react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 interface Orientation {
   dx: number;
@@ -12,12 +14,20 @@ interface Orientation {
 const WordSearch1: React.FC = () => {
   const [board, setBoard] = useState<string[][]>([]);
   const [inputWord, setInputWord] = useState<string>("");
-  const [wordArray, setWordArray] = useState<string[]>(["JAVASCRIPT", "PYTHON", "HTML5", "CSS3", "REACT"]);
+  const [wordArray, setWordArray] = useState<string[]>([
+    "JAVASCRIPT",
+    "PYTHON",
+    "HTML5",
+    "CSS3",
+    "REACT",
+  ]);
   const [horizontal, setHorizontal] = useState<boolean>(true);
   const [vertical, setVertical] = useState<boolean>(true);
   const [diagonalTopLeft, setDiagonalTopLeft] = useState<boolean>(true);
   const [diagonalBottomLeft, setDiagonalBottomLeft] = useState<boolean>(true);
-console.log(board)
+  const [showSolution, setShowSolution] = useState<boolean>(false);
+
+  console.log(board);
   const getRandomInt = (max: number): number => {
     return Math.floor(Math.random() * Math.floor(max));
   };
@@ -30,8 +40,7 @@ console.log(board)
     let placed = false;
 
     while (!placed) {
-      const orientation =
-        directions[getRandomInt(directions.length)];
+      const orientation = directions[getRandomInt(directions.length)];
       const reverse = Math.random() < 0.5;
 
       const startRow = getRandomInt(board.length);
@@ -64,10 +73,9 @@ console.log(board)
             const col = startCol + i * orientation.dx;
 
             board[row][col] = JSON.stringify({
-                
-                randomLetter : null,
-                orignalLetter : reverse ? word[word.length - 1 - i] : word[i],
-              });
+              randomLetter: null,
+              orignalLetter: reverse ? word[word.length - 1 - i] : word[i],
+            });
           }
           placed = true;
         }
@@ -81,12 +89,11 @@ console.log(board)
     for (let row = 0; row < board.length; row++) {
       for (let col = 0; col < board[row].length; col++) {
         if (board[row][col] === "-") {
-          board[row][col] =JSON.stringify({
-            randomLetter : String.fromCharCode(65 + getRandomInt(26)),
-            orignalLetter : null,
+          board[row][col] = JSON.stringify({
+            randomLetter: String.fromCharCode(65 + getRandomInt(26)),
+            orignalLetter: null,
           }); // Random uppercase letter
         }
-        
       }
     }
 
@@ -122,13 +129,29 @@ console.log(board)
     }
   };
 
+  const downloadPDF = () => {
+    const componentRef = document.getElementById(`wordsearch`) as HTMLElement;
+
+    html2canvas(componentRef).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF ({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+
+        });
+
+        const imgWidth = 150;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        // pdf.text(`crossword`,0,0)
+
+        pdf.addImage(imgData, 'PNG', 30,10, imgWidth, imgHeight);
+        pdf.save(`wordsearch.pdf`);
+    });
+};
+
   // Assuming board is an HTML element with the id "board"
-
-console.log("sss", wordArray);
-
-
   return (
-    
     <div className="container mt-5">
       <div className="mb-3">
         <label htmlFor="wordInput" className="form-label">
@@ -192,40 +215,158 @@ console.log("sss", wordArray);
         Generate Puzzle
       </button>
 
-      <table className="table text-center w-50 table-bordered mt-3">
-        <tbody>
-          {board.map((row, rowIndex) => (
-            <tr key={rowIndex}>
-              {row.map((cell, colIndex) => {
+      <button className="btn btn-primary mx-1" onClick={() => downloadPDF()}>
+        Download
+      </button>
 
-                let parsedCell = JSON.parse(cell)
-                
-                
-                return (
-                <td
-                  className="p-1"
-                  key={colIndex}
-                  style={{ width: "25px", height: "20px", background : parsedCell?.orignalLetter ? "gray" : "white" }}
-                >
+      <button className="btn btn-dark" onClick={() => setShowSolution(!showSolution)}>{showSolution ? `Hide`:`Show`} Solution</button>
 
-                    {
-                        parsedCell?.orignalLetter ? parsedCell?.orignalLetter :parsedCell?.randomLetter 
-                    }
-                 
-                </td>
-              )})}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      
+        <div className="row w-75">
+          <div className="col-md-3 position-relative">
+            <button
+              className="carousel-control-prev"
+              onClick={generatePuzzle}
+              type="button"
+              data-bs-target="#carouselExample"
+              data-bs-slide="prev"
+            >
+              <span
+                className="carousel-control-prev-icon bg-black z-1"
+                aria-hidden="true"
+              ></span>
+              <span className="visually-hidden">Previous</span>
+            </button>
+          </div>
+          
+          <div id={`wordsearch`} className="col-md-6">
+            <div id="carouselExample" className="carousel slide">
+              <div className="carousel-inner">
+                <div className="carousel-item active">
+                    
+                  <table className="table text-center w-100 table-bordered mt-3">
+                    <tbody>
+                      {board.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, colIndex) => {
+                            let parsedCell = JSON.parse(cell);
 
-      <div className="mt-3">
-        <h5>Word List:</h5>
-        <ul>
-          {wordArray.map((word, index) => (
-            <li key={index}>{word}</li>
-          ))}
-        </ul>
+                            return (
+                              <td
+                                className="p-1"
+                                key={colIndex}
+                                style={{
+                                  width: "25px",
+                                  height: "20px",
+                                  background: parsedCell?.orignalLetter && showSolution
+                                    ? "gray"
+                                    : "white",
+                                }}
+                              >
+                                {parsedCell?.orignalLetter
+                                  ? parsedCell?.orignalLetter
+                                  : parsedCell?.randomLetter}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="carousel-item">
+                  <table className="table text-center w-100 table-bordered mt-3">
+                    <tbody>
+                      {board.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, colIndex) => {
+                            let parsedCell = JSON.parse(cell);
+
+                            return (
+                              <td
+                                className="p-1"
+                                key={colIndex}
+                                style={{
+                                  width: "25px",
+                                  height: "20px",
+                                  background: parsedCell?.orignalLetter && showSolution
+                                    ? "gray"
+                                    : "white",
+                                }}
+                              >
+                                {parsedCell?.orignalLetter
+                                  ? parsedCell?.orignalLetter
+                                  : parsedCell?.randomLetter}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="carousel-item">
+                  <table className="table text-center w-100 table-bordered mt-3">
+                    <tbody>
+                      {board.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                          {row.map((cell, colIndex) => {
+                            let parsedCell = JSON.parse(cell);
+
+                            return (
+                              <td
+                                className="p-1"
+                                key={colIndex}
+                                style={{
+                                  width: "25px",
+                                  height: "20px",
+                                  background: parsedCell?.orignalLetter && showSolution
+                                    ? "gray"
+                                    : "white",
+                                }}
+                              >
+                                {parsedCell?.orignalLetter
+                                  ? parsedCell?.orignalLetter
+                                  : parsedCell?.randomLetter}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+          <h5>Word List:</h5>
+          <ul>
+            {wordArray.map((word, index) => (
+              <li key={index}>{word}</li>
+            ))}
+          </ul>
+        </div>
+          </div>
+          
+
+          <div className="col-md-3 position-relative">
+            <button
+              className="carousel-control-next"
+              onClick={generatePuzzle}
+              type="button"
+              data-bs-target="#carouselExample"
+              data-bs-slide="next"
+            >
+              <span
+                className="carousel-control-next-icon bg-black z-1"
+                aria-hidden="true"
+              ></span>
+              <span className="visually-hidden">Next</span>
+            </button>
+          </div>
+        
+        
       </div>
     </div>
   );

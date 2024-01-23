@@ -5,6 +5,8 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { AlgorithmType, CWG, CellPropsType } from "./utils";
+import html2canvas from 'html2canvas';
+import { jsPDF } from "jspdf";
 // import CWG from "cwg";
 
 
@@ -129,7 +131,7 @@ const CrossWordGenerator: React.FC = () => {
                 ? "gainsboro"
                 : cell?.vIdx || cell?.hIdx
                   ? "white"
-                  : "black",
+                  : "gray",
             // visibility: cell?.letter ? "visible" : "hidden",
             color: "black",
             // background: cell?.letter ? "white" : "black",
@@ -198,16 +200,37 @@ const CrossWordGenerator: React.FC = () => {
     return -1; // Return -1 if no match is found
   }
 
+  const downloadPDF = () => {
+    const componentRef = document.getElementById(`crossword`) as HTMLElement;
+
+    html2canvas(componentRef).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF ({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4',
+
+        });
+
+        const imgWidth = 300;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        // pdf.text(`crossword`,0,0)
+
+        pdf.addImage(imgData, 'PNG', 50,10, imgWidth, imgHeight);
+        pdf.save(`crossword.pdf`);
+    });
+};
+
   // .filter((obj) => obj.isHorizon))
 
   return (
     <div className="crossword-grid">
       <div className="container">
         <div className="row">
-          <div className="d-flex">
+          <div className="d-flex my-3">
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary me-3"
               onClick={generateNewPuzzle}
             >
               Regenerate
@@ -219,8 +242,11 @@ const CrossWordGenerator: React.FC = () => {
             >
               Show Solution
             </button>
+            <button className="btn btn-primary mx-1" onClick={() => downloadPDF()}>Download</button>
           </div>
         </div>
+
+        <div id={`crossword`}>
         <div className="row">
           <div className="col-6">
             <table
@@ -265,6 +291,7 @@ const CrossWordGenerator: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
