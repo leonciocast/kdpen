@@ -257,15 +257,20 @@ const WordSearch1: React.FC = () => {
                                 key={colIndex}
                                 style={{
                                   width: "25px",
-                                  height: "20px",
-                                  background: parsedCell?.orignalLetter && showSolution
-                                    ? "gray"
-                                    : "white",
+                                  height: "25px",
+                                //   background: parsedCell?.orignalLetter && showSolution
+                                //     ? "gray"
+                                //     : "white",
                                 }}
                               >
+                                <span  style={{
+                                 
+                                  background: (parsedCell?.orignalLetter && showSolution)&& "antiquewhite",
+                                }}>
                                 {parsedCell?.orignalLetter
                                   ? parsedCell?.orignalLetter
                                   : parsedCell?.randomLetter}
+                                    </span>
                               </td>
                             );
                           })}
