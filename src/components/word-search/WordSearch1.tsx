@@ -280,7 +280,7 @@ const WordSearch1: React.FC = () => {
                   </table>
                 </div>
                 <div className="carousel-item">
-                  <table className="table text-center w-100 table-bordered mt-3">
+                <table className="table text-center w-100 table-bordered mt-3">
                     <tbody>
                       {board.map((row, rowIndex) => (
                         <tr key={rowIndex}>
@@ -293,15 +293,20 @@ const WordSearch1: React.FC = () => {
                                 key={colIndex}
                                 style={{
                                   width: "25px",
-                                  height: "20px",
-                                  background: parsedCell?.orignalLetter && showSolution
-                                    ? "gray"
-                                    : "white",
+                                  height: "25px",
+                                //   background: parsedCell?.orignalLetter && showSolution
+                                //     ? "gray"
+                                //     : "white",
                                 }}
                               >
+                                <span  style={{
+                                 
+                                  background: (parsedCell?.orignalLetter && showSolution)&& "antiquewhite",
+                                }}>
                                 {parsedCell?.orignalLetter
                                   ? parsedCell?.orignalLetter
                                   : parsedCell?.randomLetter}
+                                    </span>
                               </td>
                             );
                           })}
@@ -311,7 +316,7 @@ const WordSearch1: React.FC = () => {
                   </table>
                 </div>
                 <div className="carousel-item">
-                  <table className="table text-center w-100 table-bordered mt-3">
+                <table className="table text-center w-100 table-bordered mt-3">
                     <tbody>
                       {board.map((row, rowIndex) => (
                         <tr key={rowIndex}>
@@ -324,15 +329,20 @@ const WordSearch1: React.FC = () => {
                                 key={colIndex}
                                 style={{
                                   width: "25px",
-                                  height: "20px",
-                                  background: parsedCell?.orignalLetter && showSolution
-                                    ? "gray"
-                                    : "white",
+                                  height: "25px",
+                                //   background: parsedCell?.orignalLetter && showSolution
+                                //     ? "gray"
+                                //     : "white",
                                 }}
                               >
+                                <span  style={{
+                                 
+                                  background: (parsedCell?.orignalLetter && showSolution)&& "antiquewhite",
+                                }}>
                                 {parsedCell?.orignalLetter
                                   ? parsedCell?.orignalLetter
                                   : parsedCell?.randomLetter}
+                                    </span>
                               </td>
                             );
                           })}
