@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
+import CSVReader from "react-csv-reader";
 
 interface Orientation {
   dx: number;
@@ -15,11 +16,10 @@ const WordSearch1: React.FC = () => {
   const [board, setBoard] = useState<string[][]>([]);
   const [inputWord, setInputWord] = useState<string>("");
   const [wordArray, setWordArray] = useState<string[]>([
-    "JAVASCRIPT",
+    
     "PYTHON",
     "HTML5",
-    "CSS3",
-    "REACT",
+    
   ]);
   const [horizontal, setHorizontal] = useState<boolean>(true);
   const [vertical, setVertical] = useState<boolean>(true);
@@ -149,6 +149,11 @@ const WordSearch1: React.FC = () => {
         pdf.save(`wordsearch.pdf`);
     });
 };
+const handleFileUpload = (data: string[][], fileInfo: any): void => {
+  const wordsFromFile = data.map((item) => item[0]);
+  setWordArray([...wordArray, ...wordsFromFile]);
+  console.log("test", wordsFromFile)
+};
 
   // Assuming board is an HTML element with the id "board"
   return (
@@ -165,6 +170,19 @@ const WordSearch1: React.FC = () => {
           onChange={(e) => setInputWord(e.target.value)}
         />
       </div>
+
+      <label className="btn btn-info me-2">
+        Upload CSV
+        <CSVReader
+          onFileLoaded={handleFileUpload}
+          parserOptions={{
+            header: false,
+            dynamicTyping: true,
+            skipEmptyLines: true,
+          }}
+        />
+      </label>
+
       <div className="mb-3">
         <label className="form-check-label me-2">
           <input
@@ -210,6 +228,7 @@ const WordSearch1: React.FC = () => {
       <button className="btn btn-primary me-2" onClick={handleAddWord}>
         Add Word
       </button>
+      
 
       <button className="btn btn-success" onClick={generatePuzzle}>
         Generate Puzzle
