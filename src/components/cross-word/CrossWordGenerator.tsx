@@ -5,17 +5,19 @@ import { AlgorithmType, CWG, CellPropsType, PositionObjectType } from "./utils";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
+
 interface SingleWordType {
   word: string;
   clue: string;
 }
+
 const CrossWordGenerator: React.FC = () => {
   const initialEmptyInput = {
     word: "",
     clue: "",
   };
-  const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
 
+  const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
   const [words, setWords] = useState<SingleWordType[]>([]);
   const [buttonClicked, setButtonClicked] = useState(false);
   const [showSolution, setSolution] = useState(false);
@@ -39,37 +41,37 @@ const CrossWordGenerator: React.FC = () => {
       setWords((prev) => [
         ...prev,
         {
-          word: inputWord.word.toUpperCase(),
-          clue: inputWord.clue,
+          word: inputWord.word.toUpperCase().trim(),
+          clue: inputWord.clue.trim(),
         },
       ]);
       setInputWord(initialEmptyInput);
-    }else{
-      alert("Enter Word and Clue Both")
+    } else {
+      alert("Enter Word and Clue Both");
     }
   };
 
   const handleRegenerate = () => {
     // setWords((prevWords) => [...prevWords, ...newWords]);
     // setNewWords([]);
-    // setButtonClicked(true);
-    // generateNewPuzzle();
+    setButtonClicked(true);
+    generateNewPuzzle();
   };
 
   const plainWords = useMemo(() => {
-    // Use the `filter` method to only include objects with non-empty strings in the "word" property
-    return words.filter(word => typeof word.word === 'string' && word.word.trim() !== '')
-                   .map(item => item.word.trim());
+    return words
+      .filter((word) => typeof word.word === "string" && word.word.trim() !== "")
+      .map((item) => item.word.trim());
   }, [words]);
 
   const wordsWithIndex = useMemo(() => {
     return algorithm?.positionObjArr.map((item, index) => ({
       ...item,
       index,
+      clue: words[index]?.clue,
+      wordStr: words[index]?.word, // Corrected this line to use 'word' property
     }));
-  }, [algorithm]);
-
-  
+  }, [algorithm, words]);
 
   const generateNewPuzzle = () => {
     let result = CWG(plainWords);
@@ -90,17 +92,12 @@ const CrossWordGenerator: React.FC = () => {
   // }, []);
 
   const handleCSVFile = (data: any, fileInfo: any) => {
-    const newWords = data.map((item: any) => item[0]);
+    const newWords = data.map((item: any) => ({
+      word: item[0].toUpperCase().trim(),
+      clue: item[1], 
+    }));
+
     setWords((prevWords) => [...prevWords, ...newWords]);
-    // setAlgorithm({
-    //   positionObjArr: [],
-    //   width: 0,
-    //   height: 0,
-    //   ownerMap: [],
-    // });
-    // setWords(newWords);
-    // generateNewPuzzle();
-    // console.log(newWords,"newWords");
   };
 
   const Cell: React.FC<CellPropsType> = ({ row, col, cell }) => {
@@ -288,9 +285,13 @@ const CrossWordGenerator: React.FC = () => {
                         key={index}
                         style={word.index === 0 ? { listStyle: "none" } : {}}
                       >
-                        {word.index === 0
-                          ? ""
-                          : `${word.index} ${word.wordStr}`}
+                        {word.index === 0 ? (
+                          ""
+                        ) : (
+                          <span>
+                            {word.index}  -  {word?.clue}
+                          </span>
+                        )}
                       </li>
                     ))}
                 </ul>
@@ -298,13 +299,13 @@ const CrossWordGenerator: React.FC = () => {
                   <b>Down</b>
                   {wordsWithIndex
                     .filter((obj) => !obj?.isHorizon)
-                    .map((word, index) => {
-                      return (
-                        <li key={index}>
-                          {word.index} {word.wordStr}
-                        </li>
-                      );
-                    })}
+                    .map((word, index) => (
+                      <li key={index}>
+                        <span>
+                          {word.index}  - {word?.clue}
+                        </span>
+                      </li>
+                    ))}
                 </ul>
               </div>
             </div>
