@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useMemo, useState } from "react";
 import { AlgorithmType, CWG, CellPropsType, PositionObjectType } from "./utils";
 import html2canvas from "html2canvas";
@@ -16,17 +15,13 @@ const CrossWordGenerator: React.FC = () => {
     word: "",
     clue: "",
   };
-
   const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
   const [words, setWords] = useState<SingleWordType[]>([]);
-  const [buttonClicked, setButtonClicked] = useState(false);
-  const [showSolution, setSolution] = useState(false);
-  const [algorithm, setAlgorithm] = useState<AlgorithmType>({
-    positionObjArr: [],
-    width: 0,
-    height: 0,
-    ownerMap: [],
-  });
+  // const [buttonClicked, setButtonClicked] = useState(false);
+  const [words_per_puzzle, set_words_per_puzzle] = useState(10);
+  const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
+
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -50,31 +45,35 @@ const CrossWordGenerator: React.FC = () => {
       alert("Enter Word and Clue Both");
     }
   };
+  const dividedArray: SingleWordType[][] = useMemo(() => {
+    const result = [];
+  for (let i = 0; i < words.length; i += 10) {
+      result.push(words.slice(i, i + 10));
+  }
+  return result;
 
-  const handleRegenerate = () => {
-    // setWords((prevWords) => [...prevWords, ...newWords]);
-    // setNewWords([]);
-    setButtonClicked(true);
-    generateNewPuzzle();
-  };
 
-  const plainWords = useMemo(() => {
-    return words
-      .filter((word) => typeof word.word === "string" && word.word.trim() !== "")
-      .map((item) => item.word.trim());
+  
   }, [words]);
 
-  const wordsWithIndex = useMemo(() => {
-    return algorithm?.positionObjArr.map((item, index) => ({
-      ...item,
-      index,
-      clue: words[index]?.clue,
-      wordStr: words[index]?.word, // Corrected this line to use 'word' property
-    }));
-  }, [algorithm, words]);
 
-  const generateNewPuzzle = () => {
-    let result = CWG(plainWords);
+  console.log("Divided Array:", dividedArray)
+  const handleRegenerate = () => {
+    setPuzzles([])
+    dividedArray.map((single_array, single_array_index) => {
+      setPuzzles((prevPuzzles) => {
+        return [...prevPuzzles, generateNewPuzzle(single_array)];
+      });
+    });
+  };
+
+ 
+
+  const generateNewPuzzle = (input_words:SingleWordType[]) => {
+    let words__ = input_words.filter(
+      (word) => typeof word.word === "string" && word.word.trim() !== ""
+    ).map((item) => item.word.trim());
+    let result = CWG(words__);
     if (!result) {
       result = {
         positionObjArr: [],
@@ -84,7 +83,8 @@ const CrossWordGenerator: React.FC = () => {
       };
     }
 
-    setAlgorithm(result);
+    // setAlgorithm(result);
+    return result;
   };
 
   // useEffect(() => {
@@ -94,11 +94,138 @@ const CrossWordGenerator: React.FC = () => {
   const handleCSVFile = (data: any, fileInfo: any) => {
     const newWords = data.map((item: any) => ({
       word: item[0].toUpperCase().trim(),
-      clue: item[1], 
+      clue: item[1],
     }));
-
     setWords((prevWords) => [...prevWords, ...newWords]);
   };
+
+  // const dividedWords = useMemo(()=>{
+  //   const wordsArrays: string[][] = [];
+  //   for (let i = 0; i < words.length; i += 10) {
+  //     wordsArrays.push(words.slice(i, i + 10));
+  //   }
+  //   return wordsArrays
+  // }, [words])
+
+  const downloadPDF = () => {
+    const componentRef = document.getElementById(`crossword`) as HTMLElement;
+    html2canvas(componentRef).then((canvas) => {
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+      html2canvas(componentRef, {
+        scale: 2,
+      }).then((canvas) => {});
+      const imgWidth = 300;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      pdf.addImage(imgData, "PNG", 50, 10, imgWidth, imgHeight);
+      pdf.save(`crossword.pdf`);
+    });
+  };
+
+  console.log(
+    "All Puzzles Algos: ", puzzles
+  )
+
+  return (
+    <div className="crossword-grid">
+      <div className="container">
+        <div className="row">
+          <div className=" my-3 ">
+            <div>
+              <div>
+                <input
+                  type="text"
+                  className="form-control me-2 mb-2 w-50"
+                  placeholder="Enter Word"
+                  value={inputWord.word}
+                  name="word"
+                  onChange={handleInputChange}
+                />
+                <input
+                  type="text"
+                  className="form-control me-2 mb-2 w-50"
+                  placeholder="Enter Clue"
+                  value={inputWord.clue}
+                  name="clue"
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary me-2"
+                onClick={handleAddWord}
+              >
+                Add Word
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary me-2"
+                onClick={() => {
+                  handleRegenerate();
+                }}
+              >
+                Regenerate
+              </button>
+
+              <button
+                className="btn btn-primary mx-1 "
+                onClick={() => downloadPDF()}
+              >
+                Download
+              </button>
+            </div>
+            <div className="mt-2">
+              <CSVReader
+                onFileLoaded={handleCSVFile}
+                parserOptions={{ header: false, skipEmptyLines: true }}
+              />
+            </div>
+          </div>
+        </div>
+        {
+          puzzles.map((single_algo, i)=>{
+            return <SinglePuzzle key={i} algorithm={single_algo} orignal_words={words} />
+          })
+          }
+      </div>
+    </div>
+  );
+};
+
+interface SinglePuzzleType {
+  algorithm: AlgorithmType;
+  orignal_words: SingleWordType[];
+}
+const SinglePuzzle: React.FC<SinglePuzzleType> = ({
+  algorithm,
+  orignal_words,
+}) => {
+  const [showSolution, setSolution] = useState(false);
+
+  const wordsWithIndex = useMemo(() => {
+    return algorithm?.positionObjArr.map((item, index) => ({
+      ...item,
+      index,
+      clue: orignal_words[index]?.clue,
+      wordStr: orignal_words[index]?.word,
+    }));
+  }, [algorithm, orignal_words]);
+
+  function findWordIndex(col: number, row: number) {
+    for (let i = 0; i < algorithm.positionObjArr.length; i++) {
+      const word = algorithm.positionObjArr[i];
+      if (word.xNum === col && word.yNum === row) {
+        return i;
+      }
+    }
+    return -1;
+  }
 
   const Cell: React.FC<CellPropsType> = ({ row, col, cell }) => {
     return (
@@ -169,151 +296,64 @@ const CrossWordGenerator: React.FC = () => {
     return grid;
   };
 
-  function findWordIndex(col: number, row: number) {
-    for (let i = 0; i < algorithm.positionObjArr.length; i++) {
-      const word = algorithm.positionObjArr[i];
-      if (word.xNum === col && word.yNum === row) {
-        return i;
-      }
-    }
-    return -1;
-  }
-
-  const downloadPDF = () => {
-    const componentRef = document.getElementById(`crossword`) as HTMLElement;
-    html2canvas(componentRef).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a4",
-      });
-      html2canvas(componentRef, {
-        scale: 2,
-      }).then((canvas) => {});
-      const imgWidth = 300;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      pdf.addImage(imgData, "PNG", 50, 10, imgWidth, imgHeight);
-      pdf.save(`crossword.pdf`);
-    });
-  };
-
   return (
-    <div className="crossword-grid">
-      <div className="container">
-        <div className="row">
-          <div className=" my-3 ">
-            <div>
-              <div>
-                <input
-                  type="text"
-                  className="form-control me-2 mb-2 w-50"
-                  placeholder="Enter Word"
-                  value={inputWord.word}
-                  name="word"
-                  onChange={handleInputChange}
-                />
-                <input
-                  type="text"
-                  className="form-control me-2 mb-2 w-50"
-                  placeholder="Enter Clue"
-                  value={inputWord.clue}
-                  name="clue"
-                  onChange={handleInputChange}
-                />
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-primary me-2"
-                onClick={handleAddWord}
-              >
-                Add Word
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary me-2"
-                onClick={() => {
-                  handleRegenerate();
-                  setButtonClicked(true);
-                }}
-              >
-                {buttonClicked ? "Regenerate" : "Generate"}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => setSolution(!showSolution)}
-              >
-                Show Solution
-              </button>
-              <button
-                className="btn btn-primary mx-1 "
-                onClick={() => downloadPDF()}
-              >
-                Download
-              </button>
-            </div>
-            <div className="mt-2">
-              <CSVReader
-                onFileLoaded={handleCSVFile}
-                parserOptions={{ header: false, skipEmptyLines: true }}
-              />
-            </div>
-          </div>
+    <div id={`crossword`}>
+      <div className="row">
+        <div className="col-6">
+          <table>
+            <tbody>{renderGrid()}</tbody>
+          </table>
         </div>
-
-        <div id={`crossword`}>
-          <div className="row">
-            <div className="col-6">
-              <table>
-                <tbody>{renderGrid()}</tbody>
-              </table>
-            </div>
-          </div>
-          <div className="row">
-            <div className="col-6">
-              <div className="d-flex">
-                <ul>
-                  <b>Across</b>
-                  {wordsWithIndex
-                    .filter((obj) => obj?.isHorizon)
-                    .map((word, index) => (
-                      <li
-                        key={index}
-                        style={word.index === 0 ? { listStyle: "none" } : {}}
-                      >
-                        {word.index === 0 ? (
-                          ""
-                        ) : (
-                          <span>
-                            {word.index}  -  {word?.clue}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                </ul>
-                <ul>
-                  <b>Down</b>
-                  {wordsWithIndex
-                    .filter((obj) => !obj?.isHorizon)
-                    .map((word, index) => (
-                      <li key={index}>
-                        <span>
-                          {word.index}  - {word?.clue}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            </div>
+      </div>
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={() => setSolution(!showSolution)}
+      >
+        Show Solution
+      </button>
+      <div className="row">
+        <div className="col-6">
+          <div className="d-flex">
+            <ul>
+              <b>Across</b>
+              {wordsWithIndex
+                .filter((obj) => obj?.isHorizon)
+                .map((word, index) => (
+                  <li
+                    key={index}
+                    style={
+                      word.index === 0
+                        ? { listStyle: "none", whiteSpace: "nowrap" }
+                        : { whiteSpace: "nowrap" }
+                    }
+                  >
+                    {word.index === 0 ? (
+                      ""
+                    ) : (
+                      <span>
+                        {word.index} - {word?.clue}
+                      </span>
+                    )}
+                  </li>
+                ))}
+            </ul>
+            <ul>
+              <b>Down</b>
+              {wordsWithIndex
+                .filter((obj) => !obj?.isHorizon)
+                .map((word, index) => (
+                  <li key={index} style={{ whiteSpace: "nowrap" }}>
+                    <span>
+                      {word.index} - {word?.clue}
+                    </span>
+                  </li>
+                ))}
+            </ul>
           </div>
         </div>
       </div>
     </div>
   );
 };
-
 export default CrossWordGenerator;
