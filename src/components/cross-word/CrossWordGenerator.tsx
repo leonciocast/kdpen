@@ -1,46 +1,25 @@
-'use client';
-/* eslint-disable no-unused-vars */
-/* eslint-disable react/prop-types */
-// import React from "react";
+"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { AlgorithmType, CWG, CellPropsType } from "./utils";
-import html2canvas from 'html2canvas';
+import { AlgorithmType, CWG, CellPropsType, PositionObjectType } from "./utils";
+import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-// import CWG from "cwg";
+import CSVReader from "react-csv-reader";
 
+interface SingleWordType {
+  word: string;
+  clue: string;
+}
 
-
-// const initWords = [
-//   {
-//     word: "AJAX",
-//     clue: "A way to make request to server without loading page",
-//   },
-//   { word: "REACT", clue: "Popular UI liabrary of JS" },
-//   { word: "DJANGO", clue: "A framework for perfectionists with deadlines" },
-// ];
 const CrossWordGenerator: React.FC = () => {
-  const initWords = [
-    "AJAX",
-    "ASBESTOS",
-    "TORSION",
-    "TWERK",
-    "PUNCH",
-    "WILLOW",
-    "PRACTICALJOKE",
-    "PREFAB",
-    "QATAR",
-    "PUSSY",
-    "ANIMATE",
-    "COLORADO",
-    "MEWS",
-    "ANTIPOPE",
-    "APRON",
-    "MISHIT",
-    "SANDWICHBOARD",
-    "EXTOL",
-    "TREMOLO",
-  ];
+  const initialEmptyInput = {
+    word: "",
+    clue: "",
+  };
+
+  const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
+  const [words, setWords] = useState<SingleWordType[]>([]);
+  const [buttonClicked, setButtonClicked] = useState(false);
   const [showSolution, setSolution] = useState(false);
   const [algorithm, setAlgorithm] = useState<AlgorithmType>({
     positionObjArr: [],
@@ -48,47 +27,78 @@ const CrossWordGenerator: React.FC = () => {
     height: 0,
     ownerMap: [],
   });
-  // const [inputWords, setInputWords] = useState<WordClueType[]>(initWords);
-  // const words: string[] = useMemo(() => {
-  //   return inputWords.map(elm => elm.word);;
-  // }, [inputWords]);
-  const words: string[] = initWords;
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setInputWord((prevData) => ({
+      ...prevData,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  const handleAddWord = () => {
+    if (inputWord.word.trim() !== "" && inputWord.clue.trim() !== "") {
+      setWords((prev) => [
+        ...prev,
+        {
+          word: inputWord.word.toUpperCase().trim(),
+          clue: inputWord.clue.trim(),
+        },
+      ]);
+      setInputWord(initialEmptyInput);
+    } else {
+      alert("Enter Word and Clue Both");
+    }
+  };
+
+  const handleRegenerate = () => {
+    // setWords((prevWords) => [...prevWords, ...newWords]);
+    // setNewWords([]);
+    setButtonClicked(true);
+    generateNewPuzzle();
+  };
+
+  const plainWords = useMemo(() => {
+    return words
+      .filter((word) => typeof word.word === "string" && word.word.trim() !== "")
+      .map((item) => item.word.trim());
+  }, [words]);
 
   const wordsWithIndex = useMemo(() => {
     return algorithm?.positionObjArr.map((item, index) => ({
       ...item,
       index,
+      clue: words[index]?.clue,
+      wordStr: words[index]?.word, // Corrected this line to use 'word' property
     }));
-  }, [algorithm]);
+  }, [algorithm, words]);
 
   const generateNewPuzzle = () => {
-    // const w = ["do", "not"];
-    const result = CWG(words);
-    if (result) {
-      setAlgorithm(result);
-    } else {
-      setAlgorithm({
+    let result = CWG(plainWords);
+    if (!result) {
+      result = {
         positionObjArr: [],
         width: 0,
         height: 0,
         ownerMap: [],
-      });
+      };
     }
-    console.log("Result", result);
+
+    setAlgorithm(result);
   };
 
-  useEffect(() => {
-    generateNewPuzzle();
-  }, []);
-  console.log("Algorithm: ", algorithm);
-  console.log(
-    "here are the input words",
-    initWords,
-    "here are the memo words",
-    words
-  );
+  // useEffect(() => {
+  //   generateNewPuzzle();
+  // }, []);
 
-  console.log("Words with index", wordsWithIndex);
+  const handleCSVFile = (data: any, fileInfo: any) => {
+    const newWords = data.map((item: any) => ({
+      word: item[0].toUpperCase().trim(),
+      clue: item[1], 
+    }));
+
+    setWords((prevWords) => [...prevWords, ...newWords]);
+  };
 
   const Cell: React.FC<CellPropsType> = ({ row, col, cell }) => {
     return (
@@ -130,11 +140,9 @@ const CrossWordGenerator: React.FC = () => {
               cell?.vIdx === 0 || cell?.hIdx === 0
                 ? "gainsboro"
                 : cell?.vIdx || cell?.hIdx
-                  ? "white"
-                  : "gray",
-            // visibility: cell?.letter ? "visible" : "hidden",
+                ? "white"
+                : "gray",
             color: "black",
-            // background: cell?.letter ? "white" : "black",
           }}
         >
           {showSolution ? cell?.letter : ""}
@@ -151,38 +159,9 @@ const CrossWordGenerator: React.FC = () => {
       const rowContent = [];
       for (let col = 0; col < width; col++) {
         const ownerCell = ownerMap[row][col];
-        if (ownerCell) {
-          rowContent.push(
-            <Cell key={`${row}-${col}`} cell={ownerCell} row={row} col={col} />
-          );
-        } else {
-          rowContent.push(
-            <Cell key={`${row}-${col}`} cell={ownerCell} row={row} col={col} />
-          );
-          // const intersectingPoint = positionObjArr.find(
-          //   (pos) => pos.xNum === col && pos.yNum === row
-          // );
-          // if (intersectingPoint) {
-          //   rowContent.push(
-          //     <Cell
-          //       key={`${row}-${col}`}
-          //       cell={ownerCell}
-          //       row={row}
-          //       col={col}
-          //     />
-          //   );
-          // } else {
-          //   // Display an empty cell
-          //   rowContent.push(
-          //     <Cell
-          //       key={`${row}-${col}`}
-          //       cell={ownerCell}
-          //       row={row}
-          //       col={col}
-          //     />
-          //   );
-          // }
-        }
+        rowContent.push(
+          <Cell key={`${row}-${col}`} cell={ownerCell} row={row} col={col} />
+        );
       }
       grid.push(<tr key={row}>{rowContent}</tr>);
     }
@@ -194,104 +173,144 @@ const CrossWordGenerator: React.FC = () => {
     for (let i = 0; i < algorithm.positionObjArr.length; i++) {
       const word = algorithm.positionObjArr[i];
       if (word.xNum === col && word.yNum === row) {
-        return i; // Return the index if a match is found
+        return i;
       }
     }
-    return -1; // Return -1 if no match is found
+    return -1;
   }
 
   const downloadPDF = () => {
     const componentRef = document.getElementById(`crossword`) as HTMLElement;
+    html2canvas(componentRef).then((canvas) => {
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+      html2canvas(componentRef, {
+        scale: 2,
+      }).then((canvas) => {});
+      const imgWidth = 300;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    html2canvas(componentRef).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF ({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
-
-        });
-
-        const imgWidth = 300;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        // pdf.text(`crossword`,0,0)
-
-        pdf.addImage(imgData, 'PNG', 50,10, imgWidth, imgHeight);
-        pdf.save(`crossword.pdf`);
+      pdf.addImage(imgData, "PNG", 50, 10, imgWidth, imgHeight);
+      pdf.save(`crossword.pdf`);
     });
-};
-
-  // .filter((obj) => obj.isHorizon))
+  };
 
   return (
     <div className="crossword-grid">
       <div className="container">
         <div className="row">
-          <div className="d-flex my-3">
-            <button
-              type="button"
-              className="btn btn-primary me-3"
-              onClick={generateNewPuzzle}
-            >
-              Regenerate
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setSolution(!showSolution)}
-            >
-              Show Solution
-            </button>
-            <button className="btn btn-primary mx-1" onClick={() => downloadPDF()}>Download</button>
+          <div className=" my-3 ">
+            <div>
+              <div>
+                <input
+                  type="text"
+                  className="form-control me-2 mb-2 w-50"
+                  placeholder="Enter Word"
+                  value={inputWord.word}
+                  name="word"
+                  onChange={handleInputChange}
+                />
+                <input
+                  type="text"
+                  className="form-control me-2 mb-2 w-50"
+                  placeholder="Enter Clue"
+                  value={inputWord.clue}
+                  name="clue"
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary me-2"
+                onClick={handleAddWord}
+              >
+                Add Word
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary me-2"
+                onClick={() => {
+                  handleRegenerate();
+                  setButtonClicked(true);
+                }}
+              >
+                {buttonClicked ? "Regenerate" : "Generate"}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setSolution(!showSolution)}
+              >
+                Show Solution
+              </button>
+              <button
+                className="btn btn-primary mx-1 "
+                onClick={() => downloadPDF()}
+              >
+                Download
+              </button>
+            </div>
+            <div className="mt-2">
+              <CSVReader
+                onFileLoaded={handleCSVFile}
+                parserOptions={{ header: false, skipEmptyLines: true }}
+              />
+            </div>
           </div>
         </div>
 
         <div id={`crossword`}>
-        <div className="row">
-          <div className="col-6">
-            <table
-              style={
-                {
-                  // border: "1px solid black",
-                  // padding: "20px",
-                }
-              }
-            >
-              <tbody>{renderGrid()}</tbody>
-            </table>
+          <div className="row">
+            <div className="col-6">
+              <table>
+                <tbody>{renderGrid()}</tbody>
+              </table>
+            </div>
           </div>
-        </div>
-        <div className="row">
-          <div className="col-6">
-            <div className="d-flex">
-              <ul>
-                <b>Across</b>
-                {wordsWithIndex
-                  .filter((obj) => obj?.isHorizon)
-                  .map((word, index) => {
-                    return (
-                      <li key={index}>
-                        {word.index} {word.wordStr}
+          <div className="row">
+            <div className="col-6">
+              <div className="d-flex">
+                <ul>
+                  <b>Across</b>
+                  {wordsWithIndex
+                    .filter((obj) => obj?.isHorizon)
+                    .map((word, index) => (
+                      <li
+                        key={index}
+                        style={word.index === 0 ? { listStyle: "none" } : {}}
+                      >
+                        {word.index === 0 ? (
+                          ""
+                        ) : (
+                          <span>
+                            {word.index}  -  {word?.clue}
+                          </span>
+                        )}
                       </li>
-                    );
-                  })}
-              </ul>
-              <ul>
-                <b>Down</b>
-                {wordsWithIndex
-                  .filter((obj) => !obj?.isHorizon)
-                  .map((word, index) => {
-                    return (
+                    ))}
+                </ul>
+                <ul>
+                  <b>Down</b>
+                  {wordsWithIndex
+                    .filter((obj) => !obj?.isHorizon)
+                    .map((word, index) => (
                       <li key={index}>
-                        {word.index} {word.wordStr}
+                        <span>
+                          {word.index}  - {word?.clue}
+                        </span>
                       </li>
-                    );
-                  })}
-              </ul>
+                    ))}
+                </ul>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );
