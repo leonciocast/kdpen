@@ -27,7 +27,7 @@ export default function RootLayout({
       <body className={inter.className} suppressHydrationWarning={true}>
         <Navbar />
         <main>
-          <div className='container'>
+          <div className='' style={{margin:"0 30px"}}>
             {children}
           </div>
         </main>
