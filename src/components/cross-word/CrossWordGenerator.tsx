@@ -4,7 +4,6 @@ import { AlgorithmType, CWG, CellPropsType, PositionObjectType } from "./utils";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
-// import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 interface SingleWordType {
@@ -139,15 +138,17 @@ const CrossWordGenerator: React.FC = () => {
   };
 
   return (
-    <div className="crossword-grid">
-      <div className="container">
+    <div className="crossword-grid mainWrapper" >
+      <div className="">
+        <div className="row ">
+        <div className="col-md-4">
         <div className="row">
           <div className=" my-3 ">
             <div>
               <div>
                 <input
                   type="text"
-                  className="form-control me-2 mb-2 w-50"
+                  className="form-control me-2 mb-2 "
                   placeholder="Enter Word"
                   value={inputWord.word}
                   name="word"
@@ -155,24 +156,26 @@ const CrossWordGenerator: React.FC = () => {
                 />
                 <input
                   type="text"
-                  className="form-control me-2 mb-2 w-50"
+                  className="form-control  "
                   placeholder="Enter Clue"
                   value={inputWord.clue}
                   name="clue"
                   onChange={handleInputChange}
                 />
               </div>
-
+              <div style={{display:"flex"}}>
               <button
                 type="button"
-                className="btn btn-primary me-2"
+                style={{margin:"7px 5px",padding:"3px 5px",whiteSpace:"nowrap"}}
+                className="btn btn-primary "
                 onClick={handleAddWord}
               >
                 Add Word
               </button>
               <button
                 type="button"
-                className="btn btn-primary me-2"
+                className="btn btn-primary "
+                style={{margin:"7px 5px",padding:"3px 5px",whiteSpace:"nowrap"}}              
                 onClick={() => {
                   handleRegenerate();
                 }}
@@ -183,9 +186,12 @@ const CrossWordGenerator: React.FC = () => {
               <button
                 className="btn btn-primary mx-1 "
                 onClick={() => downloadPDF()}
+                style={{margin:"7px 5px",padding:"3px 5px",whiteSpace:"nowrap"}}
+
               >
                 Download
               </button>
+              </div>
             </div>
             <div className="mt-2">
               <CSVReader
@@ -195,10 +201,18 @@ const CrossWordGenerator: React.FC = () => {
             </div>
           </div>
         </div>
-
-        <div className="row">
-          <div className="col-12 my-3">
-            <div id="carouselExample" className="carousel slide" data-bs-ride="carousel">
+        </div>
+      <div className="col-md-8">
+        <div className="row my-3">
+        <div className="col-md-1 position-relative">
+            <button id="prevButton" className="carousel-control-prev" style={{left: "17px", bottom: "30%"}} type="button" onClick={handlePrevButtonClick}>
+                <span className="carousel-control-prev-icon bg-black z-1 p-3" aria-hidden="true"></span>
+                <span className="visually-hidden">Previous</span>
+              </button>   
+              </div> 
+              <div className="col-md-10 ">        
+            <div id="carouselExample" className="carousel slide carousel-fade">
+             
               <div className="carousel-inner">
                 {puzzles.map((single_algo, i) => (
                   <div key={i} className={`carousel-item ${i === 0 ? 'active' : ''}`}>
@@ -206,19 +220,19 @@ const CrossWordGenerator: React.FC = () => {
                   </div>
                 ))}
               </div>
-              <button id="prevButton" className="carousel-control-prev" type="button" onClick={handlePrevButtonClick}>
-                <span className="carousel-control-prev-icon" aria-hidden="true"></span>
-                <span className="visually-hidden">Previous</span>
-              </button>
-              <button id="nextButton" className="carousel-control-next" type="button" onClick={handleNextButtonClick}>
-                <span className="carousel-control-next-icon" aria-hidden="true"></span>
+              </div>
+              </div>
+            <div className="col-md-1 position-relative">
+              <button id="nextButton" className="carousel-control-next" style={{right: "17px", bottom: "29%"}}  type="button" onClick={handleNextButtonClick}>
+                <span className="carousel-control-next-icon bg-black z-1 p-3" aria-hidden="true"></span>
                 <span className="visually-hidden">Next</span>
               </button>
-            </div>
-          </div>
+              </div>
+            
+          
         </div>
-
-
+        </div>
+        </div>
       </div>
     </div>
   );
