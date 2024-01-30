@@ -4,6 +4,8 @@ import { AlgorithmType, CWG, CellPropsType, PositionObjectType } from "./utils";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
+// import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 interface SingleWordType {
   word: string;
@@ -17,7 +19,6 @@ const CrossWordGenerator: React.FC = () => {
   };
   const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
   const [words, setWords] = useState<SingleWordType[]>([]);
-  // const [buttonClicked, setButtonClicked] = useState(false);
   const [words_per_puzzle, set_words_per_puzzle] = useState(10);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
 
@@ -51,12 +52,7 @@ const CrossWordGenerator: React.FC = () => {
       result.push(words.slice(i, i + 10));
   }
   return result;
-
-
-  
   }, [words]);
-
-
   console.log("Divided Array:", dividedArray)
   const handleRegenerate = () => {
     setPuzzles([])
@@ -86,10 +82,6 @@ const CrossWordGenerator: React.FC = () => {
     // setAlgorithm(result);
     return result;
   };
-
-  // useEffect(() => {
-  //   generateNewPuzzle();
-  // }, []);
 
   const handleCSVFile = (data: any, fileInfo: any) => {
     const newWords = data.map((item: any) => ({
@@ -130,7 +122,25 @@ const CrossWordGenerator: React.FC = () => {
   console.log(
     "All Puzzles Algos: ", puzzles
   )
-
+  
+  const handlePrevButtonClick = () => {
+    const carousel = document.getElementById('carouselExample');
+    if (carousel) {
+      carousel.setAttribute('data-bs-slide', 'prev');
+      const bsCarousel = new (window as any).bootstrap.Carousel(carousel);
+      bsCarousel.to('prev');
+    }
+  };
+  
+  const handleNextButtonClick = () => {
+    const carousel = document.getElementById('carouselExample');
+    if (carousel) {
+      carousel.setAttribute('data-bs-slide', 'next');
+      const bsCarousel = new  (window as any).bootstrap.Carousel(carousel);
+      bsCarousel.to('next');
+    }
+  };
+  
   return (
     <div className="crossword-grid">
       <div className="container">
@@ -188,11 +198,30 @@ const CrossWordGenerator: React.FC = () => {
             </div>
           </div>
         </div>
-        {
-          puzzles.map((single_algo, i)=>{
-            return <SinglePuzzle key={i} algorithm={single_algo} orignal_words={words} />
-          })
-          }
+        
+        <div className="row">
+          <div className="col-12 my-3">
+            <div id="carouselExample" className="carousel slide" data-bs-ride="carousel">
+              <div className="carousel-inner">
+                {puzzles.map((single_algo, i) => (
+                  <div key={i} className={`carousel-item ${i === 0 ? 'active' : ''}`}>
+                    <SinglePuzzle algorithm={single_algo} orignal_words={words} />
+                  </div>
+                ))}
+              </div>
+              <button id="prevButton" className="carousel-control-prev" type="button" onClick={handlePrevButtonClick}>
+                <span className="carousel-control-prev-icon" aria-hidden="true"></span>
+                <span className="visually-hidden">Previous</span>
+              </button>
+              <button id="nextButton" className="carousel-control-next" type="button" onClick={handleNextButtonClick}>
+                <span className="carousel-control-next-icon" aria-hidden="true"></span>
+                <span className="visually-hidden">Next</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+
       </div>
     </div>
   );
@@ -206,16 +235,18 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
   algorithm,
   orignal_words,
 }) => {
-  const [showSolution, setSolution] = useState(false);
+  const [showSolution, setSolution] = useState(true);
 
   const wordsWithIndex = useMemo(() => {
-    return algorithm?.positionObjArr.map((item, index) => ({
+    return algorithm?.positionObjArr.map((item, index) => ({        
       ...item,
       index,
       clue: orignal_words[index]?.clue,
       wordStr: orignal_words[index]?.word,
     }));
-  }, [algorithm, orignal_words]);
+    
+  }, []);
+console.log(wordsWithIndex,"wordsWithIndex");
 
   function findWordIndex(col: number, row: number) {
     for (let i = 0; i < algorithm.positionObjArr.length; i++) {
@@ -307,11 +338,11 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
       </div>
       <button
         type="button"
-        className="btn btn-primary"
+        className="btn btn-primary mt-2"
         onClick={() => setSolution(!showSolution)}
       >
-        {showSolution ?  "Hide Solution" : "Show Solution"}
-      </button>
+        {showSolution ?  "Hide Solution" : "Show Solution"}     
+         </button>
       <div className="row">
         <div className="col-6">
           <div className="d-flex">
