@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
+import { MdDelete } from "react-icons/md";
 
 interface Orientation {
   dx: number;
@@ -10,30 +11,16 @@ interface Orientation {
 }
 
 const WordSearch1: React.FC = () => {
-  const [boards, setBoards] = useState<string[][][]>([]);
-  const [inputWord, setInputWord] = useState<string>("");
-  const [wordArray, setWordArray] = useState<string[]>([
-    // "PYTHON",
-    // "HTML5",
-  ]);
-
-  const dividedArray: string[][] = useMemo(() => {
-    const wordsArrays: string[][] = [];
-    for (let i = 0; i < wordArray.length; i += 10) {
-      wordsArrays.push(wordArray.slice(i, i + 10));
-    }
-    return wordsArrays;
-  }, [wordArray]);
-
-  console.log("Divided arrays are: ", dividedArray);
-  console.log("Our final Boards are: ", boards);
-
   const [horizontal, setHorizontal] = useState<boolean>(true);
   const [vertical, setVertical] = useState<boolean>(true);
   const [diagonalTopLeft, setDiagonalTopLeft] = useState<boolean>(true);
   const [diagonalBottomLeft, setDiagonalBottomLeft] = useState<boolean>(true);
 
-  // console.log(board);
+  const [boards, setBoards] = useState<string[][][]>([]);
+  const [inputWord, setInputWord] = useState<string>("");
+  const [wordArray, setWordArray] = useState<string[]>([]);
+  const [dividedArray, setDividedArray] = useState<string[][]>([]);
+
   const getRandomInt = (max: number): number => {
     return Math.floor(Math.random() * Math.floor(max));
   };
@@ -117,6 +104,11 @@ const WordSearch1: React.FC = () => {
       alert("Enter Appropriate word");
     }
   };
+  const handleDelete = (index: number) => {
+    const updatedWordsArray = [...wordArray];
+    updatedWordsArray.splice(index, 1);
+    setWordArray(updatedWordsArray);
+  };
 
   const generatePuzzleForWords = (wordsArray: string[]): string[][] => {
     let newBoard = Array.from({ length: 13 }, () =>
@@ -157,20 +149,23 @@ const WordSearch1: React.FC = () => {
     return result;
   }
   return (
-    <div className="container mt-5">
+    <div className="container">
       <div className="row">
         <div className="col-md-12 col-lg-6">
           <div className="mt-3">
             <label htmlFor="wordInput" className="form-label">
               Enter Word:
             </label>
-            <div className="d-flex gap-2">
+            <div className="d-flex gap-2" style={{ whiteSpace: "nowrap" }}>
               <input
                 type="text"
                 className="form-control w-75"
                 id="wordInput"
                 value={inputWord}
-                onChange={(e) => setInputWord(e.target.value)}
+                onChange={(e) => {
+                  setInputWord(e.target.value);
+                }}
+                maxLength={10}
               />
               <button className="btn btn-primary me-2" onClick={handleAddWord}>
                 Add Word
@@ -235,7 +230,17 @@ const WordSearch1: React.FC = () => {
             className="btn btn-success"
             onClick={() => {
               setBoards([]);
-              dividedArray.map((single_array, i) => {
+
+              const d_array: string[][] = [];
+              for (let i = 0; i < wordArray.length; i += 10) {
+                d_array.push(wordArray.slice(i, i + 10));
+              }
+
+              setDividedArray((_) => {
+                return d_array;
+              });
+
+              d_array.map((single_array, i) => {
                 setBoards((prevBoards) => {
                   return [...prevBoards, generatePuzzleForWords(single_array)];
                 });
@@ -244,17 +249,39 @@ const WordSearch1: React.FC = () => {
           >
             Generate Puzzles
           </button>
+          {wordArray.length == 0 ? (
+            ""
+          ) : (
+            <div className="mt-3">
+              <h5>Word List:</h5>
+              <ul>
+                {wordArray.map((word, index) => (
+                  <>
+                    <div className="d-flex justify-content-between">
+                      <li key={index}>{word}</li>
+                      <button
+                        className="my-1 bg-white border-0"
+                        onClick={() => handleDelete(index)}
+                      >
+                        <MdDelete className="text-danger fs-4" />
+                      </button>
+                    </div>
+                  </>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <div className="col-md-12 col-lg-6">
           <div className="row">
             {boards.length !== 0 ? (
               <div className="col-md-1 col-lg-1 col-1 position-relative">
                 <button
-                  className="carousel-control-prev bottom-50"
+                  className="carousel-control-prev"
                   type="button"
                   data-bs-target="#carouselExampleFade"
                   data-bs-slide="prev"
-                  style={{ left: "17px" }}
+                  style={{ left: "17px", bottom: "30%" }}
                 >
                   <span
                     className="carousel-control-prev-icon bg-black z-1 p-3"
@@ -301,11 +328,11 @@ const WordSearch1: React.FC = () => {
             {boards.length !== 0 ? (
               <div className="col-md-1 col-lg-1 col-1 position-relative">
                 <button
-                  className="carousel-control-next bottom-50"
+                  className="carousel-control-next"
                   type="button"
                   data-bs-target="#carouselExampleFade"
                   data-bs-slide="next"
-                  style={{ right: "17px" }}
+                  style={{ right: "17px", bottom: "29%" }}
                 >
                   <span
                     className="carousel-control-next-icon bg-black z-1 p-3"
@@ -362,7 +389,7 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
   return (
     <>
       <div id={`wordsearch_${board_index}`}>
-        <table className="table text-center w-100 table-bordered mt-3">
+        <table className="table text-center w-100 table-bordered border-dark border-4 mt-3">
           <tbody>
             {board.map((row, rowIndex) => (
               <tr key={rowIndex}>
@@ -376,9 +403,6 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
                       style={{
                         width: "25px",
                         height: "25px",
-                        //   background: parsedCell?.orignalLetter && showSolution
-                        //     ? "gray"
-                        //     : "white",
                       }}
                     >
                       <span
@@ -401,12 +425,16 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
           </tbody>
         </table>
         <div className="mt-3">
-          <h5>Word List:</h5>
-          <ul>
+          <h5 className="text-center py-2">Puzzle Words</h5>
+          <div className="d-flex flex-wrap justify-content-start gap-3">
             {words_array.map((word, index) => (
-              <li key={index}>{word}</li>
+              <>
+                <li className="list-unstyled" key={index}>
+                  {word}
+                </li>
+              </>
             ))}
-          </ul>
+          </div>
         </div>
       </div>
 
