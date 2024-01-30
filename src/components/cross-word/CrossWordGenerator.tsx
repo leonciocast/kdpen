@@ -310,7 +310,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
         className="btn btn-primary"
         onClick={() => setSolution(!showSolution)}
       >
-        Show Solution
+        {showSolution ?  "Hide Solution" : "Show Solution"}
       </button>
       <div className="row">
         <div className="col-6">
