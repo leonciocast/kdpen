@@ -4,7 +4,8 @@ import { AlgorithmType, CWG, CellPropsType, PositionObjectType } from "./utils";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
-import 'bootstrap/dist/css/bootstrap.min.css';
+import "bootstrap/dist/css/bootstrap.min.css";
+import { MdDelete } from "react-icons/md";
 
 interface SingleWordType {
   word: string;
@@ -20,9 +21,6 @@ const CrossWordGenerator: React.FC = () => {
   const [words, setWords] = useState<SingleWordType[]>([]);
   const [words_per_puzzle, set_words_per_puzzle] = useState(10);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
-
-
-
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -54,20 +52,21 @@ const CrossWordGenerator: React.FC = () => {
     return result;
   }, [words]);
   const handleRegenerate = () => {
-    setPuzzles([])
-    dividedArray.map((single_array, single_array_index) => {
-      setPuzzles((prevPuzzles) => {
-        return [...prevPuzzles, generateNewPuzzle(single_array)];
-      });
+    setPuzzles((prevPuzzles) => {
+      const updatedPuzzles = dividedArray.map((single_array) =>
+        generateNewPuzzle(single_array)
+      );
+      return updatedPuzzles;
     });
   };
 
 
-
   const generateNewPuzzle = (input_words: SingleWordType[]) => {
-    let words__ = input_words.filter(
-      (word) => typeof word.word === "string" && word.word.trim() !== ""
-    ).map((item) => item.word.trim());
+    let words__ = input_words
+      .filter(
+        (word) => typeof word.word === "string" && word.word.trim() !== ""
+      )
+      .map((item) => item.word.trim());
     let result = CWG(words__);
     if (!result) {
       result = {
@@ -89,7 +88,28 @@ const CrossWordGenerator: React.FC = () => {
     }));
     setWords((prevWords) => [...prevWords, ...newWords]);
   };
-
+const handleDeleteWord = (index: number) => {
+    const deletedWord = words[index];
+    const newWords = words.filter((_, i) => i !== index);
+    setWords(newWords);
+  
+    // Remove the deleted word from puzzles
+    setPuzzles((prevPuzzles) =>
+      prevPuzzles.map((puzzle) => {
+        const updatedPositionObjArr = puzzle.positionObjArr.filter(
+          (positionObj) => positionObj.wordStr !== deletedWord.word
+        );
+  
+        return {
+          ...puzzle,
+          positionObjArr: updatedPositionObjArr,
+        };
+      })
+    );
+  
+    // Regenerate puzzles after deleting a word
+    handleRegenerate();
+  };
   // const dividedWords = useMemo(()=>{
   //   const wordsArrays: string[][] = [];
   //   for (let i = 0; i < words.length; i += 10) {
@@ -97,144 +117,170 @@ const CrossWordGenerator: React.FC = () => {
   //   }
   //   return wordsArrays
   // }, [words])
-  const downloadPDF = () => {
-    const componentRef = document.getElementById(`crossword`) as HTMLElement;
-    html2canvas(componentRef).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({
-        orientation: "landscape",
-        unit: "mm",
-        format: "a4",
-      });
-      html2canvas(componentRef, {
-        scale: 2,
-      }).then((canvas) => { });
-      const imgWidth = 300;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      pdf.addImage(imgData, "PNG", 50, 10, imgWidth, imgHeight);
-      pdf.save(`crossword.pdf`);
-    });
-  };
-
+  
 
   const handlePrevButtonClick = () => {
-    const carousel = document.getElementById('carouselExample');
+    const carousel = document.getElementById("carouselExample");
     if (carousel) {
-      carousel.setAttribute('data-bs-slide', 'prev');
+      carousel.setAttribute("data-bs-slide", "prev");
       const bsCarousel = new (window as any).bootstrap.Carousel(carousel);
-      bsCarousel.to('prev');
+      bsCarousel.to("prev");
     }
   };
 
   const handleNextButtonClick = () => {
-    const carousel = document.getElementById('carouselExample');
+    const carousel = document.getElementById("carouselExample");
     if (carousel) {
-      carousel.setAttribute('data-bs-slide', 'next');
+      carousel.setAttribute("data-bs-slide", "next");
       const bsCarousel = new (window as any).bootstrap.Carousel(carousel);
-      bsCarousel.to('next');
+      bsCarousel.to("next");
     }
   };
 
   return (
-    <div className="crossword-grid mainWrapper" >
+    <div className="crossword-grid mainWrapper">
       <div className="">
         <div className="row ">
-        <div className="col-md-4">
-        <div className="row">
-          <div className=" my-3 ">
-            <div>
-              <div>
-                <input
-                  type="text"
-                  className="form-control me-2 mb-2 "
-                  placeholder="Enter Word"
-                  value={inputWord.word}
-                  name="word"
-                  onChange={handleInputChange}
-                />
-                <input
-                  type="text"
-                  className="form-control  "
-                  placeholder="Enter Clue"
-                  value={inputWord.clue}
-                  name="clue"
-                  onChange={handleInputChange}
-                />
-              </div>
-              <div style={{display:"flex"}}>
-              <button
-                type="button"
-                style={{margin:"7px 5px",padding:"3px 5px",whiteSpace:"nowrap"}}
-                className="btn btn-primary "
-                onClick={handleAddWord}
-              >
-                Add Word
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary "
-                style={{margin:"7px 5px",padding:"3px 5px",whiteSpace:"nowrap"}}              
-                onClick={() => {
-                  handleRegenerate();
-                }}
-              >
-                Regenerate
-              </button>
-
-              <button
-                className="btn btn-primary mx-1 "
-                onClick={() => downloadPDF()}
-                style={{margin:"7px 5px",padding:"3px 5px",whiteSpace:"nowrap"}}
-
-              >
-                Download
-              </button>
-              </div>
-            </div>
-            <div className="mt-2">
-              <CSVReader
-                onFileLoaded={handleCSVFile}
-                parserOptions={{ header: false, skipEmptyLines: true }}
-              />
-            </div>
-          </div>
-        </div>
-        </div>
-      <div className="col-md-8">
-        <div className="row my-3">
-        <div className="col-md-1 position-relative">
-        {puzzles.length > 0 && (
-            <button id="prevButton" className="carousel-control-prev" style={{left: "17px", bottom: "30%"}} type="button" onClick={handlePrevButtonClick}>
-                <span className="carousel-control-prev-icon bg-black z-1 p-3" aria-hidden="true"></span>
-                <span className="visually-hidden">Previous</span>
-              </button>   
-              )}
-              </div> 
-              <div className="col-md-10 ">        
-            <div id="carouselExample" className="carousel slide carousel-fade">
-             
-              <div className="carousel-inner">
-                {puzzles.map((single_algo, i) => (
-                  <div key={i} className={`carousel-item ${i === 0 ? 'active' : ''}`}>
-                    <SinglePuzzle algorithm={single_algo} orignal_words={words} />
+          <div className="col-md-4 col-lg-6">
+            <div className="row">
+              <div className=" my-3 ">
+                <div>
+                  <div>
+                    <input
+                      type="text"
+                      className="form-control me-2 mb-2 "
+                      placeholder="Enter Word"
+                      value={inputWord.word}
+                      name="word"
+                      onChange={handleInputChange}
+                    />
+                    <input
+                      type="text"
+                      className="form-control  "
+                      placeholder="Enter Clue"
+                      value={inputWord.clue}
+                      name="clue"
+                      onChange={handleInputChange}
+                    />
                   </div>
-                ))}
+                  <div style={{ display: "flex" }}>
+                    <button
+                      type="button"
+                      style={{
+                        margin: "7px 5px",
+                        padding: "3px 5px",
+                        whiteSpace: "nowrap",
+                      }}
+                      className="btn btn-primary "
+                      onClick={handleAddWord}
+                    >
+                      Add Word
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary "
+                      style={{
+                        margin: "7px 5px",
+                        padding: "3px 5px",
+                        whiteSpace: "nowrap",
+                      }}
+                      onClick={() => {
+                        handleRegenerate();
+                      }}
+                    >
+                      Regenerate
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2">
+                  <CSVReader
+                    onFileLoaded={handleCSVFile}
+                    parserOptions={{ header: false, skipEmptyLines: true }}
+                  />
+                </div>
               </div>
-              </div>
-              </div>
-            <div className="col-md-1 position-relative">
-            {puzzles.length > 0 && (
-              <button id="nextButton" className="carousel-control-next" style={{right: "17px", bottom: "29%"}}  type="button" onClick={handleNextButtonClick}>
-                <span className="carousel-control-next-icon bg-black z-1 p-3" aria-hidden="true"></span>
-                <span className="visually-hidden">Next</span>
-              </button>
+            </div>
+            {puzzles.length > 0 &&  (
+            
+            <div className="mt-3">
+              <h5>Word List:</h5>
+              <ul >
+                      {words.map((word, index) => (
+                        
+                        <li key={index} className="d-flex align-items-center justify-content-between">
+                             <span>{index } - {word.word}</span>
+                          <button
+                            className="btn btn-link text-danger"
+                            onClick={() => handleDeleteWord(index)}
+                          >
+                            <MdDelete className="fs-4" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+            </div>
+          )}
+          </div>
+          <div className="col-md-8 col-lg-6">
+            <div className="row my-3">
+              <div className="col-md-1 position-relative">
+                {puzzles.length > 0 && (
+                  <button
+                    id="prevButton"
+                    className="carousel-control-prev"
+                    style={{ left: "17px", bottom: "30%" }}
+                    type="button"
+                    onClick={handlePrevButtonClick}
+                  >
+                    <span
+                      className="carousel-control-prev-icon bg-black z-1 p-3"
+                      aria-hidden="true"
+                    ></span>
+                    <span className="visually-hidden">Previous</span>
+                  </button>
                 )}
               </div>
-            
-          
-        </div>
-        </div>
+              <div className="col-md-10 d-flex justify-content-center">
+                <div
+                  id="carouselExample"
+                  className="carousel slide carousel-fade"
+                >
+                  <div className="carousel-inner">
+                    {puzzles.map((single_algo, i) => (
+                      <div
+                        key={i}
+                        className={`carousel-item ${i === 0 ? "active" : ""}`}
+                      >
+                        <SinglePuzzle
+                          algorithm={single_algo}
+                          orignal_words={words}
+                          board_index={i}
+                          key={i}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="col-md-1 position-relative">
+                {puzzles.length > 0 && (
+                  <button
+                    id="nextButton"
+                    className="carousel-control-next"
+                    style={{ right: "17px", bottom: "29%" }}
+                    type="button"
+                    onClick={handleNextButtonClick}
+                  >
+                    <span
+                      className="carousel-control-next-icon bg-black z-1 p-3"
+                      aria-hidden="true"
+                    ></span>
+                    <span className="visually-hidden">Next</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -244,10 +290,12 @@ const CrossWordGenerator: React.FC = () => {
 interface SinglePuzzleType {
   algorithm: AlgorithmType;
   orignal_words: SingleWordType[];
+  board_index: number;
 }
 const SinglePuzzle: React.FC<SinglePuzzleType> = ({
   algorithm,
   orignal_words,
+  board_index,
 }) => {
   const [showSolution, setSolution] = useState(true);
 
@@ -255,13 +303,15 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
     return algorithm?.positionObjArr.map((item, index) => {
       return {
         ...item,
-        index
-      }
+        index,
+      };
     });
   }, [algorithm]);
 
   function getClueFromWord(word: string) {
-    const matchingEntry = orignal_words.find(entry => entry.word.toUpperCase() === word.toUpperCase());
+    const matchingEntry = orignal_words.find(
+      (entry) => entry.word.toUpperCase() === word.toUpperCase()
+    );
 
     // Return the clue if found, or a default message if not found
     return matchingEntry ? matchingEntry.clue : null;
@@ -317,8 +367,8 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
               cell?.vIdx === 0 || cell?.hIdx === 0
                 ? "gainsboro"
                 : cell?.vIdx || cell?.hIdx
-                  ? "white"
-                  : "gray",
+                ? "white"
+                : "gray",
             color: "black",
           }}
         >
@@ -345,14 +395,80 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
 
     return grid;
   };
+  const downloadPDF = (id: number) => {
+    const componentRef = document.getElementById(
+      `crossword_${id}`
+    ) as HTMLElement;
+
+    html2canvas(componentRef).then((canvas) => {
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const imgWidth = 150;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.text(`Cross Word ${id + 1}`, 30, 10);
+
+      pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
+      pdf.save(`crossword ${id + 1}.pdf`);
+    });
+  };
 
   return (
-    <div id={`crossword`}>
-      <div className="row">
-        <div className="col-6">
-          <table>
-            <tbody>{renderGrid()}</tbody>
-          </table>
+    <>
+      <div id={`crossword_${board_index}`}>
+        <div className="row">
+          <div className="col-6">
+            <table>
+              <tbody>{renderGrid()}</tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="">
+          <div className="">
+            <div className="d-flex my-3 gap-4">
+              {/* {JSON.stringify(algorithm, null, 2)} */}
+              <ul className="list-unstyled">
+                <b>Across</b>
+                {wordsWithIndex
+                  .filter((obj) => obj?.isHorizon)
+                  .map((word, index) => (
+                    <li
+                      key={index}
+                      style={
+                        word.index === 0
+                          ? { listStyle: "none", whiteSpace: "nowrap" }
+                          : { whiteSpace: "nowrap" }
+                      }
+                    >
+                      {word.index === 0 ? (
+                        ""
+                      ) : (
+                        <span>
+                          {word.index} - {getClueFromWord(word?.wordStr)}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+              <ul className="list-unstyled">
+                <b>Down</b>
+                {wordsWithIndex
+                  .filter((obj) => !obj?.isHorizon)
+                  .map((word, index) => (
+                    <li key={index} style={{ whiteSpace: "nowrap" }}>
+                      <span>
+                        {word.index} - {getClueFromWord(word?.wordStr)}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
       <button
@@ -362,49 +478,14 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
       >
         {showSolution ? "Hide Solution" : "Show Solution"}
       </button>
-      <div className="row">
-        <div className="col-6">
-          <div className="d-flex">
-            {/* {JSON.stringify(algorithm, null, 2)} */}
-            <ul>
-              <b>Across</b>
-              {wordsWithIndex
-                .filter((obj) => obj?.isHorizon)
-                .map((word, index) => (
-                  <li
-                    key={index}
-                    style={
-                      word.index === 0
-                        ? { listStyle: "none", whiteSpace: "nowrap" }
-                        : { whiteSpace: "nowrap" }
-                    }
-                  >
-                    {word.index === 0 ? (
-                      ""
-                    ) : (
-                      <span>
-                        {word.index} - {getClueFromWord(word?.wordStr)}
-                      </span>
-                    )}
-                  </li>
-                ))}
-            </ul>
-            <ul>
-              <b>Down</b>
-              {wordsWithIndex
-                .filter((obj) => !obj?.isHorizon)
-                .map((word, index) => (
-                  <li key={index} style={{ whiteSpace: "nowrap" }}>
-                    <span>
-                      {word.index} - {getClueFromWord(word?.wordStr)}
-                    </span>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
+      <button
+        className="btn btn-primary mx-1 mt-2"
+        onClick={() => downloadPDF(board_index)}
+        
+      >
+        Download
+      </button>
+    </>
   );
 };
 export default CrossWordGenerator;
