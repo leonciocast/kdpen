@@ -141,14 +141,14 @@ const handleDeleteWord = (index: number) => {
     <div className="crossword-grid mainWrapper">
       <div className="">
         <div className="row ">
-          <div className="col-md-4 col-lg-6">
+          <div className="col-md-4 col-lg-5">
             <div className="row">
               <div className=" my-3 ">
                 <div>
                   <div>
                     <input
                       type="text"
-                      className="form-control me-2 mb-2 "
+                      className="form-control me-2 mb-2 w-50"
                       placeholder="Enter Word"
                       value={inputWord.word}
                       name="word"
@@ -156,7 +156,7 @@ const handleDeleteWord = (index: number) => {
                     />
                     <input
                       type="text"
-                      className="form-control  "
+                      className="form-control  w-50"
                       placeholder="Enter Clue"
                       value={inputWord.clue}
                       name="clue"
@@ -221,7 +221,7 @@ const handleDeleteWord = (index: number) => {
             </div>
           )}
           </div>
-          <div className="col-md-8 col-lg-6">
+          <div className="col-md-8 col-lg-7">
             <div className="row my-3">
               <div className="col-md-1 position-relative">
                 {puzzles.length > 0 && (
@@ -240,7 +240,7 @@ const handleDeleteWord = (index: number) => {
                   </button>
                 )}
               </div>
-              <div className="col-md-10 d-flex justify-content-center">
+              <div className="col-md-10">
                 <div
                   id="carouselExample"
                   className="carousel slide carousel-fade"
@@ -308,12 +308,27 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
     });
   }, [algorithm]);
 
+  const accrossWordsClues = useMemo(()=>{
+    return wordsWithIndex
+    .filter((obj) => obj?.isHorizon)
+  }, [wordsWithIndex])
+
+  const downWordsClues = useMemo(()=>{
+    return wordsWithIndex
+    .filter((obj) => !obj?.isHorizon)
+  }, [wordsWithIndex])
+
+
+  console.log("consoleLog",wordsWithIndex, accrossWordsClues, downWordsClues)
+
+
   function getClueFromWord(word: string) {
     const matchingEntry = orignal_words.find(
-      (entry) => entry.word.toUpperCase() === word.toUpperCase()
-    );
+      (entry) => entry.word.toUpperCase() == word.toUpperCase()
+      
+      );
+      console.log("Input Word : ", word,matchingEntry,"matchingEntry")
 
-    // Return the clue if found, or a default message if not found
     return matchingEntry ? matchingEntry.clue : null;
   }
 
@@ -408,7 +423,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
         format: "a4",
       });
 
-      const imgWidth = 150;
+      const imgWidth = 100;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.text(`Cross Word ${id + 1}`, 30, 10);
 
@@ -437,10 +452,8 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
                 {wordsWithIndex
                   .filter((obj) => obj?.isHorizon)
                   .map((word, index) => (
-                    <li
-                      key={index}
-                      style={
-                        word.index === 0
+                    <li key={index} 
+                    style={ word.index === 0
                           ? { listStyle: "none", whiteSpace: "nowrap" }
                           : { whiteSpace: "nowrap" }
                       }
@@ -449,7 +462,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
                         ""
                       ) : (
                         <span>
-                          {word.index} - {getClueFromWord(word?.wordStr)}
+                          {word.index} - {word?.wordStr}  | {getClueFromWord(word?.wordStr)}
                         </span>
                       )}
                     </li>
@@ -460,9 +473,9 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
                 {wordsWithIndex
                   .filter((obj) => !obj?.isHorizon)
                   .map((word, index) => (
-                    <li key={index} style={{ whiteSpace: "nowrap" }}>
+                    <li key={index} style={{ whiteSpace: "normal" }}>{/*no-wrap*/}
                       <span>
-                        {word.index} - {getClueFromWord(word?.wordStr)}
+                        {word.index} - {word?.wordStr}  | {getClueFromWord(word?.wordStr)}
                       </span>
                     </li>
                   ))}
