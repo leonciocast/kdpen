@@ -97,7 +97,6 @@ const CrossWordGenerator: React.FC = () => {
   //   }
   //   return wordsArrays
   // }, [words])
-
   const downloadPDF = () => {
     const componentRef = document.getElementById(`crossword`) as HTMLElement;
     html2canvas(componentRef).then((canvas) => {
@@ -205,10 +204,12 @@ const CrossWordGenerator: React.FC = () => {
       <div className="col-md-8">
         <div className="row my-3">
         <div className="col-md-1 position-relative">
+        {puzzles.length > 0 && (
             <button id="prevButton" className="carousel-control-prev" style={{left: "17px", bottom: "30%"}} type="button" onClick={handlePrevButtonClick}>
                 <span className="carousel-control-prev-icon bg-black z-1 p-3" aria-hidden="true"></span>
                 <span className="visually-hidden">Previous</span>
               </button>   
+              )}
               </div> 
               <div className="col-md-10 ">        
             <div id="carouselExample" className="carousel slide carousel-fade">
@@ -223,10 +224,12 @@ const CrossWordGenerator: React.FC = () => {
               </div>
               </div>
             <div className="col-md-1 position-relative">
+            {puzzles.length > 0 && (
               <button id="nextButton" className="carousel-control-next" style={{right: "17px", bottom: "29%"}}  type="button" onClick={handleNextButtonClick}>
                 <span className="carousel-control-next-icon bg-black z-1 p-3" aria-hidden="true"></span>
                 <span className="visually-hidden">Next</span>
               </button>
+                )}
               </div>
             
           
