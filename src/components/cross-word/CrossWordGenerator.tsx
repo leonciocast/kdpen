@@ -6,6 +6,7 @@ import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { MdDelete } from "react-icons/md";
+import { BsArrowDownCircle,BsArrowRepeat,BsEye, BsEyeSlash   } from "react-icons/bs";
 
 interface SingleWordType {
   word: string;
@@ -163,14 +164,9 @@ const handleDeleteWord = (index: number) => {
                       onChange={handleInputChange}
                     />
                   </div>
-                  <div style={{ display: "flex" }}>
+                  <div className="mt-2 d-flex gap-2" >
                     <button
-                      type="button"
-                      style={{
-                        margin: "7px 5px",
-                        padding: "3px 5px",
-                        whiteSpace: "nowrap",
-                      }}
+                      type="button"                  
                       className="btn btn-primary "
                       onClick={handleAddWord}
                     >
@@ -179,16 +175,13 @@ const handleDeleteWord = (index: number) => {
                     <button
                       type="button"
                       className="btn btn-primary "
-                      style={{
-                        margin: "7px 5px",
-                        padding: "3px 5px",
-                        whiteSpace: "nowrap",
-                      }}
                       onClick={() => {
                         handleRegenerate();
                       }}
                     >
-                      Regenerate
+                  <div style={{display:"flex",gap:"5px",alignItems:"center"}}>  <BsArrowRepeat  /><span> Regenerate </span></div>
+
+                      
                     </button>
                   </div>
                 </div>
@@ -308,18 +301,33 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
     });
   }, [algorithm]);
 
-  const accrossWordsClues = useMemo(()=>{
-    return wordsWithIndex
-    .filter((obj) => obj?.isHorizon)
-  }, [wordsWithIndex])
+  const renderCluesList = (isHorizon: boolean) => (
+    <ul className="list-unstyled">
+      <b>{isHorizon ? "Across" : "Down"}</b>
+      {wordsWithIndex
+        .filter((obj) => obj?.isHorizon === isHorizon)
+        .map((word, index) => (
+          <li key={index} style={{ whiteSpace: "nowrap" }}>
+            <span>
+              {word.index} - {getClueFromWord(word?.wordStr)}
+            </span>
+          </li>
+        ))}
+    </ul>
+  );
 
-  const downWordsClues = useMemo(()=>{
-    return wordsWithIndex
-    .filter((obj) => !obj?.isHorizon)
-  }, [wordsWithIndex])
+  // const accrossWordsClues = useMemo(()=>{
+  //   return wordsWithIndex
+  //   .filter((obj) => obj?.isHorizon)
+  // }, [wordsWithIndex])
+
+  // const downWordsClues = useMemo(()=>{
+  //   return wordsWithIndex
+  //   .filter((obj) => !obj?.isHorizon)
+  // }, [wordsWithIndex])
 
 
-  console.log("consoleLog",wordsWithIndex, accrossWordsClues, downWordsClues)
+  // console.log("consoleLog",wordsWithIndex, accrossWordsClues, downWordsClues)
 
 
   function getClueFromWord(word: string) {
@@ -327,22 +335,24 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
       (entry) => entry.word.toUpperCase() == word.toUpperCase()
       
       );
-      console.log("Input Word : ", word,matchingEntry,"matchingEntry")
+      // console.log("Input Word : ", word,matchingEntry,"matchingEntry")
 
     return matchingEntry ? matchingEntry.clue : null;
   }
-
-  function findWordIndex(col: number, row: number) {
+  function findWordIndices(col: number, row: number) {
+    const indices = [];
     for (let i = 0; i < algorithm.positionObjArr.length; i++) {
       const word = algorithm.positionObjArr[i];
       if (word.xNum === col && word.yNum === row) {
-        return i;
+        indices.push(i);
       }
     }
-    return -1;
+    return indices;
   }
 
   const Cell: React.FC<CellPropsType> = ({ row, col, cell }) => {
+    const indices = findWordIndices(col, row);
+
     return (
       <td
         data-row={row}
@@ -357,19 +367,25 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
           padding: 0,
         }}
       >
-        {(cell?.vIdx === 0 || cell?.hIdx === 0) && (
+
+        {indices.map((index, idx) => (
           <div
+            key={`${row}-${col}-${idx}`}
             style={{
               fontSize: "0.43rem",
+              fontWeight:"bold",
               position: "absolute",
-              left: 1,
-              top: 1,
+              left: 1 + idx * 19,
+              top:-1.6,
+              // top: 17 + idx * -2,
               color: "black",
+              padding: "0",
             }}
           >
-            {findWordIndex(col, row)}
+            {index}
           </div>
-        )}
+        ))}
+
 
         <div
           style={{
@@ -411,25 +427,26 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
     return grid;
   };
   const downloadPDF = (id: number) => {
-    const componentRef = document.getElementById(
-      `crossword_${id}`
-    ) as HTMLElement;
-
-    html2canvas(componentRef).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
+    const componentRef = document.getElementById(`crossword_${id}`) as HTMLElement;  
+    // DPI (dots per inch) for better image quality
+    const dpi = 400; 
+  
+    html2canvas(componentRef, { scale: dpi / 156 }) // Adjust scale based on DPI
+      .then((canvas) => {
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+  
+        const imgWidth = 150;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        pdf.text(`Cross Word ${id + 1}`, 30, 10);
+  
+        pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
+        pdf.save(`crossword_${id + 1}.pdf`);
       });
-
-      const imgWidth = 100;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      pdf.text(`Cross Word ${id + 1}`, 30, 10);
-
-      pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
-      pdf.save(`crossword ${id + 1}.pdf`);
-    });
   };
 
   return (
@@ -462,7 +479,9 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
                         ""
                       ) : (
                         <span>
-                          {word.index} - {word?.wordStr}  | {getClueFromWord(word?.wordStr)}
+                          {word.index} -
+                           {/* {word?.wordStr}   */}
+                           {getClueFromWord(word?.wordStr)}
                         </span>
                       )}
                     </li>
@@ -475,7 +494,9 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
                   .map((word, index) => (
                     <li key={index} style={{ whiteSpace: "normal" }}>{/*no-wrap*/}
                       <span>
-                        {word.index} - {word?.wordStr}  | {getClueFromWord(word?.wordStr)}
+                        {word.index} - 
+                        {/* {word?.wordStr} */}
+                           {getClueFromWord(word?.wordStr)}
                       </span>
                     </li>
                   ))}
@@ -485,18 +506,29 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
         </div>
       </div>
       <button
-        type="button"
-        className="btn btn-primary mt-2"
-        onClick={() => setSolution(!showSolution)}
-      >
-        {showSolution ? "Hide Solution" : "Show Solution"}
-      </button>
+  type="button"
+  className="btn btn-primary mt-2"
+  onClick={() => setSolution(!showSolution)}
+>
+  {showSolution ? (
+    <>
+      <BsEyeSlash className="me-2 top-0"  />
+      Hide Solution
+    </>
+  ) : (
+    <>
+      <BsEye className="me-2 top-0" />
+      Show Solution
+    </>
+  )}
+</button>
       <button
         className="btn btn-primary mx-1 mt-2"
         onClick={() => downloadPDF(board_index)}
         
       >
-        Download
+      <div style={{display:"flex",gap:"5px",alignItems:"center"}}>  <BsArrowDownCircle /><span> Download </span>
+      </div>
       </button>
     </>
   );
