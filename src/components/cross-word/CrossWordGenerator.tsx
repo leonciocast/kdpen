@@ -23,7 +23,19 @@ const CrossWordGenerator: React.FC = () => {
   const [words_per_puzzle, set_words_per_puzzle] = useState(10);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+
+  const uniqueWordsSet = new Set<string>();
+
+  
+  const addUniqueWord = (word: string, clue: string) => {
+    if (!uniqueWordsSet.has(word.toUpperCase())) {
+      uniqueWordsSet.add(word.toUpperCase());
+      setWords((prev) => [...prev, { word: word.toUpperCase(), clue }]);
+    }
+  };
+
+ 
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setInputWord((prevData) => ({
       ...prevData,
@@ -33,18 +45,46 @@ const CrossWordGenerator: React.FC = () => {
 
   const handleAddWord = () => {
     if (inputWord.word.trim() !== "" && inputWord.clue.trim() !== "") {
-      setWords((prev) => [
-        ...prev,
-        {
-          word: inputWord.word.toUpperCase().trim(),
-          clue: inputWord.clue.trim(),
-        },
-      ]);
+      const wordsArray = inputWord.word.trim().split('\n');
+      const cluesArray = inputWord.clue.trim().split('\n');
+  
+      if (wordsArray.length !== cluesArray.length) {
+        alert("Number of words and clues should match.");
+        return;
+      }
+  
+      let newWordsToAdd = [];
+      for (let i = 0; i < wordsArray.length; i++) {
+        const word = wordsArray[i].trim();
+        const clue = cluesArray[i].trim();
+        if (word && clue) {
+          if (!wordExists(word.toUpperCase())) {
+            uniqueWordsSet.add(word.toUpperCase());
+            newWordsToAdd.push({ word: word.toUpperCase(), clue });
+          } else {
+            alert("Word already exists: " + word);
+          }
+        }
+      }
+  
+      if (newWordsToAdd.length > 0) {
+        setWords((prev) => [...prev, ...newWordsToAdd]);
+      }
+      
       setInputWord(initialEmptyInput);
     } else {
-      alert("Enter Word and Clue Both");
+      alert("Enter Word(s) and Clue(s) Both");
     }
   };
+  
+  const wordExists = (word: any) => {
+    return words.some(item => item.word.toUpperCase() === word);
+  };
+  
+  
+  
+  
+
   const dividedArray: SingleWordType[][] = useMemo(() => {
     const result = [];
     for (let i = 0; i < words.length; i += 10) {
@@ -52,6 +92,7 @@ const CrossWordGenerator: React.FC = () => {
     }
     return result;
   }, [words]);
+  
   const handleRegenerate = () => {
     setPuzzles((prevPuzzles) => {
       const updatedPuzzles = dividedArray.map((single_array) =>
@@ -77,24 +118,25 @@ const CrossWordGenerator: React.FC = () => {
         ownerMap: [],
       };
     }
-
-    // setAlgorithm(result);
     return result;
   };
 
   const handleCSVFile = (data: any, fileInfo: any) => {
     const newWords = data.map((item: any) => ({
       word: item[0].toUpperCase().trim(),
-      clue: item[1],
+      clue: item[1].trim(),
     }));
-    setWords((prevWords) => [...prevWords, ...newWords]);
+    newWords.forEach((wordObj:any) => {
+      addUniqueWord(wordObj.word, wordObj.clue);
+    });
   };
+
 const handleDeleteWord = (index: number) => {
     const deletedWord = words[index];
     const newWords = words.filter((_, i) => i !== index);
     setWords(newWords);
   
-    // Remove the deleted word from puzzles
+   
     setPuzzles((prevPuzzles) =>
       prevPuzzles.map((puzzle) => {
         const updatedPositionObjArr = puzzle.positionObjArr.filter(
@@ -145,46 +187,48 @@ const handleDeleteWord = (index: number) => {
           <div className="col-md-4 col-lg-5">
             <div className="row">
               <div className=" my-3 ">
-                <div>
-                  <div>
-                    <input
-                      type="text"
-                      className="form-control me-2 mb-2 w-50"
-                      placeholder="Enter Word"
-                      value={inputWord.word}
-                      name="word"
-                      onChange={handleInputChange}
-                    />
-                    <input
-                      type="text"
-                      className="form-control  w-50"
-                      placeholder="Enter Clue"
-                      value={inputWord.clue}
-                      name="clue"
-                      onChange={handleInputChange}
-                    />
-                  </div>
-                  <div className="mt-2 d-flex gap-2" >
+
+              <form>
+              <div>
+                  <textarea
+                    className="form-control me-2 mb-2 w-100"
+                    placeholder="Enter Word(s) (separated by newline)"
+                    value={inputWord.word}
+                    name="word"
+                    onChange={handleInputChange}
+                    rows={3} 
+                  />
+                  <textarea
+                    className="form-control w-100"
+                    placeholder="Enter Clue(s) (separated by newline)"
+                    value={inputWord.clue}
+                    name="clue"
+                    onChange={handleInputChange}
+                    rows={3} 
+                  />
+                </div>
+                  <div className="mt-2 d-flex gap-2">
                     <button
-                      type="button"                  
-                      className="btn btn-primary "
+                      type="button"
+                      className="btn btn-primary"
                       onClick={handleAddWord}
                     >
                       Add Word
                     </button>
                     <button
                       type="button"
-                      className="btn btn-primary "
+                      className="btn btn-primary"
                       onClick={() => {
                         handleRegenerate();
                       }}
                     >
-                  <div style={{display:"flex",gap:"5px",alignItems:"center"}}>  <BsArrowRepeat  /><span> Regenerate </span></div>
-
-                      
+                      <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                        <BsArrowRepeat /><span> Regenerate </span>
+                      </div>
                     </button>
                   </div>
-                </div>
+                </form>
+
                 <div className="mt-2">
                   <CSVReader
                     onFileLoaded={handleCSVFile}
@@ -403,7 +447,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
             color: "black",
           }}
         >
-          {showSolution ? cell?.letter : ""}
+     {showSolution ? cell?.letter.trim() : ""}
         </div>
       </td>
     );

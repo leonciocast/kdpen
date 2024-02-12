@@ -40,8 +40,10 @@ export type LetterMap = Record<string, XYObj[]>;
 export type MatrixObj = Record<number, Record<number, string>>;
 
 export const CWG = (arr: string[]): any => {
-    const sortedArr = sortArr([...arr]);
-    return draw(
+    const cleanedArr = arr.map(word => word.replace(/\s/g, ''));
+
+    const sortedArr = sortArr([...cleanedArr]);
+        return draw(
         [{ wordStr: sortedArr.pop() as string, xNum: 0, yNum: 0, isHorizon: true }],
         sortedArr.pop() as string
     );
@@ -220,9 +222,14 @@ export const CWG = (arr: string[]): any => {
                 const y = startY + (isHorizon ? 0 : letterIdx);
                 const obj = { letter };
                 const key = isHorizon ? "h" : "v";
-                const target = ownerMap[y][x] || obj;
+                // const target = ownerMap[y][x] || obj;
+                // target[key] = orderIdx;
+                // target[key + "Idx"] = letterIdx;
+                // if (!ownerMap[y][x]) ownerMap[y][x] = obj;
+                const target = (ownerMap[y] && ownerMap[y][x]) || obj;
                 target[key] = orderIdx;
                 target[key + "Idx"] = letterIdx;
+                if (!ownerMap[y]) ownerMap[y] = [];
                 if (!ownerMap[y][x]) ownerMap[y][x] = obj;
             });
         });

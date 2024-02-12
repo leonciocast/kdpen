@@ -15,6 +15,8 @@ const WordSearch1: React.FC = () => {
   const [vertical, setVertical] = useState<boolean>(true);
   const [diagonalTopLeft, setDiagonalTopLeft] = useState<boolean>(true);
   const [diagonalBottomLeft, setDiagonalBottomLeft] = useState<boolean>(true);
+  const [inputWords, setInputWords] = useState<string>("");
+  const [uniqueWords, setUniqueWords] = useState<Set<string>>(new Set());
 
   const [boards, setBoards] = useState<string[][][]>([]);
   const [inputWord, setInputWord] = useState<string>("");
@@ -92,18 +94,33 @@ const WordSearch1: React.FC = () => {
 
     return board;
   };
+    // Function to add unique words
+    const addUniqueWords = (newWords: string[]) => {
+      const updatedSet = new Set(uniqueWords);
+      newWords.forEach(word => updatedSet.add(word));
+      setUniqueWords(updatedSet);
+    };
 
-  const handleAddWord = (): void => {
-    if (inputWord.trim() !== "") {
-      setWordArray((prevWordArray) => [
-        ...prevWordArray,
-        inputWord.toUpperCase(),
-      ]);
-      setInputWord("");
-    } else {
-      alert("Enter Appropriate word");
-    }
-  };
+    const handleAddWord = (): void => {
+      if (inputWords.trim() !== "") {
+        const newWords = inputWords.split("\n").map((word) => word.trim().toUpperCase());
+        const duplicateWords = newWords.filter(word => uniqueWords.has(word));
+    
+        if (duplicateWords.length > 0) {
+          const duplicateWordMessage = duplicateWords.map(word => `"${word}"`).join(', ');
+          alert(`The word ${duplicateWordMessage} are already exists.`);
+          return;
+        }
+
+        setWordArray((prevWordArray) => [...prevWordArray, ...newWords]);
+        newWords.forEach(word => uniqueWords.add(word));
+        setInputWords("");
+      } else {
+        alert("Enter Appropriate word(s)");
+      }
+    };
+    
+    
   const handleDelete = (index: number) => {
     const updatedWordsArray = [...wordArray];
     updatedWordsArray.splice(index, 1);
@@ -135,7 +152,9 @@ const WordSearch1: React.FC = () => {
     wordsFromFile = wordsFromFile.map((word, i) => {
       return word.toUpperCase();
     });
+
     setWordArray([...wordArray, ...wordsFromFile]);
+    addUniqueWords(wordsFromFile); // Add unique words here
   };
 
   function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
@@ -154,23 +173,24 @@ const WordSearch1: React.FC = () => {
         <div className="col-md-12 col-lg-6">
           <div className="mt-3">
             <label htmlFor="wordInput" className="form-label">
-              Enter Word:
+               Enter Words:
             </label>
             <div className="d-flex gap-2" style={{ whiteSpace: "nowrap" }}>
-              <input
-                type="text"
+             
+               <textarea
+               placeholder="when multiple words (separated by new line)"
                 className="form-control w-75"
                 id="wordInput"
-                value={inputWord}
+                value={inputWords}
                 onChange={(e) => {
-                  setInputWord(e.target.value);
+                  setInputWords(e.target.value);
                 }}
-                maxLength={10}
+                rows={3}
               />
-              <button className="btn btn-primary me-2" onClick={handleAddWord}>
+          </div>
+            <button className="btn btn-primary me-2 mt-2" onClick={handleAddWord}>
                 Add Word
               </button>
-            </div>
           </div>
           <div className="d-flex flex-wrap align-items-center my-3">
             <label className=" fw-bold me-2">Upload CSV</label>
@@ -364,27 +384,26 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
   board_index,
 }) => {
   const [showSolution, setShowSolution] = useState<boolean>(false);
-  const downloadPDF = (id: number) => {
-    const componentRef = document.getElementById(
-      `wordsearch_${id}`
-    ) as HTMLElement;
+  const downloadPDF = (id:number) => {
+    const componentRef = document.getElementById(`wordsearch_${id}`) as HTMLElement;
+    const dpi = 400;
+    html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF({
+            orientation: "portrait",
+            unit: "mm",
+            format: "a4",
+        });
 
-    html2canvas(componentRef).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+        const imgWidth = 150;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        pdf.text(`WordSearch ${id + 1}`, 30, 10);
 
-      const imgWidth = 150;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      pdf.text(`WordSearch ${id + 1}`, 30, 10);
-
-      pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
-      pdf.save(`WordSearch ${id + 1}.pdf`);
+        pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
+        pdf.save(`WordSearch_${id + 1}.pdf`);
     });
-  };
+};
+
 
   return (
     <>
