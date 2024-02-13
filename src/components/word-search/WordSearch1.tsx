@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState, useEffect } from "react";
+import React, {useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
@@ -19,7 +19,6 @@ const WordSearch1: React.FC = () => {
   const [uniqueWords, setUniqueWords] = useState<Set<string>>(new Set());
 
   const [boards, setBoards] = useState<string[][][]>([]);
-  const [inputWord, setInputWord] = useState<string>("");
   const [wordArray, setWordArray] = useState<string[]>([]);
   const [dividedArray, setDividedArray] = useState<string[][]>([]);
 
@@ -87,14 +86,14 @@ const WordSearch1: React.FC = () => {
           board[row][col] = JSON.stringify({
             randomLetter: String.fromCharCode(65 + getRandomInt(26)),
             orignalLetter: null,
-          }); // Random uppercase letter
+          }); 
         }
       }
     }
 
     return board;
   };
-    // Function to add unique words
+
     const addUniqueWords = (newWords: string[]) => {
       const updatedSet = new Set(uniqueWords);
       newWords.forEach(word => updatedSet.add(word));
@@ -116,7 +115,7 @@ const WordSearch1: React.FC = () => {
         newWords.forEach(word => uniqueWords.add(word));
         setInputWords("");
       } else {
-        alert("Enter Appropriate word(s)");
+        alert("Enter words firts");
       }
     };
     
@@ -144,6 +143,36 @@ const WordSearch1: React.FC = () => {
 
     return fillEmpty(newBoard);
   };
+  // const generateAllPuzzlesPDF = () => {
+  //   const pdf = new jsPDF({
+  //     orientation: "portrait",
+  //     unit: "mm",
+  //     format: "a4",
+  //   });
+  //   console.log('teSt')
+
+  //   boards.forEach((_, index) => {
+  //     const componentRef = document.getElementById(`wordsearch_${index}`) as HTMLElement;
+  //     console.log(componentRef)
+  //     const dpi = 400;
+  //     html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
+  //       const imgData = canvas.toDataURL("image/png");
+
+  //       const imgWidth = 150;
+  //       const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  //       pdf.text(`WordSearch ${index + 1}`, 30, pdf.internal.pageSize.height + 10);
+
+  //       if (index !== 0) {
+  //         pdf.addPage();
+  //       }
+        
+  //       pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
+  //       if (index === boards.length - 1) {
+  //         pdf.save(`WordSearchAll.pdf`);
+  //       }
+  //     });
+  //   });
+  // };
 
   const handleFileUpload = (data: string[][], fileInfo: any): void => {
     // Extract words from CSV data
@@ -190,7 +219,7 @@ const WordSearch1: React.FC = () => {
           </div>
             <button className="btn btn-primary me-2 mt-2" onClick={handleAddWord}>
                 Add Word
-              </button>
+              </button>              
           </div>
           <div className="d-flex flex-wrap align-items-center my-3">
             <label className=" fw-bold me-2">Upload CSV</label>
@@ -269,12 +298,18 @@ const WordSearch1: React.FC = () => {
           >
             Generate Puzzles
           </button>
+          <button
+          className="btn btn-primary mx-1 my-3"
+          // onClick={generateAllPuzzlesPDF}
+        >
+          Download All Puzzles (PDF)
+        </button>
           {wordArray.length == 0 ? (
             ""
           ) : (
             <div className="mt-3">
               <h5>Word List:</h5>
-              <ul>
+              <ol>
                 {wordArray.map((word, index) => (
                   <>
                     <div className="d-flex justify-content-between">
@@ -288,7 +323,7 @@ const WordSearch1: React.FC = () => {
                     </div>
                   </>
                 ))}
-              </ul>
+              </ol>
             </div>
           )}
         </div>
