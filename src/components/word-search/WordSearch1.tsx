@@ -1,5 +1,5 @@
 "use client";
-import React, {useState } from "react";
+import React, { useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
@@ -15,7 +15,10 @@ const WordSearch1: React.FC = () => {
   const [vertical, setVertical] = useState<boolean>(true);
   const [diagonalTopLeft, setDiagonalTopLeft] = useState<boolean>(true);
   const [diagonalBottomLeft, setDiagonalBottomLeft] = useState<boolean>(true);
+  const [showSolution, setShowSolution] = useState<boolean>(false);
+
   const [inputWords, setInputWords] = useState<string>("");
+
   const [uniqueWords, setUniqueWords] = useState<Set<string>>(new Set());
 
   const [boards, setBoards] = useState<string[][][]>([]);
@@ -25,6 +28,15 @@ const WordSearch1: React.FC = () => {
   const getRandomInt = (max: number): number => {
     return Math.floor(Math.random() * Math.floor(max));
   };
+  const getRandomColor = () => {
+    // Generate light shade colors by ensuring higher values for RGB components
+    const r = Math.floor(Math.random() * 100) + 155; // Red component
+    const g = Math.floor(Math.random() * 100) + 155; // Green component
+    const b = Math.floor(Math.random() * 100) + 155; // Blue component
+
+    // Convert RGB components to hexadecimal format and concatenate
+    return `#${r.toString(16)}${g.toString(16)}${b.toString(16)}`;
+  };
 
   const placeWord = (
     board: string[][],
@@ -32,6 +44,8 @@ const WordSearch1: React.FC = () => {
     directions: Orientation[]
   ): string[][] => {
     let placed = false;
+
+    const r_color = getRandomColor();
 
     while (!placed) {
       const orientation = directions[getRandomInt(directions.length)];
@@ -69,6 +83,7 @@ const WordSearch1: React.FC = () => {
             board[row][col] = JSON.stringify({
               randomLetter: null,
               orignalLetter: reverse ? word[word.length - 1 - i] : word[i],
+              color: r_color,
             });
           }
           placed = true;
@@ -86,7 +101,7 @@ const WordSearch1: React.FC = () => {
           board[row][col] = JSON.stringify({
             randomLetter: String.fromCharCode(65 + getRandomInt(26)),
             orignalLetter: null,
-          }); 
+          });
         }
       }
     }
@@ -94,32 +109,35 @@ const WordSearch1: React.FC = () => {
     return board;
   };
 
-    const addUniqueWords = (newWords: string[]) => {
-      const updatedSet = new Set(uniqueWords);
-      newWords.forEach(word => updatedSet.add(word));
-      setUniqueWords(updatedSet);
-    };
+  const addUniqueWords = (newWords: string[]) => {
+    const updatedSet = new Set(uniqueWords);
+    newWords.forEach((word) => updatedSet.add(word));
+    setUniqueWords(updatedSet);
+  };
 
-    const handleAddWord = (): void => {
-      if (inputWords.trim() !== "") {
-        const newWords = inputWords.split("\n").map((word) => word.trim().toUpperCase());
-        const duplicateWords = newWords.filter(word => uniqueWords.has(word));
-    
-        if (duplicateWords.length > 0) {
-          const duplicateWordMessage = duplicateWords.map(word => `"${word}"`).join(', ');
-          alert(`The word ${duplicateWordMessage} are already exists.`);
-          return;
-        }
+  const handleAddWord = (): void => {
+    if (inputWords.trim() !== "") {
+      const newWords = inputWords
+        .split("\n")
+        .map((word) => word.trim().toUpperCase());
+      const duplicateWords = newWords.filter((word) => uniqueWords.has(word));
 
-        setWordArray((prevWordArray) => [...prevWordArray, ...newWords]);
-        newWords.forEach(word => uniqueWords.add(word));
-        setInputWords("");
-      } else {
-        alert("Enter words firts");
+      if (duplicateWords.length > 0) {
+        const duplicateWordMessage = duplicateWords
+          .map((word) => `"${word}"`)
+          .join(", ");
+        alert(`The word ${duplicateWordMessage} are already exists.`);
+        return;
       }
-    };
-    
-    
+
+      setWordArray((prevWordArray) => [...prevWordArray, ...newWords]);
+      newWords.forEach((word) => uniqueWords.add(word));
+      setInputWords("");
+    } else {
+      alert("Enter words firts");
+    }
+  };
+
   const handleDelete = (index: number) => {
     const updatedWordsArray = [...wordArray];
     updatedWordsArray.splice(index, 1);
@@ -165,7 +183,7 @@ const WordSearch1: React.FC = () => {
   //       if (index !== 0) {
   //         pdf.addPage();
   //       }
-        
+
   //       pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
   //       if (index === boards.length - 1) {
   //         pdf.save(`WordSearchAll.pdf`);
@@ -196,18 +214,18 @@ const WordSearch1: React.FC = () => {
 
     return result;
   }
+
   return (
     <div className="container">
       <div className="row">
         <div className="col-md-12 col-lg-6">
           <div className="mt-3">
             <label htmlFor="wordInput" className="form-label">
-               Enter Words:
+              Enter Words:
             </label>
             <div className="d-flex gap-2" style={{ whiteSpace: "nowrap" }}>
-             
-               <textarea
-               placeholder="when multiple words (separated by new line)"
+              <textarea
+                placeholder="when multiple words (separated by new line)"
                 className="form-control w-75"
                 id="wordInput"
                 value={inputWords}
@@ -216,10 +234,14 @@ const WordSearch1: React.FC = () => {
                 }}
                 rows={3}
               />
-          </div>
-            <button className="btn btn-primary me-2 mt-2" onClick={handleAddWord}>
-                Add Word
-              </button>              
+            </div>
+            <button
+              className="btn btn-primary me-2 mt-2"
+              onClick={handleAddWord}
+            >
+              Add Word
+            </button>
+            
           </div>
           <div className="d-flex flex-wrap align-items-center my-3">
             <label className=" fw-bold me-2">Upload CSV</label>
@@ -299,11 +321,17 @@ const WordSearch1: React.FC = () => {
             Generate Puzzles
           </button>
           <button
-          className="btn btn-primary mx-1 my-3"
-          // onClick={generateAllPuzzlesPDF}
-        >
-          Download All Puzzles (PDF)
-        </button>
+              className="btn btn-dark mx-2 my-3"
+              onClick={() => setShowSolution(!showSolution)}
+            >
+              {showSolution ? `Hide` : `Show`} Solution
+            </button>
+          <button
+            className="btn btn-primary mx-1 my-3"
+            // onClick={generateAllPuzzlesPDF}
+          >
+            Download All Puzzles (PDF)
+          </button>
           {wordArray.length == 0 ? (
             ""
           ) : (
@@ -371,6 +399,7 @@ const WordSearch1: React.FC = () => {
                               words_array={single_array}
                               board_index={single_board_index}
                               key={single_board_index}
+                              showSolution={showSolution}
                             />
                           </div>
                         );
@@ -412,33 +441,35 @@ interface SinglePuzzleProp {
   board: string[][];
   words_array: string[];
   board_index: number;
+  showSolution: boolean;
 }
 const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
   board,
   words_array,
   board_index,
+  showSolution,
 }) => {
-  const [showSolution, setShowSolution] = useState<boolean>(false);
-  const downloadPDF = (id:number) => {
-    const componentRef = document.getElementById(`wordsearch_${id}`) as HTMLElement;
+  const downloadPDF = (id: number) => {
+    const componentRef = document.getElementById(
+      `wordsearch_${id}`
+    ) as HTMLElement;
     const dpi = 400;
     html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
-        const imgData = canvas.toDataURL("image/png");
-        const pdf = new jsPDF({
-            orientation: "portrait",
-            unit: "mm",
-            format: "a4",
-        });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
 
-        const imgWidth = 150;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        pdf.text(`WordSearch ${id + 1}`, 30, 10);
+      const imgWidth = 150;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      pdf.text(`WordSearch ${id + 1}`, 30, 10);
 
-        pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
-        pdf.save(`WordSearch_${id + 1}.pdf`);
+      pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
+      pdf.save(`WordSearch_${id + 1}.pdf`);
     });
-};
-
+  };
 
   return (
     <>
@@ -460,11 +491,13 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
                       }}
                     >
                       <span
+                      className="rounded"
                         style={{
                           background:
                             parsedCell?.orignalLetter && showSolution
-                              ? "antiquewhite"
+                              ? parsedCell?.color
                               : "white",
+                          padding: "4px 6px", // Adjust padding as needed
                         }}
                       >
                         {parsedCell?.orignalLetter
@@ -491,13 +524,6 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
           </div>
         </div>
       </div>
-
-      <button
-        className="btn btn-dark my-3"
-        onClick={() => setShowSolution(!showSolution)}
-      >
-        {showSolution ? `Hide` : `Show`} Solution
-      </button>
 
       <button
         className="btn btn-primary mx-1 my-3"
