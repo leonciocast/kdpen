@@ -22,6 +22,7 @@ const CrossWordGenerator: React.FC = () => {
   const [words, setWords] = useState<SingleWordType[]>([]);
   // const [words_per_puzzle, set_words_per_puzzle] = useState(10);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
+  const [showSolution, setSolution] = useState(false);
 
 
   const uniqueWordsSet = new Set<string>();
@@ -191,26 +192,25 @@ const handleDeleteWord = (index: number) => {
           <div className="col-md-4 col-lg-5">
             <div className="row">
               <div className=" my-3 ">
-
-              <form>
-              <div>
-                  <textarea
-                    className="form-control me-2 mb-2 w-100"
-                    placeholder="Enter Word(s) (separated by newline)"
-                    value={inputWord.word}
-                    name="word"
-                    onChange={handleInputChange}
-                    rows={3} 
-                  />
-                  <textarea
-                    className="form-control w-100"
-                    placeholder="Enter Clue(s) (separated by newline)"
-                    value={inputWord.clue}
-                    name="clue"
-                    onChange={handleInputChange}
-                    rows={3} 
-                  />
-                </div>
+                <form>
+                  <div>
+                    <textarea
+                      className="form-control me-2 mb-2 w-100"
+                      placeholder="Enter Word(s) (separated by newline)"
+                      value={inputWord.word}
+                      name="word"
+                      onChange={handleInputChange}
+                      rows={3}
+                    />
+                    <textarea
+                      className="form-control w-100"
+                      placeholder="Enter Clue(s) (separated by newline)"
+                      value={inputWord.clue}
+                      name="clue"
+                      onChange={handleInputChange}
+                      rows={3}
+                    />
+                  </div>
                   <div className="mt-2 d-flex gap-2">
                     <button
                       type="button"
@@ -226,9 +226,33 @@ const handleDeleteWord = (index: number) => {
                         handleRegenerate();
                       }}
                     >
-                      <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                        <BsArrowRepeat /><span> Regenerate </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "5px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <BsArrowRepeat />
+                        <span> Regenerate </span>
                       </div>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => setSolution(!showSolution)}
+                    >
+                      {showSolution ? (
+                        <>
+                          <BsEyeSlash className="me-2 top-0" />
+                          Hide Solution
+                        </>
+                      ) : (
+                        <>
+                          <BsEye className="me-2 top-0" />
+                          Show Solution
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -241,26 +265,29 @@ const handleDeleteWord = (index: number) => {
                 </div>
               </div>
             </div>
-            {puzzles.length > 0 &&  (
-            
-            <div className="mt-3">
-              <h5>Word List:</h5>
-              <ul >
-                      {words.map((word, index) => (
-                        
-                        <li key={index} className="d-flex align-items-center justify-content-between">
-                             <span>{index } - {word.word}</span>
-                          <button
-                            className="btn btn-link text-danger"
-                            onClick={() => handleDeleteWord(index)}
-                          >
-                            <MdDelete className="fs-4" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-            </div>
-          )}
+            {puzzles.length > 0 && (
+              <div className="mt-3">
+                <h5>Word List:</h5>
+                <ul>
+                  {words.map((word, index) => (
+                    <li
+                      key={index}
+                      className="d-flex align-items-center justify-content-between"
+                    >
+                      <span>
+                        {index} - {word.word}
+                      </span>
+                      <button
+                        className="btn btn-link text-danger"
+                        onClick={() => handleDeleteWord(index)}
+                      >
+                        <MdDelete className="fs-4" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <div className="col-md-8 col-lg-7">
             <div className="row my-3">
@@ -297,6 +324,7 @@ const handleDeleteWord = (index: number) => {
                           orignal_words={words}
                           board_index={i}
                           key={i}
+                          showSolution={showSolution}
                         />
                       </div>
                     ))}
@@ -332,13 +360,15 @@ interface SinglePuzzleType {
   algorithm: AlgorithmType;
   orignal_words: SingleWordType[];
   board_index: number;
+  showSolution: boolean;
 }
 const SinglePuzzle: React.FC<SinglePuzzleType> = ({
   algorithm,
   orignal_words,
   board_index,
+  showSolution,
 }) => {
-  const [showSolution, setSolution] = useState(false);
+  
 
   const wordsWithIndex = useMemo(() => {
     return algorithm?.positionObjArr.map((item, index) => {
@@ -553,23 +583,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
           </div>
         </div>
       </div>
-      <button
-  type="button"
-  className="btn btn-primary mt-2"
-  onClick={() => setSolution(!showSolution)}
->
-  {showSolution ? (
-    <>
-      <BsEyeSlash className="me-2 top-0"  />
-      Hide Solution
-    </>
-  ) : (
-    <>
-      <BsEye className="me-2 top-0" />
-      Show Solution
-    </>
-  )}
-</button>
+      
       <button
         className="btn btn-primary mx-1 mt-2"
         onClick={() => downloadPDF(board_index)}
