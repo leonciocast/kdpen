@@ -1,14 +1,17 @@
 'use client';
-import React, { ChangeEvent, useEffect, useMemo, useRef } from 'react';
+import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import html2canvas from 'html2canvas';
 import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
 import useSudoku from './useSudoku';
 import { downloadPuzzlesAsPDF } from '@/utils';
-import { PuzzleType } from '@/types/sudoku';
+import { PuzzleType, SudokuHookType } from '@/types/sudoku';
 import { jsPDF } from "jspdf";
+import { BsArrowDownCircle,BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter,BsDownload     } from "react-icons/bs";
+
 
 interface SudokuGeneratorComponentProps {
     styles: any
+    sudoku: SudokuHookType 
 }
 interface SingleSudokuComponentProps {
     styles: any,
@@ -18,12 +21,54 @@ interface SingleSudokuComponentProps {
 
 
 const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) => {
-
+    const [showAllSolutions, setShowAllSolutions] = useState<boolean>(false); 
+    const [showSolution, setShowSolution] = useState<boolean>(false); 
     const [numberOfPuzzles, setNumberOfPuzzles] = React.useState<number>(1)
     const [difficulty, setDifficulty] = React.useState<Difficulty>("easy")
+    const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
     const sudoku = useSudoku(difficulty)
-
+   
+    const printAllPuzzles = () => {
+        setIsPrinting(true);
+        const canvasList: HTMLCanvasElement[] = [];
+    
+        for (let puzzleIndex = 0; puzzleIndex < sudoku.listOfPuzzles.length; puzzleIndex++) {
+            const componentRef = document.getElementById(`sudoku_${puzzleIndex}`) as HTMLElement;
+            if (componentRef) {
+                html2canvas(componentRef, {
+                    useCORS: true,
+                    scale: 2 
+                }).then(canvas => {
+                    canvasList.push(canvas);
+    
+                    if (canvasList.length === sudoku.listOfPuzzles.length) {
+                        const printWindow = window.open('', '_blank');
+                        if (printWindow) {
+                            printWindow.document.write('<html><head><title>All Sudoku Puzzles</title></head><body>');
+                            for (let i = 0; i < canvasList.length; i++) {
+                                printWindow.document.write('<div style="page-break-before: always;">');
+                                printWindow.document.write(`<h4 style="text-align: center;">Sudoku Puzzle: ${i + 1}</h4>`);
+                                printWindow.document.write(`<img src="${canvasList[i].toDataURL("image/png")}" style="width: 80%; display:flex;margin:auto" />`);
+                                printWindow.document.write('</div>');
+                            }
+                            printWindow.document.write('</body></html>');
+                            printWindow.document.close();
+                            printWindow.print();
+                        } else {
+                            console.error('Failed to open print window');
+                        }
+                        setIsPrinting(false);
+                    }
+                }).catch(error => {
+                    console.error('Error rendering canvas:', error);
+                    setIsPrinting(false);
+                });
+            }
+        }
+    };
+    
+    
     return (
         <>
             <div className="d-flex flex-row justify-content-center align-items-center my-2">
@@ -52,14 +97,36 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
                     return __changed_value
                 })} />
                 <button
-                    className="btn btn-primary mx-1"
+                    className="btn btn-primary mx-1 text-nowrap"
                     onClick={() => {
                         // setShowSolution(false)
                         sudoku.generateNumberOfPuzzles(numberOfPuzzles)
                     }}
                 >
-                    Regenerate
-                </button>
+             <BsArrowRepeat /><span> Regenerate </span></button>
+                <button
+                className='btn btn-primary mx-1 text-nowrap'
+                onClick={() => setShowAllSolutions(!showAllSolutions)}
+            >
+                {showAllSolutions ? (
+                    <>
+                    <BsEyeSlash className="me-2 top-0"  />
+                    Hide Solution
+                    </>
+                ) : (
+                    <>
+                    <BsEye className="me-2 top-0" />
+                    Show Solution
+                    </>
+                )}
+            </button>    
+            <button className="btn btn-primary mx-1 my-2 text-nowrap" onClick={printAllPuzzles} disabled={isPrinting}>
+            {isPrinting ? <div className="spinner-border spinner-border-sm me-2" role="status"><span className="visually-hidden">Loading...</span></div> : null}
+            <BsPrinter /><span className="ms-1"> Print </span>
+        </button>
+                        <button className="btn btn-primary mx-1 my-2 text-nowrap" onClick={() => downloadAllPDF(sudoku.listOfPuzzles)}>
+                <BsDownload /><span> Download All </span>
+            </button>
                 {/* {
                     sudoku.listOfPuzzles.length !== 0 && (
                         <button
@@ -74,17 +141,17 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
 
             </div>
             <div className="row row-cols-1 row-cols-md-3 g-4">
-                {
-                    sudoku.listOfPuzzles.map((puzzle, puzzleIndex) => {
-
-                        return (
-                            <div className="col" key={puzzleIndex}>
-                                <SingleSudoku puzzle={puzzle} styles={styles} key={puzzleIndex} puzzleIndex={puzzleIndex} />
-                            </div>
-                        )
-                    })
-
-                }
+            {sudoku.listOfPuzzles.map((puzzle, puzzleIndex) => (
+                    <div className="col" key={puzzleIndex}>
+                        <SingleSudoku
+                            puzzle={puzzle}
+                            styles={styles}
+                            key={puzzleIndex}
+                            puzzleIndex={puzzleIndex}
+                            showSolution={showAllSolutions ? true : showSolution} 
+                        />
+                    </div>
+                ))}
             </div>
         </>
     )
@@ -92,41 +159,81 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
 
 export default SudokuGenerator;
 
-const downloadPDF = (id: number) => {
-    const componentRef = document.getElementById(`sudoku_${id}`) as HTMLElement;
 
-    html2canvas(componentRef).then(canvas => {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF ({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4',
+// const downloadSinglePDF = (puzzle: PuzzleType, id: number) => {
+//     const componentRef = document.getElementById(`sudoku_${id}`) as HTMLElement;
+//     const dpi = 400; 
+//     html2canvas(componentRef, { scale: dpi / 96 }) 
+//         .then((canvas) => {
+//             const imgData = canvas.toDataURL("image/png");
+//             const pdf = new jsPDF({
+//                 orientation: "portrait",
+//                 unit: "mm",
+//                 format: "a4",
+//             });
 
+//             const imgWidth = 150;
+//             const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            
+//             // pdf.rect(20, 15, imgWidth, imgHeight);  // for border 
+//             pdf.text(`Sudoku ${id + 1}`, 30, 10);
+//             pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
+//             pdf.save(`Sudoku_${id + 1}.pdf`);
+//         });
+// };
+
+const downloadAllPDF = (puzzles: PuzzleType[]) => {
+    const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+    });
+
+    puzzles.forEach((puzzle, index) => {
+        const componentRef = document.getElementById(`sudoku_${index}`) as HTMLElement;
+        if (!componentRef || !componentRef.innerHTML.trim()) {
+            return;
+        }
+
+        const dpi = 400; 
+        html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
+            const imgData = canvas.toDataURL("image/png");
+            const imgWidth = 150;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            if (index !== 0) {
+                pdf.addPage();
+            }
+            pdf.text(`Sudoku ${index + 1}`, 30, 20);
+            pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+            if (index === puzzles.length - 1) {
+                pdf.save("All_Sudokus.pdf");
+            }
         });
-
-        const imgWidth = 100;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        pdf.text(`Sudoku ${id + 1}`, imgWidth / 2, imgHeight / 5)
-
-        pdf.addImage(imgData, 'PNG', imgWidth / 2, imgHeight / 4, imgWidth, imgHeight);
-        pdf.save(`Sudoku ${id + 1}.pdf`);
     });
 };
-const SingleSudoku: React.FC<SingleSudokuComponentProps> = ({ puzzle, styles, puzzleIndex }) => {
-    const [showSolution, setShowSolution] = React.useState<boolean>(false)
 
+// const downloadPDF = (listOfPuzzles: PuzzleType[], puzzleIndex?: number) => {
+//     if (puzzleIndex !== undefined) {
+//         downloadSinglePDF(listOfPuzzles[puzzleIndex], puzzleIndex);
+//     } else {
+//         downloadAllPDF(listOfPuzzles);
+//     }
+// };
+
+const SingleSudoku: React.FC<SingleSudokuComponentProps & { showSolution: boolean }> = ({ puzzle, styles, puzzleIndex, showSolution }) => {
+    // const [localShowSolution, setLocalShowSolution] = React.useState<boolean>(false);
     function render_cell_value(cell: number, solution_cell: number): number | string {
-
         if (showSolution) {
-            return solution_cell
+            return solution_cell;
         } else {
             if (cell === 0) {
-                return ""
+                return "";
             } else {
-                return cell
+                return cell;
             }
-        }
+        }  
     }
+
     function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
         const result: [T, U][] = [];
         const length = Math.min(arr1.length, arr2.length);
@@ -141,6 +248,7 @@ const SingleSudoku: React.FC<SingleSudokuComponentProps> = ({ puzzle, styles, pu
 
     return (
         <>
+         <h4>Sudoku: {puzzleIndex + 1}</h4>
             <div className="card">
                 <div className="card-body">
                     <div id={`sudoku_${puzzleIndex}`}>
@@ -183,13 +291,26 @@ const SingleSudoku: React.FC<SingleSudokuComponentProps> = ({ puzzle, styles, pu
                 </div>
             </div>
 
-            <button
-                className="btn btn-primary mx-1"
-                onClick={() => setShowSolution(!showSolution)}
+            {/* <button
+                className="btn btn-primary mx-1 my-2"
+                onClick={() => setLocalShowSolution(!localShowSolution)} 
             >
-                {showSolution ? "Hide" : "Show"} Solution
-            </button>
-            <button className="btn btn-primary mx-1" onClick={() => downloadPDF(puzzleIndex)}>Download</button>
+             {localShowSolution ? (
+                    <>
+                    <BsEyeSlash className="me-2 top-0"  />
+                    Hide Solution
+                    </>
+                ) : (
+                    <>
+                    <BsEye className="me-2 top-0" />
+                    Show Solution
+                    </>
+                )}
+            </button> */}
+
+            {/* <button className="btn btn-primary mx-1 my-2" onClick={() => downloadPDF(sudoku.listOfPuzzles, puzzleIndex)}>
+                <BsArrowDownCircle /><span> Download </span>
+            </button> */}
         </>
     )
 }
