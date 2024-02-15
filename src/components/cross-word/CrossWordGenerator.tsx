@@ -20,7 +20,7 @@ const CrossWordGenerator: React.FC = () => {
   };
   const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
   const [words, setWords] = useState<SingleWordType[]>([]);
-  const [words_per_puzzle, set_words_per_puzzle] = useState(10);
+  // const [words_per_puzzle, set_words_per_puzzle] = useState(10);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
 
 
@@ -53,7 +53,8 @@ const CrossWordGenerator: React.FC = () => {
         return;
       }
   
-      let newWordsToAdd = [];
+      let newWordsToAdd:SingleWordType[] = [];
+      let addedWords = []; 
       for (let i = 0; i < wordsArray.length; i++) {
         const word = wordsArray[i].trim();
         const clue = cluesArray[i].trim();
@@ -61,6 +62,7 @@ const CrossWordGenerator: React.FC = () => {
           if (!wordExists(word.toUpperCase())) {
             uniqueWordsSet.add(word.toUpperCase());
             newWordsToAdd.push({ word: word.toUpperCase(), clue });
+            addedWords.push(word); 
           } else {
             alert("Word already exists: " + word);
           }
@@ -69,8 +71,10 @@ const CrossWordGenerator: React.FC = () => {
   
       if (newWordsToAdd.length > 0) {
         setWords((prev) => [...prev, ...newWordsToAdd]);
+        // Alert when all words are successfully added
+        alert(`Words added successfully: ${addedWords.join(", ")}`);
       }
-      
+  
       setInputWord(initialEmptyInput);
     } else {
       alert("Enter Word(s) and Clue(s) Both");
@@ -334,7 +338,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
   orignal_words,
   board_index,
 }) => {
-  const [showSolution, setSolution] = useState(true);
+  const [showSolution, setSolution] = useState(false);
 
   const wordsWithIndex = useMemo(() => {
     return algorithm?.positionObjArr.map((item, index) => {
