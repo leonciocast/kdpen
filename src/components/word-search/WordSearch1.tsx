@@ -4,10 +4,12 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
 import { MdDelete } from "react-icons/md";
+import { BsPrinter } from "react-icons/bs";
 
 interface Orientation {
   dx: number;
   dy: number;
+  
 }
 
 const WordSearch1: React.FC = () => {
@@ -16,14 +18,79 @@ const WordSearch1: React.FC = () => {
   const [diagonalTopLeft, setDiagonalTopLeft] = useState<boolean>(true);
   const [diagonalBottomLeft, setDiagonalBottomLeft] = useState<boolean>(true);
   const [showSolution, setShowSolution] = useState<boolean>(false);
-
   const [inputWords, setInputWords] = useState<string>("");
-
   const [uniqueWords, setUniqueWords] = useState<Set<string>>(new Set());
-
   const [boards, setBoards] = useState<string[][][]>([]);
   const [wordArray, setWordArray] = useState<string[]>([]);
   const [dividedArray, setDividedArray] = useState<string[][]>([]);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const printAllPuzzles = async () => {
+    setIsPrinting(true);
+    const canvasList: HTMLCanvasElement[] = [];
+  
+    const carousel = document.getElementById("carouselExampleFade");
+  
+    if (carousel) {
+      // Temporarily show all carousel items
+      const carouselItems = carousel.querySelectorAll(".carousel-item");
+      carouselItems.forEach(item => item.classList.add("active"));
+  
+      // Wait for the carousel to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+  
+      // Capture canvases for all carousel items
+      const componentRefs = carousel.querySelectorAll(
+        ".single-puzzle-component"
+      ) as NodeListOf<HTMLElement>;
+      for (let i = 0; i < componentRefs.length; i++) {
+        const componentRef = componentRefs[i];
+        try {
+          const canvas = await html2canvas(componentRef, {
+            useCORS: true,
+            scale: 2
+          });
+          canvasList.push(canvas);
+        } catch (error) {
+          console.error("Error rendering canvas:", error);
+          setIsPrinting(false);
+          return;
+        }
+      }
+  
+      // Restore the original state of carousel items
+      carouselItems.forEach(item => item.classList.remove("active"));
+    }
+  
+    // Print all captured canvases
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(
+        '<html><head><title>All Word Search Puzzles</title></head><body>'
+      );
+      for (let i = 0; i < canvasList.length; i++) {
+        printWindow.document.write('<div style="page-break-before: always;">');
+        printWindow.document.write(
+          `<h4 style="text-align: center;">Word Search Puzzle: ${i + 1}</h4>`
+        );
+        printWindow.document.write(
+          `<img src="${canvasList[i].toDataURL(
+            "image/png"
+          )}" style="width: 80%; display:flex;margin:auto" />`
+        );
+        printWindow.document.write("</div>");
+      }
+      printWindow.document.write("</body></html>");
+      printWindow.document.close();
+      printWindow.print();
+    } else {
+      console.error("Failed to open print window");
+    }
+  
+    setIsPrinting(false);
+  };
+  
+  
+  
 
   const getRandomInt = (max: number): number => {
     return Math.floor(Math.random() * Math.floor(max));
@@ -37,6 +104,7 @@ const WordSearch1: React.FC = () => {
     // Convert RGB components to hexadecimal format and concatenate
     return `#${r.toString(16)}${g.toString(16)}${b.toString(16)}`;
   };
+ 
 
   const placeWord = (
     board: string[][],
@@ -311,7 +379,7 @@ const WordSearch1: React.FC = () => {
                 return d_array;
               });
 
-              d_array.map((single_array, i) => {
+              d_array.map((single_array) => {
                 setBoards((prevBoards) => {
                   return [...prevBoards, generatePuzzleForWords(single_array)];
                 });
@@ -320,6 +388,12 @@ const WordSearch1: React.FC = () => {
           >
             Generate Puzzles
           </button>
+          
+          {/* <button className="btn btn-primary mx-1 my-2 text-nowrap" onClick={printAllPuzzles} disabled={isPrinting}>
+            {isPrinting ? <div className="spinner-border spinner-border-sm me-2" role="status"><span className="visually-hidden">Loading...</span></div> : null}
+            <BsPrinter /><span className="ms-1"> Print </span>
+        </button> */}
+
           <button
               className="btn btn-dark mx-2 my-3"
               onClick={() => setShowSolution(!showSolution)}
@@ -378,37 +452,49 @@ const WordSearch1: React.FC = () => {
               ""
             )}
 
-            <div className="col-md-10 col-lg-10 col-10">
-              <div id={`wordsearch`}>
-                <div
-                  id="carouselExampleFade"
-                  className="carousel slide carousel-fade"
-                >
-                  <div className="carousel-inner">
-                    {zip(boards, dividedArray).map(
-                      ([single_board, single_array], single_board_index) => {
-                        return (
-                          <div
-                            key={single_board_index}
-                            className={`carousel-item ${
-                              single_board_index == 0 ? "active" : ""
-                            }`}
-                          >
-                            <SinglePuzzle
-                              board={single_board}
-                              words_array={single_array}
-                              board_index={single_board_index}
-                              key={single_board_index}
-                              showSolution={showSolution}
-                            />
-                          </div>
-                        );
-                      }
-                    )}
+<div className="col-md-10 col-lg-10 col-10">
+      <div>
+        <div id="carouselExampleFade" className="carousel slide carousel-fade">
+          <div className="carousel-inner"> 
+            {zip(boards, dividedArray).map(
+              ([single_board, single_array], single_board_index) => {
+                return (
+                  <div
+                    key={single_board_index}
+                    className={`carousel-item ${
+                      single_board_index === 0 ? "active" : ""
+                    }`}
+                  >
+                    <SinglePuzzle
+                      board={single_board}
+                      words_array={single_array}
+                      board_index={single_board_index}
+                      key={single_board_index}
+                      showSolution={showSolution}
+                      boards={boards}
+                      className="single-puzzle-component" // Add this class name
+                    />
                   </div>
-                </div>
-              </div>
-            </div>
+                );
+              }
+            )}
+          </div>
+        </div>
+      </div>
+      <button
+        className="btn btn-primary mx-1 my-2 text-nowrap"
+        onClick={printAllPuzzles}
+        disabled={isPrinting}
+      >
+        {isPrinting ? (
+          <div className="spinner-border spinner-border-sm me-2" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        ) : null}
+        <BsPrinter />
+        <span className="ms-1"> Print </span>
+      </button>
+    </div>
             {boards.length !== 0 ? (
               <div className="col-md-1 col-lg-1 col-1 position-relative">
                 <button
@@ -442,12 +528,16 @@ interface SinglePuzzleProp {
   words_array: string[];
   board_index: number;
   showSolution: boolean;
+  boards: string[][][];
+  className?: string;
 }
 const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
   board,
   words_array,
   board_index,
   showSolution,
+  className,
+  boards,
 }) => {
   const downloadPDF = (id: number) => {
     const componentRef = document.getElementById(
@@ -470,10 +560,50 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
       pdf.save(`WordSearch_${id + 1}.pdf`);
     });
   };
+//   const [isPrinting, setIsPrinting] = useState<boolean>(false);
+//   const printAllPuzzles = () => {
+//     setIsPrinting(true);
+//     const canvasList: HTMLCanvasElement[] = [];
+
+//     for (let board_index = 0; board_index < boards.length; board_index++) {
+//         const componentRef = document.getElementById(`wordsearch_${board_index}`) as HTMLElement;
+//         if (componentRef) {
+//             html2canvas(componentRef, {
+//                 useCORS: true,
+//                 scale: 2 
+//             }).then(canvas => {
+//                 canvasList.push(canvas);
+
+//                 if (canvasList.length === boards.length) {
+//                     const printWindow = window.open('', '_blank');
+//                     if (printWindow) {
+//                         printWindow.document.write('<html><head><title>All Sudoku Puzzles</title></head><body>');
+//                         for (let i = 0; i < canvasList.length; i++) {
+//                             printWindow.document.write('<div style="page-break-before: always;">');
+//                             printWindow.document.write(`<h4 style="text-align: center;">Sudoku Puzzle: ${i + 1}</h4>`);
+//                             printWindow.document.write(`<img src="${canvasList[i].toDataURL("image/png")}" style="width: 80%; display:flex;margin:auto" />`);
+//                             printWindow.document.write('</div>');
+//                         }
+//                         printWindow.document.write('</body></html>');
+//                         printWindow.document.close();
+//                         printWindow.print();
+//                     } else {
+//                         console.error('Failed to open print window');
+//                     }
+//                     setIsPrinting(false);
+//                 }
+//             }).catch(error => {
+//                 console.error('Error rendering canvas:', error);
+//                 setIsPrinting(false);
+//             });
+//         }
+//     }
+// };
 
   return (
     <>
-      <div id={`wordsearch_${board_index}`}>
+      <div id={`wordsearch_${board_index}`}
+        className={className}>
         <table className="table text-center w-100 table-bordered border-dark border-4 mt-3">
           <tbody>
             {board.map((row, rowIndex) => (
@@ -531,6 +661,10 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
       >
         Download
       </button>
+      {/* <button className="btn btn-primary mx-1 my-2 text-nowrap" onClick={printAllPuzzles} disabled={isPrinting}>
+            {isPrinting ? <div className="spinner-border spinner-border-sm me-2" role="status"><span className="visually-hidden">Loading...</span></div> : null}
+            <BsPrinter /><span className="ms-1"> Print </span>
+        </button> */}
     </>
   );
 };

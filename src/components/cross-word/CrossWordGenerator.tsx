@@ -6,7 +6,7 @@ import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
 import "bootstrap/dist/css/bootstrap.min.css";
 import { MdDelete } from "react-icons/md";
-import { BsArrowDownCircle,BsArrowRepeat,BsEye, BsEyeSlash   } from "react-icons/bs";
+import { BsArrowDownCircle,BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter   } from "react-icons/bs";
 
 interface SingleWordType {
   word: string;
@@ -23,6 +23,7 @@ const CrossWordGenerator: React.FC = () => {
   // const [words_per_puzzle, set_words_per_puzzle] = useState(10);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
   const [showSolution, setSolution] = useState(false);
+  const [isPrinting, setIsPrinting] = useState<boolean>(false);
 
 
   const uniqueWordsSet = new Set<string>();
@@ -184,6 +185,71 @@ const handleDeleteWord = (index: number) => {
       bsCarousel.to("next");
     }
   };
+  const printAllPuzzles = async () => {
+    setIsPrinting(true);
+    const canvasList: HTMLCanvasElement[] = [];
+  
+    const carousel = document.getElementById("carouselExampleFade");
+  
+    if (carousel) {
+      // Temporarily show all carousel items
+      const carouselItems = carousel.querySelectorAll(".carousel-item");
+      carouselItems.forEach((item) => item.classList.add("active"));
+  
+      // Wait for the carousel to update
+      await new Promise((resolve) => setTimeout(resolve, 500));
+  
+      // Capture canvases for all carousel items
+      const componentRefs = carousel.querySelectorAll(
+        ".single-puzzle-component"
+      ) as NodeListOf<HTMLElement>;
+      for (let i = 0; i < componentRefs.length; i++) {
+        const componentRef = componentRefs[i];
+        try {
+          const canvas = await html2canvas(componentRef, {
+            useCORS: true,
+            scale: 2,
+          });
+          canvasList.push(canvas);
+        } catch (error) {
+          console.error("Error rendering canvas:", error);
+          setIsPrinting(false);
+          return;
+        }
+      }
+  
+      // Restore the original state of carousel items
+      carouselItems.forEach((item) => item.classList.remove("active"));
+    }
+  
+    // Print all captured canvases
+    const printWindow = window.open("", "_blank");
+    if (printWindow) {
+      printWindow.document.write(
+        '<html><head><title>All Word Search Puzzles</title></head><body>'
+      );
+      for (let i = 0; i < canvasList.length; i++) {
+        printWindow.document.write('<div style="page-break-before: always;">');
+        printWindow.document.write(
+          `<h4 style="text-align: center;">Word Search Puzzle: ${i + 1}</h4>`
+        );
+        printWindow.document.write(
+          `<img src="${canvasList[i].toDataURL(
+            "image/png"
+          )}" style="width: 80%; display:flex;margin:auto" />`
+        );
+        printWindow.document.write("</div>");
+      }
+      printWindow.document.write("</body></html>");
+      printWindow.document.close();
+      printWindow.print();
+    } else {
+      console.error("Failed to open print window");
+    }
+  
+    setIsPrinting(false);
+  };
+  
 
   return (
     <div className="crossword-grid mainWrapper">
@@ -254,6 +320,7 @@ const handleDeleteWord = (index: number) => {
                         </>
                       )}
                     </button>
+                    
                   </div>
                 </form>
 
@@ -298,6 +365,8 @@ const handleDeleteWord = (index: number) => {
                     className="carousel-control-prev"
                     style={{ left: "17px", bottom: "30%" }}
                     type="button"
+                    data-bs-target="#carouselExampleFade"
+                    data-bs-slide="prev"
                     onClick={handlePrevButtonClick}
                   >
                     <span
@@ -310,8 +379,7 @@ const handleDeleteWord = (index: number) => {
               </div>
               <div className="col-md-10">
                 <div
-                  id="carouselExample"
-                  className="carousel slide carousel-fade"
+                   id="carouselExampleFade" className="carousel slide carousel-fade"
                 >
                   <div className="carousel-inner">
                     {puzzles.map((single_algo, i) => (
@@ -324,12 +392,26 @@ const handleDeleteWord = (index: number) => {
                           orignal_words={words}
                           board_index={i}
                           key={i}
+                          className="single-puzzle-component"
                           showSolution={showSolution}
                         />
                       </div>
                     ))}
                   </div>
                 </div>
+                <button
+        className="btn btn-primary mx-1 my-2 text-nowrap"
+        onClick={printAllPuzzles}
+        disabled={isPrinting}
+      >
+        {isPrinting ? (
+          <div className="spinner-border spinner-border-sm me-2" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        ) : null}
+        <BsPrinter />
+        <span className="ms-1"> Print </span>
+      </button>
               </div>
               <div className="col-md-1 position-relative">
                 {puzzles.length > 0 && (
@@ -338,6 +420,8 @@ const handleDeleteWord = (index: number) => {
                     className="carousel-control-next"
                     style={{ right: "17px", bottom: "29%" }}
                     type="button"
+                    data-bs-target="#carouselExampleFade"
+                  data-bs-slide="next"
                     onClick={handleNextButtonClick}
                   >
                     <span
@@ -361,12 +445,14 @@ interface SinglePuzzleType {
   orignal_words: SingleWordType[];
   board_index: number;
   showSolution: boolean;
+  className?: string;
 }
 const SinglePuzzle: React.FC<SinglePuzzleType> = ({
   algorithm,
   orignal_words,
   board_index,
   showSolution,
+  className,
 }) => {
   
 
@@ -529,7 +615,8 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
 
   return (
     <>
-      <div id={`crossword_${board_index}`}>
+      <div id={`wordsearch_${board_index}`}
+        className={className}>
         <div className="row">
           <div className="col-6">
             <table>
