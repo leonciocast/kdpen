@@ -38,13 +38,32 @@ const CrossWordGenerator: React.FC = () => {
   };
 
  
+  const MAX_WORDS_LIMIT = 10; // Set your desired word limit
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setInputWord((prevData) => ({
-      ...prevData,
-      [e.target.name]: e.target.value,
-    }));
+  
+    // Split the input value into words
+    const words = value.trim().split(/\s+/);
+  
+    // Check if the number of words exceeds the limit
+    if (words.length <= MAX_WORDS_LIMIT) {
+      setInputWord((prevData) => ({
+        ...prevData,
+        [name]: value,
+      }));
+    } else {
+      // If the limit is exceeded, truncate the input to the allowed number of words
+      setInputWord((prevData) => ({
+        ...prevData,
+        [name]: words.slice(0, MAX_WORDS_LIMIT).join(' '), // Join the first MAX_WORDS_LIMIT words
+      }));
+  
+      // Optionally, you can display an alert or message to the user
+      alert(`Maximum ${MAX_WORDS_LIMIT} words allowed.`);
+    }
   };
+  
 
   const handleAddWord = () => {
     if (inputWord.word.trim() !== "" && inputWord.clue.trim() !== "") {
@@ -268,33 +287,47 @@ const handleDeleteWord = (index: number) => {
   
   
   const generateAllPuzzlesPDF = () => {
+    setIsDownloading(true)
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
       format: "a4",
     });
-
+  
     puzzles.forEach((_, index) => {
-      const componentRef = document.getElementById(
-        `wordsearch`
-      ) as HTMLElement;
+      const componentRef = document.getElementById(`wordsearch`) as HTMLElement;
       if (!componentRef || !componentRef.innerHTML.trim()) {
+        console.error("Component reference not found or empty.");
+        setIsDownloading(false); // Stop loading if there's an error
+
         return;
       }
-      // console.log(componentRef);
-      const dpi = 400;
-      html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
-        const imgData = canvas.toDataURL("image/png");
-        const imgWidth = 150;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        if (index !== 0) {
-          pdf.addPage();
+  
+      html2canvas(componentRef, { scale: 9 }).then((canvas) => {
+        try {
+          const imgData = canvas.toDataURL("image/png");
+          const imgWidth = 230;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  
+          if (index !== 0) {
+            pdf.addPage();
+          }
+          
+          pdf.text(`WordSearch ${index + 1}`, 30, 20);
+          pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+  
+          if (index === puzzles.length - 1) {
+            pdf.save(`WordSearchAll.pdf`);
+            setIsDownloading(false); // Stop loading when all PDFs are generated
+
+          }
+        } catch (error) {
+          setIsDownloading(false)
+          console.error("Error adding image to PDF:", error);
         }
-        pdf.text(`WordSearch ${index + 1}`, 30, 20);
-        pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
-        if (index === puzzles.length - 1) {
-          pdf.save(`WordSearchAll.pdf`);
-        }
+      }).catch((error) => {
+        setIsDownloading(false)
+        console.error("Error generating canvas:", error);
       });
     });
   };
@@ -317,6 +350,7 @@ const handleDeleteWord = (index: number) => {
                       name="word"
                       onChange={handleInputChange}
                       rows={3}
+                      maxLength={10}
                     />
                     <textarea
                       className="form-control w-100"
@@ -390,10 +424,14 @@ const handleDeleteWord = (index: number) => {
                       <button
                       type="button"
                       className="btn btn-primary text-nowrap"
-                      style={{fontSize:"14px"}}
+                      style={{fontSize:"14px",display:"flex"}}
                       onClick={generateAllPuzzlesPDF}
                       disabled={isPrinting} 
-                    >
+                    >{isDownloading?(
+                      <div className="spinner-border spinner-border-sm me-2" role="status">
+                      <span className="visually-hidden">Loading...</span>
+                    </div>
+                    ):null}
                       <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
                         <BsArrowDownCircle />
                         <span> Download All</span>

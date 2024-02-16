@@ -300,6 +300,7 @@ const WordSearch1: React.FC = () => {
                 className="form-control w-75"
                 id="wordInput"
                 value={inputWords}
+                maxLength={10}
                 onChange={(e) => {
                   setInputWords(e.target.value);
                 }}
