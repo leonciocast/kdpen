@@ -24,6 +24,7 @@ const CrossWordGenerator: React.FC = () => {
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
   const [showSolution, setSolution] = useState(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
 
   const uniqueWordsSet = new Set<string>();
@@ -185,26 +186,31 @@ const handleDeleteWord = (index: number) => {
       bsCarousel.to("next");
     }
   };
+
   const printAllPuzzles = async () => {
-    setIsPrinting(true);
+    setIsPrinting(true); // Set a state to indicate that printing is in progress
+  
     const canvasList: HTMLCanvasElement[] = [];
   
     const carousel = document.getElementById("carouselExampleFade");
   
+    let carouselItems: NodeListOf<Element>;
+  
     if (carousel) {
-      // Temporarily show all carousel items
-      const carouselItems = carousel.querySelectorAll(".carousel-item");
-      carouselItems.forEach((item) => item.classList.add("active"));
-  
-      // Wait for the carousel to update
-      await new Promise((resolve) => setTimeout(resolve, 500));
-  
-      // Capture canvases for all carousel items
-      const componentRefs = carousel.querySelectorAll(
-        ".single-puzzle-component"
-      ) as NodeListOf<HTMLElement>;
-      for (let i = 0; i < componentRefs.length; i++) {
-        const componentRef = componentRefs[i];
+      carouselItems = carousel.querySelectorAll(".carousel-item");
+      
+      // Loop through each carousel item
+      for (let i = 0; i < carouselItems.length; i++) {
+        const carouselItem = carouselItems[i];
+        
+        // Activate the current carousel item
+        carouselItem.classList.add("active");
+        
+        // Wait for a brief moment for the carousel to update
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        
+        // Capture canvas for the current carousel item
+        const componentRef = carouselItem.querySelector(".single-puzzle-component") as HTMLElement;
         try {
           const canvas = await html2canvas(componentRef, {
             useCORS: true,
@@ -216,10 +222,14 @@ const handleDeleteWord = (index: number) => {
           setIsPrinting(false);
           return;
         }
+        
+        // Deactivate the current carousel item
+        carouselItem.classList.remove("active");
       }
-  
-      // Restore the original state of carousel items
-      carouselItems.forEach((item) => item.classList.remove("active"));
+    } else {
+      console.error("Carousel not found");
+      setIsPrinting(false);
+      return;
     }
   
     // Print all captured canvases
@@ -231,12 +241,12 @@ const handleDeleteWord = (index: number) => {
       for (let i = 0; i < canvasList.length; i++) {
         printWindow.document.write('<div style="page-break-before: always;">');
         printWindow.document.write(
-          `<h4 style="text-align: center;">Word Search Puzzle: ${i + 1}</h4>`
+          `<h2 style="text-align: center;">Word Search Puzzle: ${i + 1}</h2>`
         );
         printWindow.document.write(
           `<img src="${canvasList[i].toDataURL(
             "image/png"
-          )}" style="width: 80%; display:flex;margin:auto" />`
+          )}" style=" display:flex; margin:auto;" />`
         );
         printWindow.document.write("</div>");
       }
@@ -247,8 +257,48 @@ const handleDeleteWord = (index: number) => {
       console.error("Failed to open print window");
     }
   
-    setIsPrinting(false);
+    setIsPrinting(false); // Reset the state after printing is complete
+    
+    // After printing all puzzles, activate the last generated puzzle
+    if (carouselItems) {
+      const lastCarouselItem = carouselItems[carouselItems.length - 1];
+      lastCarouselItem.classList.add("active");
+    }
   };
+  
+  // const generateAllPuzzlesPDF = () => {
+  //   const pdf = new jsPDF({
+  //     orientation: "portrait",
+  //     unit: "mm",
+  //     format: "a4",
+  //   });
+  
+  //   puzzles.forEach((_, index) => {
+  //     const componentRef = document.getElementById(`wordsearch_${index}`) as HTMLElement;
+  //     if (!componentRef || !componentRef.innerHTML.trim()) {
+  //       return;
+  //     }
+  //     const dpi = 400;
+  //     html2canvas(componentRef, { scale: dpi / 156 })
+  //       .then((canvas) => {
+  //         const imgData = canvas.toDataURL("image/png");
+  //         const imgWidth = 150;
+  //         const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  //         if (index !== 0) {
+  //           pdf.addPage();
+  //         }
+  //         pdf.text(`WordSearch ${index + 1}`, 30, 20);
+  //         pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+  //         if (index === puzzles.length - 1) {
+  //           pdf.save("WordSearchAll.pdf");
+  //         }
+  //       })
+  //       .catch((error) => {
+  //         console.error("Error rendering canvas:", error);
+  //       });
+  //   });
+  // };
+  
   
 
   return (
@@ -280,7 +330,8 @@ const handleDeleteWord = (index: number) => {
                   <div className="mt-2 d-flex gap-2">
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      style={{fontSize:"14px"}}
+                      className="btn btn-primary text-nowrap"
                       onClick={handleAddWord}
                     >
                       Add Word
@@ -288,6 +339,7 @@ const handleDeleteWord = (index: number) => {
                     <button
                       type="button"
                       className="btn btn-primary"
+                      style={{fontSize:"14px"}}
                       onClick={() => {
                         handleRegenerate();
                       }}
@@ -305,7 +357,8 @@ const handleDeleteWord = (index: number) => {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="btn btn-primary text-nowrap"
+                      style={{fontSize:"14px"}}
                       onClick={() => setSolution(!showSolution)}
                     >
                       {showSolution ? (
@@ -320,7 +373,32 @@ const handleDeleteWord = (index: number) => {
                         </>
                       )}
                     </button>
-                    
+                    <button
+                      className="btn btn-primary text-nowrap"
+                      style={{fontSize:"14px"}}
+                      onClick={printAllPuzzles}
+                      disabled={isPrinting} // Disable the button while printing is in progress
+                    >
+                      {isPrinting ? (
+                        <div className="spinner-border spinner-border-sm me-2" role="status">
+                          <span className="visually-hidden">Loading...</span>
+                        </div>
+                      ) : null}
+                      <BsPrinter />
+                      <span className="ms-1"> Print </span>
+                    </button>
+                      <button
+                      type="button"
+                      className="btn btn-primary text-nowrap"
+                      style={{fontSize:"14px"}}
+                      // onClick={generateAllPuzzlesPDF}
+                      disabled={isPrinting} 
+                    >
+                      <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
+                        <BsArrowDownCircle />
+                        <span> Download All</span>
+                      </div>
+                    </button>
                   </div>
                 </form>
 
@@ -399,7 +477,7 @@ const handleDeleteWord = (index: number) => {
                     ))}
                   </div>
                 </div>
-                <button
+                {/* <button
         className="btn btn-primary mx-1 my-2 text-nowrap"
         onClick={printAllPuzzles}
         disabled={isPrinting}
@@ -411,7 +489,7 @@ const handleDeleteWord = (index: number) => {
         ) : null}
         <BsPrinter />
         <span className="ms-1"> Print </span>
-      </button>
+      </button> */}
               </div>
               <div className="col-md-1 position-relative">
                 {puzzles.length > 0 && (
@@ -590,28 +668,28 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
 
     return grid;
   };
-  const downloadPDF = (id: number) => {
-    const componentRef = document.getElementById(`crossword_${id}`) as HTMLElement;  
-    // DPI (dots per inch) for better image quality
-    const dpi = 400; 
+  // const downloadPDF = (id: number) => {
+  //   const componentRef = document.getElementById(`crossword_${id}`) as HTMLElement;  
+  //   // DPI (dots per inch) for better image quality
+  //   const dpi = 400; 
   
-    html2canvas(componentRef, { scale: dpi / 156 }) // Adjust scale based on DPI
-      .then((canvas) => {
-        const imgData = canvas.toDataURL("image/png");
-        const pdf = new jsPDF({
-          orientation: "portrait",
-          unit: "mm",
-          format: "a4",
-        });
+  //   html2canvas(componentRef, { scale: dpi / 156 }) // Adjust scale based on DPI
+  //     .then((canvas) => {
+  //       const imgData = canvas.toDataURL("image/png");
+  //       const pdf = new jsPDF({
+  //         orientation: "portrait",
+  //         unit: "mm",
+  //         format: "a4",
+  //       });
   
-        const imgWidth = 150;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        pdf.text(`Cross Word ${id + 1}`, 30, 10);
+  //       const imgWidth = 150;
+  //       const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  //       pdf.text(`Cross Word ${id + 1}`, 30, 10);
   
-        pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
-        pdf.save(`crossword_${id + 1}.pdf`);
-      });
-  };
+  //       pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
+  //       pdf.save(`crossword_${id + 1}.pdf`);
+  //     });
+  // };
 
   return (
     <>
@@ -671,14 +749,14 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
         </div>
       </div>
       
-      <button
+      {/* <button
         className="btn btn-primary mx-1 mt-2"
         onClick={() => downloadPDF(board_index)}
         
       >
       <div style={{display:"flex",gap:"5px",alignItems:"center"}}>  <BsArrowDownCircle /><span> Download </span>
       </div>
-      </button>
+      </button> */}
     </>
   );
 };
