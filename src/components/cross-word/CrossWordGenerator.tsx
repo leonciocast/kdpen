@@ -266,38 +266,38 @@ const handleDeleteWord = (index: number) => {
     }
   };
   
-  // const generateAllPuzzlesPDF = () => {
-  //   const pdf = new jsPDF({
-  //     orientation: "portrait",
-  //     unit: "mm",
-  //     format: "a4",
-  //   });
   
-  //   puzzles.forEach((_, index) => {
-  //     const componentRef = document.getElementById(`wordsearch_${index}`) as HTMLElement;
-  //     if (!componentRef || !componentRef.innerHTML.trim()) {
-  //       return;
-  //     }
-  //     const dpi = 400;
-  //     html2canvas(componentRef, { scale: dpi / 156 })
-  //       .then((canvas) => {
-  //         const imgData = canvas.toDataURL("image/png");
-  //         const imgWidth = 150;
-  //         const imgHeight = (canvas.height * imgWidth) / canvas.width;
-  //         if (index !== 0) {
-  //           pdf.addPage();
-  //         }
-  //         pdf.text(`WordSearch ${index + 1}`, 30, 20);
-  //         pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
-  //         if (index === puzzles.length - 1) {
-  //           pdf.save("WordSearchAll.pdf");
-  //         }
-  //       })
-  //       .catch((error) => {
-  //         console.error("Error rendering canvas:", error);
-  //       });
-  //   });
-  // };
+  const generateAllPuzzlesPDF = () => {
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    puzzles.forEach((_, index) => {
+      const componentRef = document.getElementById(
+        `wordsearch`
+      ) as HTMLElement;
+      if (!componentRef || !componentRef.innerHTML.trim()) {
+        return;
+      }
+      // console.log(componentRef);
+      const dpi = 400;
+      html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
+        const imgData = canvas.toDataURL("image/png");
+        const imgWidth = 150;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        if (index !== 0) {
+          pdf.addPage();
+        }
+        pdf.text(`WordSearch ${index + 1}`, 30, 20);
+        pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+        if (index === puzzles.length - 1) {
+          pdf.save(`WordSearchAll.pdf`);
+        }
+      });
+    });
+  };
   
   
 
@@ -391,7 +391,7 @@ const handleDeleteWord = (index: number) => {
                       type="button"
                       className="btn btn-primary text-nowrap"
                       style={{fontSize:"14px"}}
-                      // onClick={generateAllPuzzlesPDF}
+                      onClick={generateAllPuzzlesPDF}
                       disabled={isPrinting} 
                     >
                       <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
@@ -693,7 +693,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
 
   return (
     <>
-      <div id={`wordsearch_${board_index}`}
+      <div id={`wordsearch`}
         className={className}>
         <div className="row">
           <div className="col-6">
