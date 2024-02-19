@@ -187,26 +187,24 @@ const WordSearch1: React.FC = () => {
 
   const handleAddWord = (): void => {
     if (inputWords.trim() !== "") {
-      const newWords = inputWords
-        .split("\n")
-        .map((word) => word.trim().toUpperCase());
+      const newWords = inputWords.split("\n").map((word) => word.trim().toUpperCase());
       const duplicateWords = newWords.filter((word) => uniqueWords.has(word));
-
+  
       if (duplicateWords.length > 0) {
-        const duplicateWordMessage = duplicateWords
-          .map((word) => `"${word}"`)
-          .join(", ");
-        alert(`The word ${duplicateWordMessage} are already exists.`);
+        const duplicateWordMessage = duplicateWords.map((word) => `"${word}"`).join(", ");
+        alert(`The word(s) ${duplicateWordMessage} already exist(s).`);
         return;
       }
-
+  
       setWordArray((prevWordArray) => [...prevWordArray, ...newWords]);
       newWords.forEach((word) => uniqueWords.add(word));
       setInputWords("");
+      alert(`Word(s) "${newWords.join(', ')}" added successfully!`);
     } else {
-      alert("Enter words firts");
+      alert("Please enter words before adding.");
     }
   };
+  
 
   const handleDelete = (index: number) => {
     const updatedWordsArray = [...wordArray];
@@ -264,15 +262,16 @@ const WordSearch1: React.FC = () => {
   };
 
   const handleFileUpload = (data: string[][]): void => {
-    // Extract words from CSV data
-    let wordsFromFile = data.map((item) => item[0]);
-
+    let wordsFromFile = data.map((item) => item[0].trim());
     wordsFromFile = wordsFromFile.map((word) => {
-      return word.toUpperCase();
+      return word.toUpperCase().trim();
     });
-
-    setWordArray([...wordArray, ...wordsFromFile]);
-    addUniqueWords(wordsFromFile); // Add unique words here
+    const uniqueWordsFromFile = wordsFromFile.filter((word, index, self) => {
+      return index === self.indexOf(word);
+    });
+  
+    setWordArray([...wordArray, ...uniqueWordsFromFile]);
+    addUniqueWords(uniqueWordsFromFile); 
   };
 
   function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {

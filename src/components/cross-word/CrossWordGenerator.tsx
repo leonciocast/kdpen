@@ -359,12 +359,14 @@ const handleDeleteWord = (index: number) => {
                       name="clue"
                       onChange={handleInputChange}
                       rows={3}
+                      maxLength={25}
                     />
                   </div>
                   <div className="mt-2 d-flex gap-2">
                     <button
                       type="button"
                       style={{fontSize:"14px"}}
+                      disabled={isPrinting || isDownloading}
                       className="btn btn-primary text-nowrap"
                       onClick={handleAddWord}
                     >
@@ -374,6 +376,7 @@ const handleDeleteWord = (index: number) => {
                       type="button"
                       className="btn btn-primary"
                       style={{fontSize:"14px"}}
+                      disabled={isPrinting || isDownloading}
                       onClick={() => {
                         handleRegenerate();
                       }}
@@ -393,6 +396,7 @@ const handleDeleteWord = (index: number) => {
                       type="button"
                       className="btn btn-primary text-nowrap"
                       style={{fontSize:"14px"}}
+                      disabled={isPrinting || isDownloading}
                       onClick={() => setSolution(!showSolution)}
                     >
                       {showSolution ? (
@@ -411,7 +415,7 @@ const handleDeleteWord = (index: number) => {
                       className="btn btn-primary text-nowrap"
                       style={{fontSize:"14px"}}
                       onClick={printAllPuzzles}
-                      disabled={isPrinting} // Disable the button while printing is in progress
+                      disabled={isPrinting || isDownloading}
                     >
                       {isPrinting ? (
                         <div className="spinner-border spinner-border-sm me-2" role="status">
@@ -426,7 +430,7 @@ const handleDeleteWord = (index: number) => {
                       className="btn btn-primary text-nowrap"
                       style={{fontSize:"14px",display:"flex"}}
                       onClick={generateAllPuzzlesPDF}
-                      disabled={isPrinting} 
+                      disabled={isPrinting || isDownloading}                    
                     >{isDownloading?(
                       <div className="spinner-border spinner-border-sm me-2" role="status">
                       <span className="visually-hidden">Loading...</span>
@@ -442,6 +446,7 @@ const handleDeleteWord = (index: number) => {
 
                 <div className="mt-2">
                   <CSVReader
+                    disabled={isPrinting || isDownloading}
                     onFileLoaded={handleCSVFile}
                     parserOptions={{ header: false, skipEmptyLines: true }}
                   />

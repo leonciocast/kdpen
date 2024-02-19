@@ -1,13 +1,11 @@
 'use client';
-import React, { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import React, {useState } from 'react';
 import html2canvas from 'html2canvas';
 import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
 import useSudoku from './useSudoku';
-import { downloadPuzzlesAsPDF } from '@/utils';
 import { PuzzleType, SudokuHookType } from '@/types/sudoku';
 import { jsPDF } from "jspdf";
-import { BsArrowDownCircle,BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter,BsDownload     } from "react-icons/bs";
-
+import { BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter,BsDownload     } from "react-icons/bs";
 
 interface SudokuGeneratorComponentProps {
     styles: any
@@ -26,6 +24,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
     const [numberOfPuzzles, setNumberOfPuzzles] = React.useState<number>(1)
     const [difficulty, setDifficulty] = React.useState<Difficulty>("easy")
     const [isPrinting, setIsPrinting] = useState<boolean>(false);
+    const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
     const sudoku = useSudoku(difficulty)
    
@@ -70,64 +69,86 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
     
     
     return (
-        <>
-            <div className="d-flex flex-row justify-content-center align-items-center my-2">
-
-                <select
-                    id="difficulty"
-                    value={difficulty}
-                    onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-                    className="form-select w-25 mx-1"
-                    aria-label="Select difficulty"
-                >
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
-                    <option value="expert">Expert</option>
-                </select>
-                <input type='number' className='form-control w-25 mx-1' value={numberOfPuzzles} onChange={(e) => setNumberOfPuzzles(_ => {
-                    let __changed_value = parseInt(e.target.value, 10)
-                    if (__changed_value < 0) {
-                        __changed_value = 0
-                    } else if (__changed_value > 100) {
-                        __changed_value = 100
-                    } else {
-                        __changed_value = __changed_value
-                    }
-                    return __changed_value
-                })} />
-                <button
-                    className="btn btn-primary mx-1 text-nowrap"
-                    onClick={() => {
-                        // setShowSolution(false)
-                        sudoku.generateNumberOfPuzzles(numberOfPuzzles)
-                    }}
-                >
-             <BsArrowRepeat /><span> Regenerate </span></button>
-                <button
-                className='btn btn-primary mx-1 text-nowrap'
-                onClick={() => setShowAllSolutions(!showAllSolutions)}
-            >
-                {showAllSolutions ? (
-                    <>
-                    <BsEyeSlash className="me-2 top-0"  />
-                    Hide Solution
-                    </>
-                ) : (
-                    <>
-                    <BsEye className="me-2 top-0" />
-                    Show Solution
-                    </>
-                )}
-            </button>    
-            <button className="btn btn-primary mx-1 my-2 text-nowrap" onClick={printAllPuzzles} disabled={isPrinting}>
-            {isPrinting ? <div className="spinner-border spinner-border-sm me-2" role="status"><span className="visually-hidden">Loading...</span></div> : null}
-            <BsPrinter /><span className="ms-1"> Print </span>
-        </button>
-                        <button className="btn btn-primary mx-1 my-2 text-nowrap" onClick={() => downloadAllPDF(sudoku.listOfPuzzles)}>
-                <BsDownload /><span> Download All </span>
-            </button>
-                {/* {
+      <>
+        <div className="d-flex flex-row justify-content-center align-items-center my-2">
+          <select
+            id="difficulty"
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value as Difficulty)}
+            className="form-select w-25 mx-1"
+            aria-label="Select difficulty"
+          >
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+            <option value="expert">Expert</option>
+          </select>
+          <input
+            type="number"
+            className="form-control w-25 mx-1"
+            value={numberOfPuzzles}
+            onChange={(e) => {
+              let newValue = parseInt(e.target.value, 10);
+              if (newValue < 0) {
+                newValue = 0;
+              } else if (newValue > 24) {
+                newValue = 24;
+                alert("Maximum limit reached: 24 puzzles");
+              }
+              setNumberOfPuzzles(newValue);
+            }}
+          />
+          <button
+            className="btn btn-primary mx-1 text-nowrap"
+            onClick={() => {
+              const limit = Math.min(numberOfPuzzles, 24);
+              sudoku.generateNumberOfPuzzles(limit);
+            }}
+          >
+            <BsArrowRepeat />
+            <span> Regenerate </span>
+          </button>
+          <button
+            className="btn btn-primary mx-1 text-nowrap"
+            onClick={() => setShowAllSolutions(!showAllSolutions)}
+          >
+            {showAllSolutions ? (
+              <>
+                <BsEyeSlash className="me-2 top-0" />
+                Hide Solution
+              </>
+            ) : (
+              <>
+                <BsEye className="me-2 top-0" />
+                Show Solution
+              </>
+            )}
+          </button>
+          <button
+            className="btn btn-primary mx-1 my-2 text-nowrap"
+            onClick={printAllPuzzles}
+            disabled={isPrinting}
+          >
+            {isPrinting ? (
+              <div
+                className="spinner-border spinner-border-sm me-2"
+                role="status"
+              >
+                <span className="visually-hidden">Loading...</span>
+              </div>
+            ) : null}
+            <BsPrinter />
+            <span className="ms-1"> Print </span>
+          </button>
+          <button
+            className="btn btn-primary mx-1 my-2 text-nowrap"
+            onClick={() => downloadAllPDF(sudoku.listOfPuzzles)}
+            disabled={isPrinting}
+          >
+            <BsDownload />
+            <span> Download All </span>
+          </button>
+          {/* {
                     sudoku.listOfPuzzles.length !== 0 && (
                         <button
                             className="btn btn-primary mx-1"
@@ -137,24 +158,22 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
                         </button>
                     )
                 } */}
-
-
+        </div>
+        <div className="row row-cols-1 row-cols-md-3 g-4 pb-3">
+          {sudoku.listOfPuzzles.map((puzzle, puzzleIndex) => (
+            <div className="col" key={puzzleIndex}>
+              <SingleSudoku
+                puzzle={puzzle}
+                styles={styles}
+                key={puzzleIndex}
+                puzzleIndex={puzzleIndex}
+                showSolution={showAllSolutions ? true : showSolution}
+              />
             </div>
-            <div className="row row-cols-1 row-cols-md-3 g-4">
-            {sudoku.listOfPuzzles.map((puzzle, puzzleIndex) => (
-                    <div className="col" key={puzzleIndex}>
-                        <SingleSudoku
-                            puzzle={puzzle}
-                            styles={styles}
-                            key={puzzleIndex}
-                            puzzleIndex={puzzleIndex}
-                            showSolution={showAllSolutions ? true : showSolution} 
-                        />
-                    </div>
-                ))}
-            </div>
-        </>
-    )
+          ))}
+        </div>
+      </>
+    );
 }
 
 export default SudokuGenerator;
