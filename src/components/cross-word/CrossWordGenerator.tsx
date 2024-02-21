@@ -26,6 +26,11 @@ const CrossWordGenerator: React.FC = () => {
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  const handleDownloadClick = () => {
+    const uploadedFilePath = '/assets/crossword.csv';
+    window.open(uploadedFilePath);
+  };
+
 
   const uniqueWordsSet = new Set<string>();
 
@@ -450,7 +455,9 @@ const handleDeleteWord = (index: number) => {
                     onFileLoaded={handleCSVFile}
                     parserOptions={{ header: false, skipEmptyLines: true }}
                   />
+                  <button id="downloadButton" onClick={handleDownloadClick}>Download CSV File</button>
                 </div>
+
               </div>
             </div>
             {puzzles.length > 0 && (
