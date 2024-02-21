@@ -23,6 +23,13 @@ const WordSearch1: React.FC = () => {
   const [wordArray, setWordArray] = useState<string[]>([]);
   const [dividedArray, setDividedArray] = useState<string[][]>([]);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
+
+  const handleDownloadClick = () => {
+    const uploadedFilePath = '/assets/wordsearch.csv';
+    window.open(uploadedFilePath);
+  };
+
+
   const printAllPuzzles = async () => {
     setIsPrinting(true);
     const canvasList: HTMLCanvasElement[] = [];
@@ -403,6 +410,7 @@ const WordSearch1: React.FC = () => {
           >
             Download (PDF)
           </button>
+          <button id="downloadButton" onClick={handleDownloadClick}>Download CSV File</button>
           <button
             className="btn btn-primary mx-1 my-2 text-nowrap"
             onClick={printAllPuzzles}
