@@ -9,7 +9,7 @@ import { BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter,BsDownload     } from "react-
 
 interface SudokuGeneratorComponentProps {
     styles: any
-    sudoku: SudokuHookType 
+    sudoku?: SudokuHookType 
 }
 interface SingleSudokuComponentProps {
     styles: any,
