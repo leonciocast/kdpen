@@ -452,7 +452,7 @@ const WordSearch1: React.FC = () => {
             ) : null}
            <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
                 <BsArrowDownCircle />
-                <span> Download CSV</span>
+                <span> Download PDF</span>
                 </div>
           </button>
           <button
@@ -508,7 +508,7 @@ const WordSearch1: React.FC = () => {
             </div>
           )}
         </div>
-        <div className="col-md-12 col-lg-6 position-fixed start-50">
+        <div className="col-md-12 col-lg-6">
           <div className="row">
             {boards.length !== 0 ? (
               <div className="col-md-1 col-lg-1 col-1 position-relative">

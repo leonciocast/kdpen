@@ -348,7 +348,7 @@ const SingleSudoku: React.FC<SingleSudokuComponentProps & { showSolution: boolea
         <>
          <h4>Sudoku: {puzzleIndex + 1}</h4>
             <div className="card">
-                <div className="card-body">
+                <div className="card-body d-flex justify-content-center">
                     <div id={`sudoku_${puzzleIndex}`}>
 
                         <table className={styles.sudoku_container}>
@@ -356,7 +356,7 @@ const SingleSudoku: React.FC<SingleSudokuComponentProps & { showSolution: boolea
                                 {zip(puzzle.board, puzzle.board_solution).map(([row, solutionRow], rowIndex) => (
                                     <tr key={rowIndex}>
                                         {zip(row, solutionRow).map(([cell, solutionCell], colIndex) => (
-                                            <td className="p-1" key={colIndex}>
+                                            <td className="" key={colIndex}>
                                                 <input
                                                     type="text"
                                                     maxLength={1}
@@ -370,10 +370,10 @@ const SingleSudoku: React.FC<SingleSudokuComponentProps & { showSolution: boolea
 
                                                     style={{
                                                         color: "black",
-                                                        // width: "3rem",
-                                                        // height: "3rem",
-                                                        // fontSize: "2rem",
-                                                        // textAlign: "center",
+                                                        width: "3rem",
+                                                        height: "3rem",
+                                                        fontSize: "1.25rem",
+                                                        textAlign: "center",
                                                         background: cell === 0 ? "white" : cell !== 0 && cell !== solutionCell ? "red" : "darkseagreen"
                                                     }}
                                                 />
