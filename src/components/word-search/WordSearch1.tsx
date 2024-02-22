@@ -4,7 +4,7 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
 import { MdDelete } from "react-icons/md";
-import { BsPrinter } from "react-icons/bs";
+import { BsArrowDownCircle,BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter   } from "react-icons/bs";
 
 interface Orientation {
   dx: number;
@@ -23,6 +23,7 @@ const WordSearch1: React.FC = () => {
   const [wordArray, setWordArray] = useState<string[]>([]);
   const [dividedArray, setDividedArray] = useState<string[][]>([]);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
   const handleDownloadClick = () => {
     const uploadedFilePath = '/assets/wordsearch.csv';
@@ -206,7 +207,7 @@ const WordSearch1: React.FC = () => {
       setWordArray((prevWordArray) => [...prevWordArray, ...newWords]);
       newWords.forEach((word) => uniqueWords.add(word));
       setInputWords("");
-      alert(`Word(s) "${newWords.join(', ')}" added successfully!`);
+      // alert(`Word(s) "${newWords.join(', ')}" added successfully!`);
     } else {
       alert("Please enter words before adding.");
     }
@@ -236,37 +237,62 @@ const WordSearch1: React.FC = () => {
 
     return fillEmpty(newBoard);
   };
+
   const generateAllPuzzlesPDF = () => {
+    setIsDownloading(true);
     const pdf = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4",
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
     });
 
-    boards.forEach((_, index) => {
-      const componentRef = document.getElementById(
-        `wordsearch_${index}`
-      ) as HTMLElement;
-      if (!componentRef || !componentRef.innerHTML.trim()) {
-        return;
-      }
-      console.log(componentRef);
-      const dpi = 400;
-      html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
-        const imgData = canvas.toDataURL("image/png");
-        const imgWidth = 150;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        if (index !== 0) {
-          pdf.addPage();
+    const canvasList: HTMLCanvasElement[] = [];
+
+    const renderPage = (index: number) => {
+        const componentRef = document.getElementById(`wordsearch_${index}`) as HTMLElement;
+        if (!componentRef || !componentRef.innerHTML.trim()) {
+            // If componentRef is not available or empty, skip to the next page
+            if (index === boards.length - 1) {
+                pdf.save(`WordSearchAll.pdf`);
+                setIsDownloading(false);
+            }
+            else {
+                renderPage(index + 1);
+            }
+            return;
         }
-        pdf.text(`WordSearch ${index + 1}`, 30, 20);
-        pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
-        if (index === boards.length - 1) {
-          pdf.save(`WordSearchAll.pdf`);
-        }
-      });
-    });
-  };
+
+        const dpi = 400;
+        html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
+            canvasList.push(canvas);
+
+            const imgData = canvas.toDataURL("image/png");
+            const imgWidth = 150;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+            if (index !== 0) {
+              pdf.addPage();
+            }
+
+            pdf.text(`WordSearch ${index + 1}`, 30, 20);
+            pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+
+            if (index === boards.length - 1) {
+                pdf.save(`WordSearchAll.pdf`);
+                setIsDownloading(false);
+            }
+            else {
+                renderPage(index + 1);
+            }
+        }).catch(error => {
+            console.error('Error rendering canvas:', error);
+            setIsDownloading(false);
+        });
+    };
+
+    renderPage(0);
+};
+
+
 
   const handleFileUpload = (data: string[][]): void => {
     let wordsFromFile = data.map((item) => item[0].trim());
@@ -302,7 +328,7 @@ const WordSearch1: React.FC = () => {
             </label>
             <div className="d-flex gap-2" style={{ whiteSpace: "nowrap" }}>
               <textarea
-                placeholder="when multiple words (separated by new line)"
+                placeholder="when multiple words (separated by new line) e.g: Hello"
                 className="form-control w-75"
                 id="wordInput"
                 value={inputWords}
@@ -319,7 +345,7 @@ const WordSearch1: React.FC = () => {
             >
               Add Word
             </button>
-          <button id="downloadButton" className="btn btn-success me-2 mt-2" onClick={handleDownloadClick}>Download CSV File</button>
+          <button id="downloadButton" className="btn btn-success me-2 mt-2" onClick={handleDownloadClick}>Download CSV</button>
 
           </div>
           <div className="d-flex flex-wrap align-items-center my-3">
@@ -408,15 +434,25 @@ const WordSearch1: React.FC = () => {
             {showSolution ? `Hide` : `Show`} Solution
           </button>
           <button
-            className="btn btn-primary mx-1 my-3"
+            className="btn btn-primary mx-1 my-3 pt-2"
             onClick={generateAllPuzzlesPDF}
+            disabled={isPrinting || isDownloading}
           >
+            {isDownloading ? (
+              <div
+                className="spinner-border spinner-border-sm me-2"
+                role="status"
+              >
+                <span className="visually-hidden">Loading...</span>
+              </div>
+            ) : null}
+            <BsArrowDownCircle className="p-1 fs-3" />
             Download (PDF)
           </button>
           <button
-            className="btn btn-info text-white mx-1 my-2 text-nowrap"
+            className="btn btn-success text-white mx-1 my-2 text-nowrap"
             onClick={printAllPuzzles}
-            disabled={isPrinting}
+            disabled={isPrinting || isDownloading}
           >
             {isPrinting ? (
               <div
