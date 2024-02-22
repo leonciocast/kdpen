@@ -350,7 +350,7 @@ const handleDeleteWord = (index: number) => {
                   <div>
                     <textarea
                       className="form-control me-2 mb-2 w-100"
-                      placeholder="Enter Word(s) (separated by newline)"
+                      placeholder="Enter Word(s) (separated by newline) e.g: Lion"
                       value={inputWord.word}
                       name="word"
                       onChange={handleInputChange}
@@ -359,7 +359,7 @@ const handleDeleteWord = (index: number) => {
                     />
                     <textarea
                       className="form-control w-100"
-                      placeholder="Enter Clue(s) (separated by newline)"
+                      placeholder="Enter Clue(s) (separated by newline) e.g: king of forest"
                       value={inputWord.clue}
                       name="clue"
                       onChange={handleInputChange}
@@ -417,7 +417,7 @@ const handleDeleteWord = (index: number) => {
                       )}
                     </button>
                     <button
-                      className="btn btn-info text-white text-nowrap"
+                      className="btn btn-success text-white text-nowrap"
                       style={{fontSize:"14px"}}
                       onClick={printAllPuzzles}
                       disabled={isPrinting || isDownloading}
@@ -443,19 +443,19 @@ const handleDeleteWord = (index: number) => {
                     ):null}
                       <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
                         <BsArrowDownCircle />
-                        <span> Download All</span>
+                        <span> Download PDF</span>
                       </div>
                     </button>
                   </div>
                 </form>
 
-                <div className="mt-2 d-flex">
+                <div className="mt-2 d-flex justify-content-between">
                   <CSVReader
                     disabled={isPrinting || isDownloading}
                     onFileLoaded={handleCSVFile}
                     parserOptions={{ header: false, skipEmptyLines: true }}
                   />
-                  <button className="btn btn-primary" id="downloadButton" onClick={handleDownloadClick}>Download CSV File</button>
+                  <button className="btn btn-primary" id="downloadButton" onClick={handleDownloadClick}>Download CSV</button>
                 </div>
 
               </div>
