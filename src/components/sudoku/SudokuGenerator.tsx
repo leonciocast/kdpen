@@ -29,43 +29,63 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
     const sudoku = useSudoku(difficulty)
    
     const printAllPuzzles = () => {
-        setIsPrinting(true);
-        const canvasList: HTMLCanvasElement[] = [];
-    
-        for (let puzzleIndex = 0; puzzleIndex < sudoku.listOfPuzzles.length; puzzleIndex++) {
-            const componentRef = document.getElementById(`sudoku_${puzzleIndex}`) as HTMLElement;
-            if (componentRef) {
-                html2canvas(componentRef, {
-                    useCORS: true,
-                    scale: 2 
-                }).then(canvas => {
-                    canvasList.push(canvas);
-    
-                    if (canvasList.length === sudoku.listOfPuzzles.length) {
-                        const printWindow = window.open('', '_blank');
-                        if (printWindow) {
-                            printWindow.document.write('<html><head><title>All Sudoku Puzzles</title></head><body>');
-                            for (let i = 0; i < canvasList.length; i++) {
-                                printWindow.document.write('<div style="page-break-before: always;">');
-                                printWindow.document.write(`<h4 style="text-align: center;">Sudoku Puzzle: ${i + 1}</h4>`);
-                                printWindow.document.write(`<img src="${canvasList[i].toDataURL("image/png")}" style="width: 80%; display:flex;margin:auto" />`);
-                                printWindow.document.write('</div>');
-                            }
-                            printWindow.document.write('</body></html>');
-                            printWindow.document.close();
-                            printWindow.print();
-                        } else {
-                            console.error('Failed to open print window');
-                        }
-                        setIsPrinting(false);
-                    }
-                }).catch(error => {
-                    console.error('Error rendering canvas:', error);
-                    setIsPrinting(false);
-                });
-            }
-        }
-    };
+      setIsPrinting(true);
+      const canvasList: HTMLCanvasElement[] = [];
+      let renderedCount = 0;
+  
+      const renderNextCanvas = (puzzleIndex: number) => {
+          const componentRef = document.getElementById(`sudoku_${puzzleIndex}`) as HTMLElement;
+          if (!componentRef) {
+              setIsPrinting(false);
+              console.error(`Component with id sudoku_${puzzleIndex} not found.`);
+              return;
+          }
+  
+          html2canvas(componentRef, {
+              useCORS: true,
+              scale: 2
+          }).then(canvas => {
+              canvasList.push(canvas);
+              renderedCount++;
+  
+              if (renderedCount === sudoku.listOfPuzzles.length) {
+                  printCanvasList(canvasList);
+              } else {
+                  renderNextCanvas(puzzleIndex + 1);
+              }
+          }).catch(error => {
+              setIsPrinting(false);
+              console.error('Error rendering canvas:', error);
+          });
+      };
+  
+      const printCanvasList = (canvasList: HTMLCanvasElement[]) => {
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+              printWindow.document.write('<html><head><title>All Sudoku Puzzles</title></head><body>');
+              canvasList.forEach((canvas, index) => {
+                  printWindow.document.write('<div style="page-break-before: always;">');
+                  printWindow.document.write(`<h4 style="text-align: center;">Sudoku Puzzle: ${index + 1}</h4>`);
+                  printWindow.document.write(`<img src="${canvas.toDataURL("image/png")}" style="width: 80%; display:flex;margin:auto" />`);
+                  printWindow.document.write('</div>');
+              });
+              printWindow.document.write('</body></html>');
+              printWindow.document.close();
+              printWindow.print();
+          } else {
+              console.error('Failed to open print window');
+          }
+          setIsPrinting(false);
+      };
+  
+      if (sudoku.listOfPuzzles.length > 0) {
+          renderNextCanvas(0);
+      } else {
+          setIsPrinting(false);
+          console.error('No puzzles to print.');
+      }
+  };
+  
   //   const downloadAllPDF = (puzzles: PuzzleType[]) => {
   //     setIsDownloading(true);
   //     const pdf = new jsPDF({
@@ -108,7 +128,6 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
 
     const renderNextPage = (index: number) => {
         if (index >= puzzles.length) {
-            // Once all pages are rendered, save the PDF
             pdf.save("All_Sudokus.pdf");
             setIsDownloading(false);
             return;
@@ -117,20 +136,20 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
         const puzzle = puzzles[index];
         const componentRef = document.getElementById(`sudoku_${index}`) as HTMLElement;
         if (!componentRef || !componentRef.innerHTML.trim()) {
-            // If componentRef is not available or empty, skip to the next page
             renderNextPage(index + 1);
             return;
         }
 
-        const dpi = 400;
+        const dpi = 300;
         html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
             canvasList.push(canvas);
-
             const imgData = canvas.toDataURL("image/png");
             const imgWidth = 150;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-            pdf.addPage();
+            if (index !== 0) {
+                pdf.addPage();
+            }
             pdf.text(`Sudoku ${index + 1}`, 30, 20);
             pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
 
@@ -181,6 +200,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
               const limit = Math.min(numberOfPuzzles, 24);
               sudoku.generateNumberOfPuzzles(limit);
             }}
+            disabled={isPrinting || isDownloading}
           >
             <BsArrowRepeat />
             <span>{sudoku.length == 0  ? "Generate" : "Regenerate"}</span>
@@ -188,6 +208,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
           <button
             className="btn btn-primary mx-1 text-nowrap"
             onClick={() => setShowAllSolutions(!showAllSolutions)}
+            disabled={isPrinting || isDownloading}
           >
             {showAllSolutions ? (
               <>
