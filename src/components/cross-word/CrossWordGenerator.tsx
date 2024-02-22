@@ -379,7 +379,7 @@ const handleDeleteWord = (index: number) => {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-primary"
+                      className="btn btn-success"
                       style={{fontSize:"14px"}}
                       disabled={isPrinting || isDownloading}
                       onClick={() => {
@@ -399,7 +399,7 @@ const handleDeleteWord = (index: number) => {
                     </button>
                     <button
                       type="button"
-                      className="btn btn-primary text-nowrap"
+                      className="btn btn-dark text-nowrap"
                       style={{fontSize:"14px"}}
                       disabled={isPrinting || isDownloading}
                       onClick={() => setSolution(!showSolution)}
@@ -417,7 +417,7 @@ const handleDeleteWord = (index: number) => {
                       )}
                     </button>
                     <button
-                      className="btn btn-primary text-nowrap"
+                      className="btn btn-info text-white text-nowrap"
                       style={{fontSize:"14px"}}
                       onClick={printAllPuzzles}
                       disabled={isPrinting || isDownloading}
@@ -449,13 +449,13 @@ const handleDeleteWord = (index: number) => {
                   </div>
                 </form>
 
-                <div className="mt-2">
+                <div className="mt-2 d-flex">
                   <CSVReader
                     disabled={isPrinting || isDownloading}
                     onFileLoaded={handleCSVFile}
                     parserOptions={{ header: false, skipEmptyLines: true }}
                   />
-                  <button id="downloadButton" onClick={handleDownloadClick}>Download CSV File</button>
+                  <button className="btn btn-primary" id="downloadButton" onClick={handleDownloadClick}>Download CSV File</button>
                 </div>
 
               </div>

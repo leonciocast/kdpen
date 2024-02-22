@@ -319,6 +319,8 @@ const WordSearch1: React.FC = () => {
             >
               Add Word
             </button>
+          <button id="downloadButton" className="btn btn-success me-2 mt-2" onClick={handleDownloadClick}>Download CSV File</button>
+
           </div>
           <div className="d-flex flex-wrap align-items-center my-3">
             <label className=" fw-bold me-2">Upload CSV</label>
@@ -330,6 +332,7 @@ const WordSearch1: React.FC = () => {
                 skipEmptyLines: true,
               }}
             />
+
           </div>
 
           <div className="mb-3">
@@ -410,9 +413,8 @@ const WordSearch1: React.FC = () => {
           >
             Download (PDF)
           </button>
-          <button id="downloadButton" onClick={handleDownloadClick}>Download CSV File</button>
           <button
-            className="btn btn-primary mx-1 my-2 text-nowrap"
+            className="btn btn-info text-white mx-1 my-2 text-nowrap"
             onClick={printAllPuzzles}
             disabled={isPrinting}
           >

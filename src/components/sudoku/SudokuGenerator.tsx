@@ -66,7 +66,84 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
             }
         }
     };
-    
+  //   const downloadAllPDF = (puzzles: PuzzleType[]) => {
+  //     setIsDownloading(true);
+  //     const pdf = new jsPDF({
+  //         orientation: "portrait",
+  //         unit: "mm",
+  //         format: "a4",
+  //     });
+  
+  //     puzzles.forEach((puzzle, index) => {
+  //         const componentRef = document.getElementById(`sudoku_${index}`) as HTMLElement;
+  //         if (!componentRef || !componentRef.innerHTML.trim()) {
+  //             return;
+  //         }
+  
+  //         const dpi = 400; 
+  //         html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
+  //             const imgData = canvas.toDataURL("image/png");
+  //             const imgWidth = 150;
+  //             const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  //             if (index !== 0) {
+  //                 pdf.addPage();
+  //             }
+  //             pdf.text(`Sudoku ${index + 1}`, 30, 20);
+  //             pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+  //             if (index === puzzles.length - 1) {
+  //                 pdf.save("All_Sudokus.pdf");
+  //             }
+  //         });
+  //     });
+  // };
+  const downloadAllPDF = (puzzles: PuzzleType[]) => {
+    setIsDownloading(true);
+    const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+    });
+
+    const canvasList: HTMLCanvasElement[] = [];
+
+    const renderNextPage = (index: number) => {
+        if (index >= puzzles.length) {
+            // Once all pages are rendered, save the PDF
+            pdf.save("All_Sudokus.pdf");
+            setIsDownloading(false);
+            return;
+        }
+
+        const puzzle = puzzles[index];
+        const componentRef = document.getElementById(`sudoku_${index}`) as HTMLElement;
+        if (!componentRef || !componentRef.innerHTML.trim()) {
+            // If componentRef is not available or empty, skip to the next page
+            renderNextPage(index + 1);
+            return;
+        }
+
+        const dpi = 400;
+        html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
+            canvasList.push(canvas);
+
+            const imgData = canvas.toDataURL("image/png");
+            const imgWidth = 150;
+            const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+            pdf.addPage();
+            pdf.text(`Sudoku ${index + 1}`, 30, 20);
+            pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+
+            renderNextPage(index + 1);
+        }).catch(error => {
+            console.error('Error rendering canvas:', error);
+            setIsDownloading(false);
+        });
+    };
+
+    renderNextPage(0);
+};
+
     
     return (
       <>
@@ -106,7 +183,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
             }}
           >
             <BsArrowRepeat />
-            <span> Regenerate </span>
+            <span>{sudoku.length == 0  ? "Generate" : "Regenerate"}</span>
           </button>
           <button
             className="btn btn-primary mx-1 text-nowrap"
@@ -127,7 +204,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
           <button
             className="btn btn-primary mx-1 my-2 text-nowrap"
             onClick={printAllPuzzles}
-            disabled={isPrinting}
+            disabled={isPrinting || isDownloading}
           >
             {isPrinting ? (
               <div
@@ -140,11 +217,20 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
             <BsPrinter />
             <span className="ms-1"> Print </span>
           </button>
+          
           <button
             className="btn btn-primary mx-1 my-2 text-nowrap"
             onClick={() => downloadAllPDF(sudoku.listOfPuzzles)}
-            disabled={isPrinting}
+            disabled={isPrinting || isDownloading}
           >
+            {isDownloading ? (
+              <div
+                className="spinner-border spinner-border-sm me-2"
+                role="status"
+              >
+                <span className="visually-hidden">Loading...</span>
+              </div>
+            ) : null}
             <BsDownload />
             <span> Download All </span>
           </button>
@@ -201,35 +287,7 @@ export default SudokuGenerator;
 //         });
 // };
 
-const downloadAllPDF = (puzzles: PuzzleType[]) => {
-    const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
 
-    puzzles.forEach((puzzle, index) => {
-        const componentRef = document.getElementById(`sudoku_${index}`) as HTMLElement;
-        if (!componentRef || !componentRef.innerHTML.trim()) {
-            return;
-        }
-
-        const dpi = 400; 
-        html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
-            const imgData = canvas.toDataURL("image/png");
-            const imgWidth = 150;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            if (index !== 0) {
-                pdf.addPage();
-            }
-            pdf.text(`Sudoku ${index + 1}`, 30, 20);
-            pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
-            if (index === puzzles.length - 1) {
-                pdf.save("All_Sudokus.pdf");
-            }
-        });
-    });
-};
 
 // const downloadPDF = (listOfPuzzles: PuzzleType[], puzzleIndex?: number) => {
 //     if (puzzleIndex !== undefined) {

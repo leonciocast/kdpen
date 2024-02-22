@@ -10,6 +10,7 @@ export type PuzzleType = {
     // showSolution: boolean;
 };
 export interface SudokuHookType {
+    length: number;
     // loading: boolean;
     // error: string | null;
     // genSudoku: SudokuType | undefined;
