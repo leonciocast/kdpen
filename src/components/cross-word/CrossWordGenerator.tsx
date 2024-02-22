@@ -43,70 +43,68 @@ const CrossWordGenerator: React.FC = () => {
   };
 
  
-  const MAX_WORDS_LIMIT = 10; // Set your desired word limit
+  const MAX_WORDS_LIMIT = 10; 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-  
-    // Split the input value into words
+    
     const words = value.trim().split(/\s+/);
-  
-    // Check if the number of words exceeds the limit
     if (words.length <= MAX_WORDS_LIMIT) {
       setInputWord((prevData) => ({
         ...prevData,
         [name]: value,
       }));
     } else {
-      // If the limit is exceeded, truncate the input to the allowed number of words
       setInputWord((prevData) => ({
         ...prevData,
-        [name]: words.slice(0, MAX_WORDS_LIMIT).join(' '), // Join the first MAX_WORDS_LIMIT words
+        [name]: words.slice(0, MAX_WORDS_LIMIT).join(' '), 
       }));
   
-      // Optionally, you can display an alert or message to the user
       alert(`Maximum ${MAX_WORDS_LIMIT} words allowed.`);
     }
   };
   
+ const handleAddWord = () => {
+  if (inputWord.word.trim() !== "" && inputWord.clue.trim() !== "") {
+    const wordsArray = inputWord.word.trim().split('\n');
+    const cluesArray = inputWord.clue.trim().split('\n');
 
-  const handleAddWord = () => {
-    if (inputWord.word.trim() !== "" && inputWord.clue.trim() !== "") {
-      const wordsArray = inputWord.word.trim().split('\n');
-      const cluesArray = inputWord.clue.trim().split('\n');
-  
-      if (wordsArray.length !== cluesArray.length) {
-        alert("Number of words and clues should match.");
-        return;
-      }
-  
-      let newWordsToAdd:SingleWordType[] = [];
-      let addedWords = []; 
-      for (let i = 0; i < wordsArray.length; i++) {
-        const word = wordsArray[i].trim();
-        const clue = cluesArray[i].trim();
-        if (word && clue) {
-          if (!wordExists(word.toUpperCase())) {
-            uniqueWordsSet.add(word.toUpperCase());
-            newWordsToAdd.push({ word: word.toUpperCase(), clue });
-            addedWords.push(word); 
-          } else {
-            alert("Word already exists: " + word);
-          }
+    if (wordsArray.length !== cluesArray.length) {
+      alert("Number of words and clues should match.");
+      return;
+    }
+
+    let newWordsToAdd: SingleWordType[] = [];
+    let addedWords = [];
+    for (let i = 0; i < wordsArray.length; i++) {
+      const word = wordsArray[i].trim();
+      const clue = cluesArray[i].trim();
+      if (word && clue) {
+        if (!wordExists(word.toUpperCase())) {
+          uniqueWordsSet.add(word.toUpperCase());
+          newWordsToAdd.push({ word: word.toUpperCase(), clue });
+          addedWords.push(word);
+        } else {
+          alert("Word already exists: " + word);
         }
       }
-  
-      if (newWordsToAdd.length > 0) {
-        setWords((prev) => [...prev, ...newWordsToAdd]);
-        // Alert when all words are successfully added
-        alert(`Words added successfully: ${addedWords.join(", ")}`);
-      }
-  
-      setInputWord(initialEmptyInput);
-    } else {
-      alert("Enter Word(s) and Clue(s) Both");
     }
-  };
+
+    if (newWordsToAdd.length > 0) {
+      console.log("Current Words State:", words);
+      setWords((prev) => [ ...prev, ...newWordsToAdd]); 
+      // console.log("Updated Words State:", words);
+      const updatedPuzzles = dividedArray.map((single_array) => generateNewPuzzle(single_array));
+      setPuzzles(updatedPuzzles);
+    }
+
+    setInputWord(initialEmptyInput);
+  } else {
+    alert("Enter Word(s) and Clue(s) Both");
+  }
+};
+
+  
   
   const wordExists = (word: any) => {
     return words.some(item => item.word.toUpperCase() === word);
@@ -157,10 +155,24 @@ const CrossWordGenerator: React.FC = () => {
       word: item[0].toUpperCase().trim(),
       clue: item[1].trim(),
     }));
-    newWords.forEach((wordObj:any) => {
-      addUniqueWord(wordObj.word, wordObj.clue);
+
+    const addedWords: SingleWordType[] = [];
+
+    newWords.forEach((wordObj: any) => {
+      if (!wordExists(wordObj.word)) {
+        uniqueWordsSet.add(wordObj.word);
+        addedWords.push(wordObj);
+      } else {
+        alert("Word already exists: " + wordObj.word);
+      }
     });
+
+    if (addedWords.length > 0) {
+      setWords((prevWords) => [...prevWords, ...addedWords]);
+      // console.log("Words added successfully from CSV: " + addedWords.map(word => word.word).join(", "));
+    }
   };
+
 
 const handleDeleteWord = (index: number) => {
     const deletedWord = words[index];
@@ -180,18 +192,8 @@ const handleDeleteWord = (index: number) => {
         };
       })
     );
-  
-    // Regenerate puzzles after deleting a word
     handleRegenerate();
-  };
-  // const dividedWords = useMemo(()=>{
-  //   const wordsArrays: string[][] = [];
-  //   for (let i = 0; i < words.length; i += 10) {
-  //     wordsArrays.push(words.slice(i, i + 10));
-  //   }
-  //   return wordsArrays
-  // }, [words])
-  
+  };  
 
   const handlePrevButtonClick = () => {
     const carousel = document.getElementById("carouselExample");
@@ -212,7 +214,7 @@ const handleDeleteWord = (index: number) => {
   };
 
   const printAllPuzzles = async () => {
-    setIsPrinting(true); // Set a state to indicate that printing is in progress
+    setIsPrinting(true); 
   
     const canvasList: HTMLCanvasElement[] = [];
   
@@ -222,18 +224,10 @@ const handleDeleteWord = (index: number) => {
   
     if (carousel) {
       carouselItems = carousel.querySelectorAll(".carousel-item");
-      
-      // Loop through each carousel item
       for (let i = 0; i < carouselItems.length; i++) {
-        const carouselItem = carouselItems[i];
-        
-        // Activate the current carousel item
+        const carouselItem = carouselItems[i];      
         carouselItem.classList.add("active");
-        
-        // Wait for a brief moment for the carousel to update
         await new Promise((resolve) => setTimeout(resolve, 100));
-        
-        // Capture canvas for the current carousel item
         const componentRef = carouselItem.querySelector(".single-puzzle-component") as HTMLElement;
         try {
           const canvas = await html2canvas(componentRef, {
@@ -246,8 +240,6 @@ const handleDeleteWord = (index: number) => {
           setIsPrinting(false);
           return;
         }
-        
-        // Deactivate the current carousel item
         carouselItem.classList.remove("active");
       }
     } else {
@@ -255,8 +247,6 @@ const handleDeleteWord = (index: number) => {
       setIsPrinting(false);
       return;
     }
-  
-    // Print all captured canvases
     const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(
@@ -281,9 +271,7 @@ const handleDeleteWord = (index: number) => {
       console.error("Failed to open print window");
     }
   
-    setIsPrinting(false); // Reset the state after printing is complete
-    
-    // After printing all puzzles, activate the last generated puzzle
+    setIsPrinting(false);
     if (carouselItems) {
       const lastCarouselItem = carouselItems[carouselItems.length - 1];
       lastCarouselItem.classList.add("active");
@@ -303,8 +291,7 @@ const handleDeleteWord = (index: number) => {
       const componentRef = document.getElementById(`wordsearch`) as HTMLElement;
       if (!componentRef || !componentRef.innerHTML.trim()) {
         console.error("Component reference not found or empty.");
-        setIsDownloading(false); // Stop loading if there's an error
-
+        setIsDownloading(false);
         return;
       }
   
@@ -323,7 +310,7 @@ const handleDeleteWord = (index: number) => {
   
           if (index === puzzles.length - 1) {
             pdf.save(`WordSearchAll.pdf`);
-            setIsDownloading(false); // Stop loading when all PDFs are generated
+            setIsDownloading(false); 
 
           }
         } catch (error) {
@@ -336,8 +323,6 @@ const handleDeleteWord = (index: number) => {
       });
     });
   };
-  
-  
 
   return (
     <div className="crossword-grid mainWrapper">
@@ -442,7 +427,7 @@ const handleDeleteWord = (index: number) => {
                     </div>
                     ):null}
                       <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
-                        <BsArrowDownCircle />
+                        {/* <BsArrowDownCircle /> */}
                         <span> Download PDF</span>
                       </div>
                     </button>
@@ -455,34 +440,73 @@ const handleDeleteWord = (index: number) => {
                     onFileLoaded={handleCSVFile}
                     parserOptions={{ header: false, skipEmptyLines: true }}
                   />
-                  <button className="btn btn-primary" id="downloadButton" onClick={handleDownloadClick}>Download CSV</button>
+                  <button   style={{fontSize:"14px",display:"flex"}} className="btn btn-primary" id="downloadButton" onClick={handleDownloadClick}>Download CSV</button>
                 </div>
 
               </div>
             </div>
-            {puzzles.length > 0 && (
               <div className="mt-3">
+            {words.length > 0 && (
+
                 <h5>Word List:</h5>
-                <ul>
+                  )} 
+                {/* <ul>
                   {words.map((word, index) => (
-                    <li
-                      key={index}
-                      className="d-flex align-items-center justify-content-between"
-                    >
-                      <span>
-                        {index} - {word.word}
-                      </span>
+                  <li key={index}>
+                  <div className="d-flex align-items-center justify-content-between">
+                    <div className="d-flex">
+                      <div className="d-flex gap-5">
+                        <p>{index} - {word.word}</p>
+                        <p>{index} - {word.clue}</p>
+                      </div>
+                    </div>
+                    <div>
                       <button
-                        className="btn btn-link text-danger"
+                        className="btn btn-link text-danger ms-3" // Adjust margin here for spacing
                         onClick={() => handleDeleteWord(index)}
                       >
                         <MdDelete className="fs-4" />
                       </button>
-                    </li>
+                    </div>
+                  </div>
+                </li>
+                
                   ))}
-                </ul>
-              </div>
-            )}
+                </ul> */}
+               {words.length > 0 && (
+  <div className="mb-4 overflow-y-scroll" style={{ height: '300px'}}>
+    <table className="table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Word</th>
+          <th>Clue</th>
+          <th>Delete</th>
+        </tr>
+      </thead>
+      <tbody>
+        {words.map((word, index) => (
+          <tr key={index}>
+            <td>{index}</td>
+            <td>{word.word}</td>
+            <td>{word.clue}</td>
+            <td>
+              <button
+                className="btn btn-link text-danger"
+                onClick={() => handleDeleteWord(index)}
+              >
+                <MdDelete className="fs-4" />
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+      
+    </table>
+  </div>
+)}
+
+              </div>          
           </div>
           <div className="col-md-8 col-lg-7">
             <div className="row my-3">
@@ -528,18 +552,18 @@ const handleDeleteWord = (index: number) => {
                   </div>
                 </div>
                 {/* <button
-        className="btn btn-primary mx-1 my-2 text-nowrap"
-        onClick={printAllPuzzles}
-        disabled={isPrinting}
-      >
-        {isPrinting ? (
-          <div className="spinner-border spinner-border-sm me-2" role="status">
-            <span className="visually-hidden">Loading...</span>
-          </div>
-        ) : null}
-        <BsPrinter />
-        <span className="ms-1"> Print </span>
-      </button> */}
+                    className="btn btn-primary mx-1 my-2 text-nowrap"
+                    onClick={printAllPuzzles}
+                    disabled={isPrinting}
+                  >
+                    {isPrinting ? (
+                      <div className="spinner-border spinner-border-sm me-2" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                      </div>
+                    ) : null}
+                    <BsPrinter />
+                    <span className="ms-1"> Print </span>
+                  </button> */}
               </div>
               <div className="col-md-1 position-relative">
                 {puzzles.length > 0 && (

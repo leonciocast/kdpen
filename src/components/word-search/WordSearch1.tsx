@@ -345,8 +345,13 @@ const WordSearch1: React.FC = () => {
             >
               Add Word
             </button>
-          <button id="downloadButton" className="btn btn-success me-2 mt-2" onClick={handleDownloadClick}>Download CSV</button>
-
+            <button
+              id="downloadButton"
+              className="btn btn-success me-2 mt-2"
+              onClick={handleDownloadClick}
+            >
+              Download CSV
+            </button>
           </div>
           <div className="d-flex flex-wrap align-items-center my-3">
             <label className=" fw-bold me-2">Upload CSV</label>
@@ -358,7 +363,6 @@ const WordSearch1: React.FC = () => {
                 skipEmptyLines: true,
               }}
             />
-
           </div>
 
           <div className="mb-3">
@@ -446,8 +450,10 @@ const WordSearch1: React.FC = () => {
                 <span className="visually-hidden">Loading...</span>
               </div>
             ) : null}
-            <BsArrowDownCircle className="p-1 fs-3" />
-            Download (PDF)
+           <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
+                <BsArrowDownCircle />
+                <span> Download CSV</span>
+                </div>
           </button>
           <button
             className="btn btn-success text-white mx-1 my-2 text-nowrap"
@@ -470,21 +476,35 @@ const WordSearch1: React.FC = () => {
           ) : (
             <div className="mt-3">
               <h5>Word List:</h5>
-              <ol>
-                {wordArray.map((word, index) => (
-                  <>
-                    <div className="d-flex justify-content-between">
-                      <li key={index}>{word}</li>
-                      <button
-                        className="my-1 bg-white border-0"
-                        onClick={() => handleDelete(index)}
-                      >
-                        <MdDelete className="text-danger fs-4" />
-                      </button>
-                    </div>
-                  </>
-                ))}
-              </ol>
+              <div
+                className="mb-4 overflow-y-scroll"
+                style={{ height: "300px" }}
+              >
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Word</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {wordArray.map((word, index) => (
+                      <tr key={index}>
+                        <td style={{ width: "500px" }}>{index} - {word}</td>{" "}
+                        <td>
+                          <button
+                            className="my-1 bg-white border-0"
+                            onClick={() => handleDelete(index)}
+                            style={{ marginLeft: "10px" }} 
+                          >
+                            <MdDelete className="text-danger fs-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -523,8 +543,9 @@ const WordSearch1: React.FC = () => {
                         return (
                           <div
                             key={single_board_index}
-                            className={`carousel-item abc d-block ${single_board_index === 0 ? "active" : ""
-                              }`}
+                            className={`carousel-item abc d-block ${
+                              single_board_index === 0 ? "active" : ""
+                            }`}
                           >
                             <SinglePuzzle
                               board={single_board}
