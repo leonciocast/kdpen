@@ -442,17 +442,19 @@ const WordSearch1: React.FC = () => {
             onClick={generateAllPuzzlesPDF}
             disabled={isPrinting || isDownloading}
           >
+            <div className="d-flex align-items-center">
             {isDownloading ? (
               <div
-                className="spinner-border spinner-border-sm me-2"
+                className="spinner-border spinner-border-sm mt-1 me-2"
                 role="status"
               >
-                <span className="visually-hidden">Loading...</span>
+                {/* <span className="visually-hidden">Loading...</span> */}
               </div>
             ) : null}
            <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
                 <BsArrowDownCircle />
                 <span> Download PDF</span>
+                </div>
                 </div>
           </button>
           <button
