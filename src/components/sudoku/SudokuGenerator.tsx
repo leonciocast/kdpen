@@ -376,6 +376,7 @@ const SingleSudoku: React.FC<SingleSudokuComponentProps & { showSolution: boolea
                                                     // onFocus={(e) => handleCellFocus(rowIndex, colIndex, e)}
 
                                                     style={{
+                                                      padding: "13px",
                                                         color: "black",
                                                         width: "3rem",
                                                         height: "3rem",

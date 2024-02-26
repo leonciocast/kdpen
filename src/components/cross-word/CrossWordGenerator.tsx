@@ -280,7 +280,7 @@ const CrossWordGenerator: React.FC = () => {
         printWindow.document.write(
           `<img src="${canvasList[i].toDataURL(
             "image/png"
-          )}" style=" display:flex; margin:auto;" />`
+          )}" style=" display:flex; justify-content:center; margin-left:auto; margin-right: auto;" />`
         );
         printWindow.document.write("</div>");
       }
