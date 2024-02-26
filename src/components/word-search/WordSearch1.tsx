@@ -1,10 +1,15 @@
 "use client";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
 import { MdDelete } from "react-icons/md";
-import { BsArrowDownCircle,BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter   } from "react-icons/bs";
+import {
+  BsArrowDownCircle,
+  BsPrinter,
+} from "react-icons/bs";
+import { ToastContainer,toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 interface Orientation {
   dx: number;
@@ -24,12 +29,17 @@ const WordSearch1: React.FC = () => {
   const [dividedArray, setDividedArray] = useState<string[][]>([]);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [showToast, setShowToast] = useState<boolean>(false);
+  const [generatePuzzlesClicked, setGeneratePuzzlesClicked] = useState<boolean>(false);
 
+  const handleGeneratePuzzlesClick = () => {
+    setGeneratePuzzlesClicked(true);
+  };
+  
   const handleDownloadClick = () => {
-    const uploadedFilePath = '/assets/wordsearch.csv';
+    const uploadedFilePath = "/assets/wordsearch.csv";
     window.open(uploadedFilePath);
   };
-
 
   const printAllPuzzles = async () => {
     setIsPrinting(true);
@@ -38,14 +48,9 @@ const WordSearch1: React.FC = () => {
     const carousel = document.getElementById("carouselExampleFade");
 
     if (carousel) {
-      // Temporarily show all carousel items
       const carouselItems = carousel.querySelectorAll(".abc");
       carouselItems.forEach((item) => item.classList.add("active"));
-
-      // Wait for the carousel to update
       await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Capture canvases for all carousel items
       const componentRefs = carousel.querySelectorAll(
         ".single-puzzle-component"
       ) as NodeListOf<HTMLElement>;
@@ -63,9 +68,6 @@ const WordSearch1: React.FC = () => {
           return;
         }
       }
-
-      // Restore the original state of carousel items
-
       for (let j = 0; j < carouselItems.length; j++) {
         if (j === 0) {
           carouselItems[j].classList.add("active");
@@ -74,8 +76,6 @@ const WordSearch1: React.FC = () => {
         }
       }
     }
-
-    // Print all captured canvases
     const printWindow = window.open("", "_blank");
     if (printWindow) {
       printWindow.document.write(
@@ -108,11 +108,10 @@ const WordSearch1: React.FC = () => {
   };
   const getRandomColor = () => {
     // Generate light shade colors by ensuring higher values for RGB components
-    const r = Math.floor(Math.random() * 100) + 155; // Red component
-    const g = Math.floor(Math.random() * 100) + 155; // Green component
-    const b = Math.floor(Math.random() * 100) + 155; // Blue component
+    const r = Math.floor(Math.random() * 100) + 155;
+    const g = Math.floor(Math.random() * 100) + 155;
+    const b = Math.floor(Math.random() * 100) + 155;
 
-    // Convert RGB components to hexadecimal format and concatenate
     return `#${r.toString(16)}${g.toString(16)}${b.toString(16)}`;
   };
 
@@ -193,23 +192,40 @@ const WordSearch1: React.FC = () => {
     setUniqueWords(updatedSet);
   };
 
+  const MAX_WORDS_LIMIT = 10;
+  const MAX_WORD_LENGTH = 10;
+
   const handleAddWord = (): void => {
     if (inputWords.trim() !== "") {
-      const newWords = inputWords.split("\n").map((word) => word.trim().toUpperCase());
-      const duplicateWords = newWords.filter((word) => uniqueWords.has(word));
+      const lines = inputWords.trim().split("\n");
+      const newWords: string[] = [];
+      lines.forEach((line) => {
+        const [word, clue] = line.trim().split("-");
+        const formattedWord = word.trim().toUpperCase().replace(/\s/g, "").slice(0, MAX_WORD_LENGTH);
+        const formattedClue = clue.trim();
+        newWords.push(`${formattedWord}-${formattedClue}`);
+      });
   
-      if (duplicateWords.length > 0) {
-        const duplicateWordMessage = duplicateWords.map((word) => `"${word}"`).join(", ");
-        alert(`The word(s) ${duplicateWordMessage} already exist(s).`);
+      console.log(newWords, "newwords");
+  
+      const uniqueNewWords = newWords.filter(
+        (word, index, self) => self.indexOf(word) === index
+      );
+  
+      if (uniqueNewWords.length === 0) {
+        toast.error("Please enter unique words before adding.");
         return;
       }
-  
-      setWordArray((prevWordArray) => [...prevWordArray, ...newWords]);
-      newWords.forEach((word) => uniqueWords.add(word));
+      if (wordArray.length + uniqueNewWords.length > MAX_WORDS_LIMIT) {
+        toast.error(`You can only add ${MAX_WORDS_LIMIT} words.`);
+        return;
+      }
+      setWordArray((prevWordArray) => [...prevWordArray, ...uniqueNewWords]);
+      // Assuming addUniqueWords function handles clues as well
+      addUniqueWords(uniqueNewWords);
       setInputWords("");
-      // alert(`Word(s) "${newWords.join(', ')}" added successfully!`);
     } else {
-      alert("Please enter words before adding.");
+      toast.error("Please enter words before adding.");
     }
   };
   
@@ -241,70 +257,89 @@ const WordSearch1: React.FC = () => {
   const generateAllPuzzlesPDF = () => {
     setIsDownloading(true);
     const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
     });
 
     const canvasList: HTMLCanvasElement[] = [];
 
     const renderPage = (index: number) => {
-        const componentRef = document.getElementById(`wordsearch_${index}`) as HTMLElement;
-        if (!componentRef || !componentRef.innerHTML.trim()) {
-            // If componentRef is not available or empty, skip to the next page
-            if (index === boards.length - 1) {
-                pdf.save(`WordSearchAll.pdf`);
-                setIsDownloading(false);
-            }
-            else {
-                renderPage(index + 1);
-            }
-            return;
+      const componentRef = document.getElementById(
+        `wordsearch_${index}`
+      ) as HTMLElement;
+      if (!componentRef || !componentRef.innerHTML.trim()) {
+        if (index === boards.length - 1) {
+          pdf.save(`WordSearchAll.pdf`);
+          setIsDownloading(false);
+        } else {
+          renderPage(index + 1);
         }
+        return;
+      }
 
-        const dpi = 400;
-        html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
-            canvasList.push(canvas);
+      const dpi = 400;
+      html2canvas(componentRef, { scale: dpi / 156 })
+        .then((canvas) => {
+          canvasList.push(canvas);
 
-            const imgData = canvas.toDataURL("image/png");
-            const imgWidth = 150;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            if (index !== 0) {
-              pdf.addPage();
-            }
+          const imgData = canvas.toDataURL("image/png");
+          const imgWidth = 150;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          if (index !== 0) {
+            pdf.addPage();
+          }
 
-            pdf.text(`WordSearch ${index + 1}`, 30, 20);
-            pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
+          pdf.text(`WordSearch ${index + 1}`, 30, 20);
+          pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
 
-            if (index === boards.length - 1) {
-                pdf.save(`WordSearchAll.pdf`);
-                setIsDownloading(false);
-            }
-            else {
-                renderPage(index + 1);
-            }
-        }).catch(error => {
-            console.error('Error rendering canvas:', error);
+          if (index === boards.length - 1) {
+            pdf.save(`WordSearchAll.pdf`);
             setIsDownloading(false);
+          } else {
+            renderPage(index + 1);
+          }
+        })
+        .catch((error) => {
+          console.error("Error rendering canvas:", error);
+          setIsDownloading(false);
         });
     };
 
     renderPage(0);
-};
-
-
+  };
 
   const handleFileUpload = (data: string[][]): void => {
-    let wordsFromFile = data.map((item) => item[0].trim());
-    wordsFromFile = wordsFromFile.map((word) => {
-      return word.toUpperCase().trim();
-    });
+    if (!data || !Array.isArray(data[0])) {
+      toast.error("Invalid file format. Please upload a CSV file.");
+      return;
+    }
+    if (data[0].length !== 1) {
+      toast.error("Invalid CSV file. Please upload a CSV file with a single column.");
+      return;
+    }
+    const regex = /^[a-zA-Z0-9\s]+$/;
+    for (let i = 0; i < data.length; i++) {
+      for (let j = 0; j < data[i].length; j++) {
+        if (!regex.test(data[i][j])) {
+          toast.error(
+            "Invalid characters detected or file formate (use only csv formate). Only English letters and numbers are allowed in the CSV file."
+          );
+          return;
+        }
+      }
+    }
+
+    let wordsFromFile = data.map((item) =>
+      item[0].trim().replace(/\s/g, "").slice(0, 10)
+    );
+    wordsFromFile = wordsFromFile.map((word) => word.toUpperCase());
     const uniqueWordsFromFile = wordsFromFile.filter((word, index, self) => {
       return index === self.indexOf(word);
     });
-  
-    setWordArray([...wordArray, ...uniqueWordsFromFile]);
-    addUniqueWords(uniqueWordsFromFile); 
+
+    setWordArray([...uniqueWordsFromFile]);
+    toast.success("CSV file uploaded successfully."); // Add toast notification for successful upload
   };
 
   function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
@@ -321,6 +356,8 @@ const WordSearch1: React.FC = () => {
   return (
     <div className="container">
       <div className="row">
+      <ToastContainer position="bottom-right" autoClose={3000}/>
+      
         <div className="col-md-12 col-lg-6">
           <div className="mt-3">
             <label htmlFor="wordInput" className="form-label">
@@ -328,11 +365,10 @@ const WordSearch1: React.FC = () => {
             </label>
             <div className="d-flex gap-2" style={{ whiteSpace: "nowrap" }}>
               <textarea
-                placeholder="when multiple words (separated by new line) e.g: Hello"
-                className="form-control w-75"
+                placeholder="Enter multiple words separated by new line (max 10 characters each word)"
+                className="form-control w-100"
                 id="wordInput"
                 value={inputWords}
-                maxLength={10}
                 onChange={(e) => {
                   setInputWords(e.target.value);
                 }}
@@ -345,137 +381,167 @@ const WordSearch1: React.FC = () => {
             >
               Add Word
             </button>
+          </div>
+          <div className="d-flex flex-wrap justify-content-between align-items-center my-3">
+            <div
+              style={{ border: "3px dotted", padding: "4px 4px" }}
+              className="d-flex"
+            >
+              <label className=" fw-bold me-2">Upload CSV</label>
+              <CSVReader
+                onFileLoaded={handleFileUpload}
+                disabled={isPrinting || isDownloading}
+                parserOptions={{
+                  header: false,
+                  dynamicTyping: true,
+                  skipEmptyLines: true,
+                }}
+              />
+            </div>
             <button
               id="downloadButton"
-              className="btn btn-success me-2 mt-2"
+              className="btn btn-success me-2"
               onClick={handleDownloadClick}
             >
               Download CSV
             </button>
           </div>
-          <div className="d-flex flex-wrap align-items-center my-3">
-            <label className=" fw-bold me-2">Upload CSV</label>
-            <CSVReader
-              onFileLoaded={handleFileUpload}
-              parserOptions={{
-                header: false,
-                dynamicTyping: true,
-                skipEmptyLines: true,
-              }}
-            />
-          </div>
 
-          <div className="mb-3">
-            <label className="form-check-label me-2">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                checked={horizontal}
-                onChange={() => setHorizontal(!horizontal)}
-              />
-              Horizontal
-            </label>
-            <br />
-            <label className="form-check-label me-2">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                checked={vertical}
-                onChange={() => setVertical(!vertical)}
-              />
-              Vertical
-            </label>
-            <br />
-            <label className="form-check-label me-2">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                checked={diagonalTopLeft}
-                onChange={() => setDiagonalTopLeft(!diagonalTopLeft)}
-              />
-              Diagonal (Top-Left to Bottom-Right)
-            </label>
-            <br />
-            <label className="form-check-label">
-              <input
-                type="checkbox"
-                className="form-check-input"
-                checked={diagonalBottomLeft}
-                onChange={() => setDiagonalBottomLeft(!diagonalBottomLeft)}
-              />
-              Diagonal (Bottom-Left to Top-Right)
-            </label>
-          </div>
-
-          <button
-            className="btn btn-success"
-            onClick={() => {
-              setBoards([]);
-
-              const d_array: string[][] = [];
-              for (let i = 0; i < wordArray.length; i += 10) {
-                d_array.push(wordArray.slice(i, i + 10));
-              }
-
-              setDividedArray((_) => {
-                return d_array;
-              });
-
-              d_array.map((single_array) => {
-                setBoards((prevBoards) => {
-                  return [...prevBoards, generatePuzzleForWords(single_array)];
-                });
-              });
-            }}
-          >
-            Generate Puzzles
-          </button>
-
-          <button
-            className="btn btn-dark mx-2 my-3"
-            onClick={() => setShowSolution(!showSolution)}
-          >
-            {showSolution ? `Hide` : `Show`} Solution
-          </button>
-          <button
-            className="btn btn-primary mx-1 my-3 pt-2"
-            onClick={generateAllPuzzlesPDF}
-            disabled={isPrinting || isDownloading}
-          >
-            {isDownloading ? (
-              <div
-                className="spinner-border spinner-border-sm me-2"
-                role="status"
-              >
-                <span className="visually-hidden">Loading...</span>
+          {wordArray.length === 0 ? (
+            " "
+          ) : (
+            <>
+              <div className="mb-3">
+                <label className="form-check-label me-2">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={horizontal}
+                    onChange={() => setHorizontal(!horizontal)}
+                  />
+                  Horizontal
+                </label>
+                <br />
+                <label className="form-check-label me-2">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={vertical}
+                    onChange={() => setVertical(!vertical)}
+                  />
+                  Vertical
+                </label>
+                <br />
+                <label className="form-check-label me-2">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={diagonalTopLeft}
+                    onChange={() => setDiagonalTopLeft(!diagonalTopLeft)}
+                  />
+                  Diagonal (Top-Left to Bottom-Right)
+                </label>
+                <br />
+                <label className="form-check-label">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    checked={diagonalBottomLeft}
+                    onChange={() => setDiagonalBottomLeft(!diagonalBottomLeft)}
+                  />
+                  Diagonal (Bottom-Left to Top-Right)
+                </label>
               </div>
-            ) : null}
-           <div style={{display:"flex",gap:"5px",alignItems:"center"}}>
-                <BsArrowDownCircle />
-                <span> Download PDF</span>
-                </div>
-          </button>
-          <button
-            className="btn btn-success text-white mx-1 my-2 text-nowrap"
-            onClick={printAllPuzzles}
-            disabled={isPrinting || isDownloading}
-          >
-            {isPrinting ? (
-              <div
-                className="spinner-border spinner-border-sm me-2"
-                role="status"
-              >
-                <span className="visually-hidden">Loading...</span>
+              <div className="d-flex text-nowrap">
+                <button
+                  className="btn btn-success mx-2 my-3"
+                  disabled={isPrinting || isDownloading}
+                  onClick={() => {
+                    setBoards([]);
+
+                    const d_array: string[][] = [];
+                    for (let i = 0; i < wordArray.length; i += 10) {
+                      d_array.push(wordArray.slice(i, i + 10));
+                    }
+
+                    setDividedArray((_) => {
+                      return d_array;
+                    });
+
+                    d_array.forEach((single_array) => {
+                      setBoards((prevBoards) => {
+                        return [
+                          ...prevBoards,
+                          generatePuzzleForWords(single_array),
+                        ];
+                      });
+                    });
+                  }}
+                >
+                  Generate Puzzles
+                </button>
+
+                {boards.length !== 0 && (
+                  <>
+                    <button
+                      disabled={isPrinting || isDownloading}
+                      className="btn btn-dark mx-2 my-3"
+                      onClick={() => setShowSolution(!showSolution)}
+                    >
+                      {showSolution ? `Hide` : `Show`} Solution
+                    </button>
+                    <button
+                      className="btn btn-primary mx-1 my-3 pt-2 text-nowrap d-flex"
+                      onClick={generateAllPuzzlesPDF}
+                      disabled={isPrinting || isDownloading}
+                    >
+                      {isDownloading && (
+                        <div
+                          className="spinner-border spinner-border-sm me-2 d-flex align-items-center text-center justify-content-center text-nowrap"
+                          role="status"
+                        >
+                          {/* <span className="visually-hidden">Loading...</span> */}
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "5px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <BsArrowDownCircle />
+                        <span> Download PDF</span>
+                      </div>
+                    </button>
+                    <button
+                      className="btn btn-success text-white text-nowrap mx-2 my-3"
+                      onClick={printAllPuzzles}
+                      disabled={isPrinting || isDownloading}
+                    >
+                      {isPrinting && (
+                        <div
+                          className="spinner-border spinner-border-sm me-2"
+                          role="status"
+                        >
+                          {/* <span className="visually-hidden">Loading...</span> */}
+                        </div>
+                      )}
+                      <BsPrinter />
+                      <span className="ms-1"> Print </span>
+                    </button>
+                  </>
+                )}
               </div>
-            ) : null}
-            <BsPrinter />
-            <span className="ms-1"> Print </span>
-          </button>
+            </>
+          )}
           {wordArray.length == 0 ? (
             ""
           ) : (
             <div className="mt-3">
-              <h5>Word List:</h5>
+              <div className="d-flex justify-content-between">
+                <h5>Word List:</h5> <h6>Total Words: {wordArray?.length}</h6>
+              </div>
               <div
                 className="mb-4 overflow-y-scroll"
                 style={{ height: "300px" }}
@@ -490,12 +556,14 @@ const WordSearch1: React.FC = () => {
                   <tbody>
                     {wordArray.map((word, index) => (
                       <tr key={index}>
-                        <td style={{ width: "500px" }}>{index} - {word}</td>{" "}
+                        <td style={{ width: "500px" }}>
+                          {index} - {word}
+                        </td>{" "}
                         <td>
                           <button
                             className="my-1 bg-white border-0"
                             onClick={() => handleDelete(index)}
-                            style={{ marginLeft: "10px" }} 
+                            style={{ marginLeft: "10px" }}
                           >
                             <MdDelete className="text-danger fs-4" />
                           </button>

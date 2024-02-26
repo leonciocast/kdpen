@@ -3,6 +3,8 @@ import React, {useState } from 'react';
 import html2canvas from 'html2canvas';
 import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
 import useSudoku from './useSudoku';
+import { toast,ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import { PuzzleType, SudokuHookType } from '@/types/sudoku';
 import { jsPDF } from "jspdf";
 import { BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter,BsDownload     } from "react-icons/bs";
@@ -167,6 +169,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
     return (
       <>
         <div className="d-flex flex-row justify-content-center align-items-center my-2">
+        <ToastContainer position="bottom-right" autoClose={3000}/>
           <select
             id="difficulty"
             value={difficulty}
@@ -189,7 +192,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
                 newValue = 0;
               } else if (newValue > 24) {
                 newValue = 24;
-                alert("Maximum limit reached: 24 puzzles");
+                toast.error("Maximum limit reached: 24 puzzles");
               }
               setNumberOfPuzzles(newValue);
             }}
@@ -202,11 +205,14 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
             }}
             disabled={isPrinting || isDownloading}
           >
-            <BsArrowRepeat />
-            <span>{sudoku.length == 0  ? "Generate" : "Regenerate"}</span>
+            {/* <BsArrowRepeat /> */}
+            <span>Generate Puzzle</span>
           </button>
+          {sudoku.listOfPuzzles.length !== 0 && (<>
+
+
           <button
-            className="btn btn-primary mx-1 text-nowrap"
+            className="btn btn-dark mx-1 text-nowrap"
             onClick={() => setShowAllSolutions(!showAllSolutions)}
             disabled={isPrinting || isDownloading}
           >
@@ -223,7 +229,7 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
             )}
           </button>
           <button
-            className="btn btn-primary mx-1 my-2 text-nowrap"
+            className="btn btn-success mx-1 my-2 text-nowrap"
             onClick={printAllPuzzles}
             disabled={isPrinting || isDownloading}
           >
@@ -255,8 +261,9 @@ const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) =>
             <BsDownload />
             <span> Download All </span>
           </button>
-          {/* {
-                    sudoku.listOfPuzzles.length !== 0 && (
+          </> )}
+
+          {/* {sudoku.listOfPuzzles.length !== 0 && (
                         <button
                             className="btn btn-primary mx-1"
                             onClick={() => setShowSolution(!showSolution)}
