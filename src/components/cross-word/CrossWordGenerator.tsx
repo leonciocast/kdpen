@@ -5,14 +5,10 @@ import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import CSVReader from "react-csv-reader";
 import "bootstrap/dist/css/bootstrap.min.css";
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import { MdDelete } from "react-icons/md";
-import {
-  BsEye,
-  BsEyeSlash,
-  BsPrinter,
-} from "react-icons/bs";
+import { BsEye, BsEyeSlash, BsPrinter } from "react-icons/bs";
 interface SingleWordType {
   word: string;
   clue: string;
@@ -27,7 +23,7 @@ const CrossWordGenerator: React.FC = () => {
     word: "",
     clue: "",
   };
-  const [textAreaInput, setTextAreaInput] = useState<string>('')
+  const [textAreaInput, setTextAreaInput] = useState<string>("");
   const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
   const [words, setWords] = useState<SingleWordType[]>([]);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
@@ -35,135 +31,95 @@ const CrossWordGenerator: React.FC = () => {
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
-
   const handleDownloadClick = () => {
     const uploadedFilePath = "/assets/crossword.csv";
     window.open(uploadedFilePath);
   };
 
-
-
   const uniqueWordsSet = new Set<string>();
 
   const MAX_WORDS_LIMIT = 10;
-  const handleInputChangee = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+  // const handleInputChangee = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  //   const { name, value } = e.target;
 
-    const words = value.trim().split(/\s+/);
-    if (words.length <= MAX_WORDS_LIMIT) {
-      setInputWord((prevData) => ({
-        ...prevData,
-        [name]: value,
-      }));
-    } else {
-      setInputWord((prevData) => ({
-        ...prevData,
-        [name]: words.slice(0, MAX_WORDS_LIMIT).join(' '),
-      }));
+  //   const words = value.trim().split(/\s+/);
+  //   if (words.length <= MAX_WORDS_LIMIT) {
+  //     setInputWord((prevData) => ({
+  //       ...prevData,
+  //       [name]: value,
+  //     }));
+  //   } else {
+  //     setInputWord((prevData) => ({
+  //       ...prevData,
+  //       [name]: words.slice(0, MAX_WORDS_LIMIT).join(" "),
+  //     }));
 
-      alert(`Maximum ${MAX_WORDS_LIMIT} words allowed.`);
-    }
-  };
+  //     alert(`Maximum ${MAX_WORDS_LIMIT} words allowed.`);
+  //   }
+  // };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setTextAreaInput(e.target.value)
-
-  }
-  // const handleAddWordMuqeet = () => {
-  //   const lines = textAreaInput.split('\n');
-  //   lines.forEach((line) => {
-  //     const [word, clue] = line.split('-').map((item) => item.trim());
-  //     if (!word || !clue) {
-  //       toast.error('Enter Word(s) and Clue(s) Both');
-  //       return;
-  //     }
-
-  //     if (word.length > 12) {
-  //       toast.error('Word should not exceed 12 characters');
-  //       return;
-  //     }
-  //     if (clue.length > 25) {
-  //       toast.error('Clue should not exceed 25 characters');
-  //       return;
-  //     }
-
-  //     if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
-  //       toast.error(`Word already exists: ${word}`);
-  //       return;
-  //     }
-
-  //     const finalWord = {
-  //       word: word.toUpperCase(),
-  //       clue: clue
-  //     };
-
-  //     setWords((prevWords) => [...prevWords, finalWord]);
-  //   });
-  //   setTextAreaInput('');
-  // };
- 
-// Function to check for words with four or more repeated characters of the same type
-const hasRepeatedCharacters = (word: string): boolean => {
-  let consecutiveCount = 1;
-  for (let i = 1; i < word.length; i++) {
-    if (word[i] === word[i - 1]) {
-      consecutiveCount++;
-      if (consecutiveCount >= 4) {
-        return true;
+    setTextAreaInput(e.target.value);
+  };
+  const hasRepeatedCharacters = (word: string): boolean => {
+    let consecutiveCount = 1;
+    for (let i = 1; i < word.length; i++) {
+      if (word[i] === word[i - 1]) {
+        consecutiveCount++;
+        if (consecutiveCount >= 4) {
+          return true;
+        }
+      } else {
+        consecutiveCount = 1;
       }
-    } else {
-      consecutiveCount = 1;
     }
-  }
-  return false;
-}
+    return false;
+  };
 
-const handleAddWordMuqeet = () => {
-  const lines = textAreaInput.split('\n');
-  lines.forEach((line) => {
-    const [word, clue] = line.split('-').map((item) => item.trim());
-    if (!word || !clue) {
-      toast.error('Enter Word(s) and Clue(s) Both');
-      return;
-    }
+  const handleAddWordMuqeet = () => {
+    const lines = textAreaInput.split("\n");
+    lines.forEach((line) => {
+      const [word, clue] = line.split("-").map((item) => item.trim());
+      if (!word || !clue) {
+        toast.error("Enter Word(s) and Clue(s) Both");
+        return;
+      }
 
-    if (word.length > 12) {
-      toast.error('Word should not exceed 12 characters');
-      return;
-    }
-    if (clue.length > 25) {
-      toast.error('Clue should not exceed 25 characters');
-      return;
-    }
+      if (word.length > 12) {
+        toast.error("Word should not exceed 12 characters");
+        return;
+      }
+      if (clue.length > 25) {
+        toast.error("Clue should not exceed 25 characters");
+        return;
+      }
 
-    // Check for words with four or more repeated characters
-    const repeatedCharacters = hasRepeatedCharacters(word);
-    if (repeatedCharacters) {
-      toast.error(`Word '${word}' contains four or more repeated characters`);
-      return;
-    }
+      // Check for words with four or more repeated characters
+      const repeatedCharacters = hasRepeatedCharacters(word);
+      if (repeatedCharacters) {
+        toast.error(`Word '${word}' contains four or more repeated characters`);
+        return;
+      }
 
-    if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
-      toast.error(`Word already exists: ${word}`);
-      return;
-    }
+      if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
+        toast.error(`Word already exists: ${word}`);
+        return;
+      }
 
-    const finalWord = {
-      word: word.toUpperCase(),
-      clue: clue
-    };
+      const finalWord = {
+        word: word.toUpperCase(),
+        clue: clue,
+      };
 
-    setWords((prevWords) => [...prevWords, finalWord]);
-  });
-  setTextAreaInput('');
-};
+      setWords((prevWords) => [...prevWords, finalWord]);
+    });
+    setTextAreaInput("");
+  };
 
-
-  console.log("puzzles", puzzles)
-
+  // console.log("puzzles", puzzles);
 
   const wordExists = (word: any) => {
-    return words.some(item => item.word.toUpperCase() === word);
+    return words.some((item) => item.word.toUpperCase() === word);
   };
   const dividedArray: SingleWordType[][] = useMemo(() => {
     const result = [];
@@ -178,11 +134,9 @@ const handleAddWordMuqeet = () => {
       const updatedPuzzles = dividedArray.map((single_array) =>
         generateNewPuzzle(single_array)
       );
-      console.log("updatedPuzzles",updatedPuzzles)
+      // console.log("updatedPuzzles", updatedPuzzles);
       return updatedPuzzles;
     });
-
-
 
     // if (puzzles[0]?.ownerMap.length === 0) {
     //   toast.info("Type words that are similar, especially in their few letters.");
@@ -215,7 +169,9 @@ const handleAddWordMuqeet = () => {
       return;
     }
     if (data.length === 0 || data[0].length !== 2) {
-      toast.error("Invalid CSV file format. The file should have exactly two columns for words and clues.")
+      toast.error(
+        "Invalid CSV file format. The file should have exactly two columns for words and clues."
+      );
       return;
     }
     setWords([]);
@@ -233,39 +189,20 @@ const handleAddWordMuqeet = () => {
         uniqueWordsSet.add(wordObj.word);
         addedWords.push(wordObj);
       } else {
-
         toast.error("Word already exists: " + wordObj.word + " ");
       }
     });
 
     if (addedWords.length > 0) {
       setWords(addedWords);
-      toast.success("CSV file uploaded successfully."); 
-
+      toast.success("CSV file uploaded successfully.");
     }
   };
 
-
   const handleDeleteWord = (index: number) => {
-    // const deletedWord = words[index];
     const newWords = words.filter((_, i) => i !== index);
-    
     setWords(newWords);
-    setPuzzles([])
-
-    // setPuzzles((prevPuzzles) =>
-    //   prevPuzzles.map((puzzle) => {
-    //     const updatedPositionObjArr = puzzle.positionObjArr.filter(
-    //       (positionObj) => positionObj.wordStr !== deletedWord.word
-    //     );
-
-    //     return {
-    //       ...puzzle,
-    //       positionObjArr: updatedPositionObjArr,
-    //     };
-    //   })
-    // );
-    // handleRegenerate();
+    setPuzzles([]);
   };
 
   const handlePrevButtonClick = () => {
@@ -311,14 +248,14 @@ const handleAddWordMuqeet = () => {
           });
           canvasList.push(canvas);
         } catch (error) {
-          console.error("Error rendering canvas:", error);
+          // console.error("Error rendering canvas:", error);
           setIsPrinting(false);
           return;
         }
         carouselItem.classList.remove("active");
       }
     } else {
-      console.error("Carousel not found");
+      // console.error("Carousel not found");
       setIsPrinting(false);
       return;
     }
@@ -343,7 +280,7 @@ const handleAddWordMuqeet = () => {
       printWindow.document.close();
       printWindow.print();
     } else {
-      console.error("Failed to open print window");
+      // console.error("Failed to open print window");
     }
 
     setIsPrinting(false);
@@ -389,12 +326,12 @@ const handleAddWordMuqeet = () => {
             }
           } catch (error) {
             setIsDownloading(false);
-            console.error("Error adding image to PDF:", error);
+            // console.error("Error adding image to PDF:", error);
           }
         })
         .catch((error) => {
           setIsDownloading(false);
-          console.error("Error generating canvas:", error);
+          // console.error("Error generating canvas:", error);
         });
     });
   };
@@ -402,7 +339,10 @@ const handleAddWordMuqeet = () => {
   return (
     <div className="crossword-grid mainWrapper">
       <div style={{ fontSize: "0" }}>
-        {puzzles[0]?.height == 0 && (toast.error("Type words that are similar, especially in their few letters."))}
+        {puzzles[0]?.height == 0 &&
+          toast.error(
+            "Type words that are similar, especially in their few letters."
+          )}
       </div>
       <ToastContainer position="bottom-right" autoClose={3000} />
       <div className="">
@@ -418,8 +358,8 @@ const handleAddWordMuqeet = () => {
                       value={textAreaInput}
                       name="word"
                       rows={4}
-
-                      onChange={handleChange} />
+                      onChange={handleChange}
+                    />
                     {/* <textarea
                       className="form-control me-2 mb-2 w-100"
                       placeholder="Enter Word(s) (separated by newline) e.g: Lion"
@@ -455,7 +395,7 @@ const handleAddWordMuqeet = () => {
                         className="btn btn-success text-nowrap"
                         style={{ fontSize: "14px" }}
                         disabled={isPrinting || isDownloading}
-                        onClick={()=>handleRegenerate()}
+                        onClick={() => handleRegenerate()}
                       >
                         <div
                           style={{
@@ -499,8 +439,7 @@ const handleAddWordMuqeet = () => {
                             <div
                               className="spinner-border spinner-border-sm me-2"
                               role="status"
-                            >
-                            </div>
+                            ></div>
                           )}
                           <BsPrinter />
                           <span className="ms-1">Print</span>
@@ -516,8 +455,7 @@ const handleAddWordMuqeet = () => {
                             <div
                               className="spinner-border spinner-border-sm me-2"
                               role="status"
-                            >
-                            </div>
+                            ></div>
                           )}
                           <div
                             style={{
@@ -531,14 +469,22 @@ const handleAddWordMuqeet = () => {
                         </button>
                       </>
                     )}
-
                   </div>
                 </form>
 
                 <div className="mt-3 d-flex justify-content-between">
-                  <div style={{ border: "3px dotted", padding: "4px 4px",  }} className="d-flex align-items-center">
-
-                    <p style={{ fontWeight: "bold", whiteSpace: "nowrap", width: "60%", margin: "auto" }}>
+                  <div
+                    style={{ border: "3px dotted", padding: "4px 4px" }}
+                    className="d-flex align-items-center"
+                  >
+                    <p
+                      style={{
+                        fontWeight: "bold",
+                        whiteSpace: "nowrap",
+                        width: "60%",
+                        margin: "auto",
+                      }}
+                    >
                       Upload CSV{" "}
                     </p>
                     <div style={{ marginLeft: "7px" }}>
@@ -548,25 +494,25 @@ const handleAddWordMuqeet = () => {
                         parserOptions={{ header: false, skipEmptyLines: true }}
                       />
                     </div>
-                 
-                  <button
-                    id="downloadButton"
-                    className="btn btn-success text-nowrap"
-                    type="button"
-                    onClick={handleDownloadClick}
-                  >
-                    Download CSV
-                  </button>
+
+                    <button
+                      id="downloadButton"
+                      className="btn btn-success text-nowrap"
+                      type="button"
+                      onClick={handleDownloadClick}
+                    >
+                      Download CSV
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
             <div className="mt-3">
-              {words.length > 0 &&
+              {words.length > 0 && (
                 <div className="d-flex justify-content-between">
                   <h5>Word List:</h5> <h6>Total Words: {words?.length}</h6>
                 </div>
-              }
+              )}
 
               {words.length > 0 && (
                 <div
@@ -778,8 +724,8 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
               cell?.vIdx === 0 || cell?.hIdx === 0
                 ? "gainsboro"
                 : cell?.vIdx || cell?.hIdx
-                  ? "white"
-                  : "gray",
+                ? "white"
+                : "gray",
             color: "black",
           }}
         >
