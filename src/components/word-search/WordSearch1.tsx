@@ -194,41 +194,49 @@ const WordSearch1: React.FC = () => {
 
   const MAX_WORDS_LIMIT = 10;
   const MAX_WORD_LENGTH = 10;
+  
+ const handleAddWord = (): void => {
+  if (inputWords.trim() !== "") {
+    const lines = inputWords.trim().split("\n");
 
-  const handleAddWord = (): void => {
-    if (inputWords.trim() !== "") {
-      const lines = inputWords.trim().split("\n");
-      const newWords: string[] = [];
-      lines.forEach((line) => {
-        const [word, clue] = line.trim().split("-");
-        const formattedWord = word.trim().toUpperCase().replace(/\s/g, "").slice(0, MAX_WORD_LENGTH);
-        const formattedClue = clue.trim();
-        newWords.push(`${formattedWord}-${formattedClue}`);
-      });
-  
-      console.log(newWords, "newwords");
-  
-      const uniqueNewWords = newWords.filter(
-        (word, index, self) => self.indexOf(word) === index
-      );
-  
-      if (uniqueNewWords.length === 0) {
-        toast.error("Please enter unique words before adding.");
-        return;
-      }
-      if (wordArray.length + uniqueNewWords.length > MAX_WORDS_LIMIT) {
-        toast.error(`You can only add ${MAX_WORDS_LIMIT} words.`);
-        return;
-      }
-      setWordArray((prevWordArray) => [...prevWordArray, ...uniqueNewWords]);
-      // Assuming addUniqueWords function handles clues as well
-      addUniqueWords(uniqueNewWords);
-      setInputWords("");
-    } else {
-      toast.error("Please enter words before adding.");
+    const newWords = lines.flatMap((line) => {
+      return line
+        .trim()
+        .toUpperCase()
+        .split(/\s+/) // Split by whitespace
+        .map((word) => word.slice(0, MAX_WORD_LENGTH)); // Truncate each word
+    });
+
+    const uniqueNewWords = newWords.filter((word, index, self) => self.indexOf(word) === index);
+
+    if (uniqueNewWords.length === 0) {
+      toast.error("Please enter unique words before adding.");
+      return;
     }
-  };
-  
+
+    const filteredWords = uniqueNewWords.filter(word => {
+      // Check for specific words triggering toast
+      if (word === "Khaawaar" || word === "Sheeheezad") {
+        toast.info(`"${word}" was added.`);
+        return false;
+      }
+      // Check for repeated characters within the word
+      const repeatedCharacters = /(.)\1{2}/.test(word);
+      if (repeatedCharacters) {
+        toast.warn(`"${word}" contains repeated characters and will be removed.`);
+        return false;
+      }
+      return true;
+    });
+
+    setWordArray((prevWordArray) => [...prevWordArray, ...filteredWords]);
+    addUniqueWords(filteredWords);
+    setInputWords("");
+  } else {
+    toast.error("Please enter words before adding.");
+  }
+};
+
 
   const handleDelete = (index: number) => {
     const updatedWordsArray = [...wordArray];
@@ -385,7 +393,7 @@ const WordSearch1: React.FC = () => {
           <div className="d-flex flex-wrap justify-content-between align-items-center my-3">
             <div
               style={{ border: "3px dotted", padding: "4px 4px" }}
-              className="d-flex"
+              className="d-flex align-items-center"
             >
               <label className=" fw-bold me-2">Upload CSV</label>
               <CSVReader
@@ -397,7 +405,6 @@ const WordSearch1: React.FC = () => {
                   skipEmptyLines: true,
                 }}
               />
-            </div>
             <button
               id="downloadButton"
               className="btn btn-success me-2"
@@ -405,6 +412,7 @@ const WordSearch1: React.FC = () => {
             >
               Download CSV
             </button>
+            </div>
           </div>
 
           {wordArray.length === 0 ? (

@@ -69,38 +69,94 @@ const CrossWordGenerator: React.FC = () => {
     setTextAreaInput(e.target.value)
 
   }
-  const handleAddWordMuqeet = () => {
-    const lines = textAreaInput.split('\n');
-    lines.forEach((line) => {
-      const [word, clue] = line.split('-').map((item) => item.trim());
-      if (!word || !clue) {
-        toast.error('Enter Word(s) and Clue(s) Both');
-        return;
-      }
+  // const handleAddWordMuqeet = () => {
+  //   const lines = textAreaInput.split('\n');
+  //   lines.forEach((line) => {
+  //     const [word, clue] = line.split('-').map((item) => item.trim());
+  //     if (!word || !clue) {
+  //       toast.error('Enter Word(s) and Clue(s) Both');
+  //       return;
+  //     }
 
-      if (word.length > 12) {
-        toast.error('Word should not exceed 12 characters');
-        return;
-      }
-      if (clue.length > 25) {
-        toast.error('Clue should not exceed 25 characters');
-        return;
-      }
+  //     if (word.length > 12) {
+  //       toast.error('Word should not exceed 12 characters');
+  //       return;
+  //     }
+  //     if (clue.length > 25) {
+  //       toast.error('Clue should not exceed 25 characters');
+  //       return;
+  //     }
 
-      if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
-        toast.error(`Word already exists: ${word}`);
-        return;
+  //     if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
+  //       toast.error(`Word already exists: ${word}`);
+  //       return;
+  //     }
+
+  //     const finalWord = {
+  //       word: word.toUpperCase(),
+  //       clue: clue
+  //     };
+
+  //     setWords((prevWords) => [...prevWords, finalWord]);
+  //   });
+  //   setTextAreaInput('');
+  // };
+ 
+// Function to check for words with four or more repeated characters of the same type
+const hasRepeatedCharacters = (word: string): boolean => {
+  let consecutiveCount = 1;
+  for (let i = 1; i < word.length; i++) {
+    if (word[i] === word[i - 1]) {
+      consecutiveCount++;
+      if (consecutiveCount >= 4) {
+        return true;
       }
+    } else {
+      consecutiveCount = 1;
+    }
+  }
+  return false;
+}
 
-      const finalWord = {
-        word: word.toUpperCase(),
-        clue: clue
-      };
+const handleAddWordMuqeet = () => {
+  const lines = textAreaInput.split('\n');
+  lines.forEach((line) => {
+    const [word, clue] = line.split('-').map((item) => item.trim());
+    if (!word || !clue) {
+      toast.error('Enter Word(s) and Clue(s) Both');
+      return;
+    }
 
-      setWords((prevWords) => [...prevWords, finalWord]);
-    });
-    setTextAreaInput('');
-  };
+    if (word.length > 12) {
+      toast.error('Word should not exceed 12 characters');
+      return;
+    }
+    if (clue.length > 25) {
+      toast.error('Clue should not exceed 25 characters');
+      return;
+    }
+
+    // Check for words with four or more repeated characters
+    const repeatedCharacters = hasRepeatedCharacters(word);
+    if (repeatedCharacters) {
+      toast.error(`Word '${word}' contains four or more repeated characters`);
+      return;
+    }
+
+    if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
+      toast.error(`Word already exists: ${word}`);
+      return;
+    }
+
+    const finalWord = {
+      word: word.toUpperCase(),
+      clue: clue
+    };
+
+    setWords((prevWords) => [...prevWords, finalWord]);
+  });
+  setTextAreaInput('');
+};
 
 
   console.log("puzzles", puzzles)
@@ -178,14 +234,13 @@ const CrossWordGenerator: React.FC = () => {
         addedWords.push(wordObj);
       } else {
 
-        toast.error("Word already exists: " + wordObj.word);
+        toast.error("Word already exists: " + wordObj.word + " ");
       }
     });
 
     if (addedWords.length > 0) {
       setWords(addedWords);
-      // showNotificationToast();
-      toast.success("CSV file uploaded successfully."); // Add toast notification for successful upload
+      toast.success("CSV file uploaded successfully."); 
 
     }
   };
@@ -347,7 +402,7 @@ const CrossWordGenerator: React.FC = () => {
   return (
     <div className="crossword-grid mainWrapper">
       <div style={{ fontSize: "0" }}>
-        {puzzles[0]?.height == 0 && (toast.info("Type words that are similar, especially in their few letters."))}
+        {puzzles[0]?.height == 0 && (toast.error("Type words that are similar, especially in their few letters."))}
       </div>
       <ToastContainer position="bottom-right" autoClose={3000} />
       <div className="">
@@ -445,7 +500,6 @@ const CrossWordGenerator: React.FC = () => {
                               className="spinner-border spinner-border-sm me-2"
                               role="status"
                             >
-                              {/* <span className="visually-hidden">Loading...</span> */}
                             </div>
                           )}
                           <BsPrinter />
@@ -463,7 +517,6 @@ const CrossWordGenerator: React.FC = () => {
                               className="spinner-border spinner-border-sm me-2"
                               role="status"
                             >
-                              {/* <span className="visually-hidden">Loading...</span> */}
                             </div>
                           )}
                           <div
@@ -473,7 +526,6 @@ const CrossWordGenerator: React.FC = () => {
                               alignItems: "center",
                             }}
                           >
-                            {/* <BsArrowDownCircle /> */}
                             <span>Download PDF</span>
                           </div>
                         </button>
@@ -484,7 +536,7 @@ const CrossWordGenerator: React.FC = () => {
                 </form>
 
                 <div className="mt-3 d-flex justify-content-between">
-                  <div style={{ border: "3px dotted", padding: "4px 4px", width: "60%" }} className="d-flex">
+                  <div style={{ border: "3px dotted", padding: "4px 4px",  }} className="d-flex align-items-center">
 
                     <p style={{ fontWeight: "bold", whiteSpace: "nowrap", width: "60%", margin: "auto" }}>
                       Upload CSV{" "}
@@ -496,7 +548,7 @@ const CrossWordGenerator: React.FC = () => {
                         parserOptions={{ header: false, skipEmptyLines: true }}
                       />
                     </div>
-                  </div>
+                 
                   <button
                     id="downloadButton"
                     className="btn btn-success text-nowrap"
@@ -505,6 +557,7 @@ const CrossWordGenerator: React.FC = () => {
                   >
                     Download CSV
                   </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -810,15 +863,6 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
           </div>
         </div>
       </div>
-
-      {/* <button
-        className="btn btn-primary mx-1 mt-2"
-        onClick={() => downloadPDF(board_index)}
-        
-      >
-      <div style={{display:"flex",gap:"5px",alignItems:"center"}}>  <BsArrowDownCircle /><span> Download </span>
-      </div>
-      </button> */}
     </>
   );
 };
