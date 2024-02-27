@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {useMemo,useState} from "react";
 import { AlgorithmType, CWG, CellPropsType } from "./utils";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -24,7 +24,6 @@ const CrossWordGenerator: React.FC = () => {
     clue: "",
   };
   const [textAreaInput, setTextAreaInput] = useState<string>("");
-  const [inputWord, setInputWord] = useState<SingleWordType>(initialEmptyInput);
   const [words, setWords] = useState<SingleWordType[]>([]);
   const [puzzles, setPuzzles] = useState<AlgorithmType[]>([]);
   const [showSolution, setSolution] = useState(false);
@@ -37,26 +36,6 @@ const CrossWordGenerator: React.FC = () => {
   };
 
   const uniqueWordsSet = new Set<string>();
-
-  const MAX_WORDS_LIMIT = 10;
-  // const handleInputChangee = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-  //   const { name, value } = e.target;
-
-  //   const words = value.trim().split(/\s+/);
-  //   if (words.length <= MAX_WORDS_LIMIT) {
-  //     setInputWord((prevData) => ({
-  //       ...prevData,
-  //       [name]: value,
-  //     }));
-  //   } else {
-  //     setInputWord((prevData) => ({
-  //       ...prevData,
-  //       [name]: words.slice(0, MAX_WORDS_LIMIT).join(" "),
-  //     }));
-
-  //     alert(`Maximum ${MAX_WORDS_LIMIT} words allowed.`);
-  //   }
-  // };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setTextAreaInput(e.target.value);
@@ -77,6 +56,11 @@ const CrossWordGenerator: React.FC = () => {
   };
 
   const handleAddWordMuqeet = () => {
+    if (words.length >= 50) {
+      toast.error("Word limit reached. Maximum 50 words allowed.");
+      return ;
+    }
+  
     const lines = textAreaInput.split("\n");
     lines.forEach((line) => {
       const [word, clue] = line.split("-").map((item) => item.trim());
@@ -84,39 +68,39 @@ const CrossWordGenerator: React.FC = () => {
         toast.error("Enter Word(s) and Clue(s) Both");
         return;
       }
-
+  
+      const isValidWord = /^[a-zA-Z0-9]+$/.test(word);
+      if (!isValidWord) {
+        
+        toast.warning(`Word "${word}" contains special characters and will be skipped`)
+        return;
+      }
+  
       if (word.length > 12) {
         toast.error("Word should not exceed 12 characters");
         return;
       }
-      if (clue.length > 25) {
-        toast.error("Clue should not exceed 25 characters");
-        return;
-      }
-
-      // Check for words with four or more repeated characters
       const repeatedCharacters = hasRepeatedCharacters(word);
       if (repeatedCharacters) {
         toast.error(`Word '${word}' contains four or more repeated characters`);
         return;
       }
-
+  
       if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
         toast.error(`Word already exists: ${word}`);
         return;
       }
-
+  
       const finalWord = {
         word: word.toUpperCase(),
         clue: clue,
       };
-
+  
       setWords((prevWords) => [...prevWords, finalWord]);
     });
     setTextAreaInput("");
   };
-
-  // console.log("puzzles", puzzles);
+  
 
   const wordExists = (word: any) => {
     return words.some((item) => item.word.toUpperCase() === word);
@@ -137,12 +121,6 @@ const CrossWordGenerator: React.FC = () => {
       // console.log("updatedPuzzles", updatedPuzzles);
       return updatedPuzzles;
     });
-
-    // if (puzzles[0]?.ownerMap.length === 0) {
-    //   toast.info("Type words that are similar, especially in their few letters.");
-    // }else{
-    //   toast.success(`${puzzles.length} Puzzles Generated`);
-    // }
   };
 
   const generateNewPuzzle = (input_words: SingleWordType[]) => {
@@ -165,39 +143,59 @@ const CrossWordGenerator: React.FC = () => {
 
   const handleCSVFile = (data: any, fileInfo: any) => {
     if (!fileInfo.name.includes(".csv")) {
-      toast.error("Invalid file format. Only CSV files are accepted.");
+      toast.warning("Invalid file format. Only CSV files are accepted.");
       return;
     }
     if (data.length === 0 || data[0].length !== 2) {
-      toast.error(
+      toast.warning(
         "Invalid CSV file format. The file should have exactly two columns for words and clues."
       );
       return;
     }
-    setWords([]);
-    setPuzzles([]);
-
-    const newWords = data.map((item: any) => ({
-      word: item[0].toUpperCase().trim(),
-      clue: item[1].trim(),
-    }));
-
-    const addedWords: SingleWordType[] = [];
-
-    newWords.forEach((wordObj: any) => {
-      if (!wordExists(wordObj.word)) {
-        uniqueWordsSet.add(wordObj.word);
-        addedWords.push(wordObj);
-      } else {
-        toast.error("Word already exists: " + wordObj.word + " ");
+  
+    const newWords = [];
+    const uniqueWordsSet = new Set<string>();
+  
+    for (let i = 0; i < data.length; i++) {
+      const word = data[i][0].toUpperCase().trim();
+      const clue = data[i][1].trim();
+  
+      const isValidWord = /^[a-zA-Z0-9]+$/.test(word);
+      if (!isValidWord) {
+        toast.warning(`Invalid word format: ${word}. Only allowed [a-zA-Z0-9] characters: Remove Spaced between words .`);
+        continue;
       }
-    });
+  
+      if (word.length > 12) {
+        toast.warning(`Word '${word}' should not exceed 12 characters`);
+        continue;
+      }
 
-    if (addedWords.length > 0) {
-      setWords(addedWords);
-      toast.success("CSV file uploaded successfully.");
+      const repeatedCharacters = hasRepeatedCharacters(word);
+      if (repeatedCharacters) {
+        toast.warning(`Word '${word}' contains four or more repeated characters`);
+        continue;
+      }
+  
+      if (!uniqueWordsSet.has(word)) {
+        newWords.push({ word, clue });
+        uniqueWordsSet.add(word);
+      }
+  
+      if (newWords.length === 50) {
+        break;
+      }
     }
+  
+    if (newWords.length === 0) {
+      toast.error("No valid words found in the CSV file.");
+      return;
+    }
+  
+    setWords(newWords);
+    toast.success("CSV file uploaded successfully.");
   };
+  
 
   const handleDeleteWord = (index: number) => {
     const newWords = words.filter((_, i) => i !== index);
@@ -354,30 +352,12 @@ const CrossWordGenerator: React.FC = () => {
                   <div>
                     <textarea
                       className="form-control me-2 mb-2 w-100"
-                      placeholder="Enter Word(s) and clues seprated by Dash - e.g: Lion-king of forest"
+                      placeholder="Enter Word(s) and clues separated by Dash - e.g: Lion-king of jungle: words accept only [a-zA-Z0-9]"
                       value={textAreaInput}
                       name="word"
                       rows={4}
                       onChange={handleChange}
-                    />
-                    {/* <textarea
-                      className="form-control me-2 mb-2 w-100"
-                      placeholder="Enter Word(s) (separated by newline) e.g: Lion"
-                      value={inputWord.word}
-                      name="word"
-                      onChange={handleInputChangee}
-                      rows={3}
-                      // maxLength={10}
-                    />
-                    <textarea
-                      className="form-control w-100"
-                      placeholder="Enter Clue(s) (separated by newline) e.g: king of forest"
-                      value={inputWord.clue}
-                      name="clue"
-                      onChange={handleInputChangee}
-                      rows={3}
-                      maxLength={25}
-                    /> */}
+                    />                   
                   </div>
                   <div className="mt-2 d-flex gap-2">
                     <button

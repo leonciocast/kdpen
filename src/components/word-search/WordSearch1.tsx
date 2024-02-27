@@ -176,7 +176,7 @@ const WordSearch1: React.FC = () => {
       for (let col = 0; col < board[row].length; col++) {
         if (board[row][col] === "-") {
           board[row][col] = JSON.stringify({
-            randomLetter: String.fromCharCode(65 + getRandomInt(26)),
+            randomLetter: String?.fromCharCode(65 + getRandomInt(26)),
             orignalLetter: null,
           });
         }
@@ -188,7 +188,7 @@ const WordSearch1: React.FC = () => {
 
   const addUniqueWords = (newWords: string[]) => {
     const updatedSet = new Set(uniqueWords);
-    newWords.forEach((word) => updatedSet.add(word));
+    newWords.forEach((word) => updatedSet?.add(word));
     setUniqueWords(updatedSet);
   };
 
@@ -196,47 +196,65 @@ const WordSearch1: React.FC = () => {
   const MAX_WORD_LENGTH = 10;
   
   const handleAddWord = (): void => {
-    if (inputWords.trim() !== "") {
-      const lines = inputWords.trim().split("\n");
+    const MAX_WORDS_LIMIT = 50;
   
-      const newWords = lines.flatMap((line) => {
+    if (inputWords.trim() !== "") {
+      const lines = inputWords?.trim()?.split("\n");
+  
+      const newWords = lines?.flatMap((line) => {
         return line
           .trim()
           .toUpperCase()
-          .split(/\s+/) 
-          .map((word) => word.slice(0, MAX_WORD_LENGTH)) 
-          .filter(word => {
+          .split(/\s+/)
+          .map((word) => word.slice(0, MAX_WORD_LENGTH))
+          .filter((word) => {
+            const validWordRegex = /^[a-zA-Z0-9]+$/;
+            if (!validWordRegex.test(word)) {
+              toast.error(
+                `Word "${word}" contains invalid characters. Only alphanumeric characters & Numbers are allowed.`
+              );
+              return false;
+            }
+  
             if (wordArray.includes(word)) {
               toast.error(`Word "${word}" already exists.`);
               return false;
             }
-
+  
             const repeatingCharsRegex = /(.)\1{3}/;
             if (repeatingCharsRegex.test(word)) {
-              toast.error(`Word "${word}" contains repeating characters and will be skipped.`);
+              toast.error(
+                `Word "${word}" contains repeating characters and will be skipped.`
+              );
               return false;
             }
-
+  
             const specificWordsRegex = /\b(NHAAHAAQ|THEEHEEZAO)\b/;
-            if (specificWordsRegex.test(word)) {
+            if (specificWordsRegex?.test(word)) {
               toast.success(`Word "${word}" matches a specific word.`);
             }
-            
+  
             return true;
           });
       });
   
-      const uniqueNewWords = newWords.filter((word, index, self) => self.indexOf(word) === index);
+      const uniqueNewWords = newWords?.filter(
+        (word, index, self) => self.indexOf(word) === index
+      );
   
-      if (uniqueNewWords.length === 0) {
+      if (uniqueNewWords?.length === 0) {
         toast.error("Please enter unique words before adding.");
         return setInputWords("");
       }
   
-      // if (wordArray.length + uniqueNewWords.length > MAX_WORDS_LIMIT) {
-      //   toast.error(`You can only add ${MAX_WORDS_LIMIT} words.`);
-      //   return;
-      // }
+      const totalWords = wordArray?.length + uniqueNewWords?.length;
+      if (totalWords > MAX_WORDS_LIMIT) {
+        const remainingWords = MAX_WORDS_LIMIT - wordArray?.length;
+        toast.error(
+          "Word limit reached. Maximum 50 words allowed."
+        );
+        return;
+      }
   
       setWordArray((prevWordArray) => [...prevWordArray, ...uniqueNewWords]);
       addUniqueWords(uniqueNewWords);
@@ -245,6 +263,7 @@ const WordSearch1: React.FC = () => {
       toast.error("Please enter words before adding.");
     }
   };
+  
   
   
 
@@ -336,29 +355,36 @@ const WordSearch1: React.FC = () => {
       toast.error("Invalid CSV file. Please upload a CSV file with a single column.");
       return;
     }
+    
     const regex = /^[a-zA-Z0-9\s]+$/;
+    let isValid = true;
+    const newWords: string[] = [];
+  
     for (let i = 0; i < data.length; i++) {
       for (let j = 0; j < data[i].length; j++) {
-        if (!regex.test(data[i][j])) {
-          toast.error(
-            "Invalid characters detected or file formate (use only csv formate). Only English letters and numbers are allowed in the CSV file."
-          );
-          return;
+        const word = data[i][j].trim().replace(/\s/g, "").slice(0, 10).toUpperCase();
+        if (!regex.test(word)) {
+          isValid = false;
+          toast.warning(`Word "${word}" contains special characters and will be skipped.`);
+        } else {
+          newWords.push(word);
         }
       }
     }
-
-    let wordsFromFile = data.map((item) =>
-      item[0].trim().replace(/\s/g, "").slice(0, 10)
-    );
-    wordsFromFile = wordsFromFile.map((word) => word.toUpperCase());
-    const uniqueWordsFromFile = wordsFromFile.filter((word, index, self) => {
-      return index === self.indexOf(word);
+  
+    if (isValid) {
+      toast.success("CSV file added successfully.");
+    } else {
+      toast.success("Valid words from CSV file added successfully.");
+    }
+  
+    setWordArray(newWords.slice(0, 50)); 
+    setBoards([]);
+    newWords.forEach(word => {
+      const puzzle = generatePuzzleForWords([word]);
+      setBoards(prevBoards => [...prevBoards, puzzle]);
     });
-
-    setWordArray([...uniqueWordsFromFile]);
-    toast.success("CSV file uploaded successfully."); // Add toast notification for successful upload
-  };
+  };   
 
   function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
     const result: [T, U][] = [];
@@ -383,7 +409,7 @@ const WordSearch1: React.FC = () => {
             </label>
             <div className="d-flex gap-2" style={{ whiteSpace: "nowrap" }}>
               <textarea
-                placeholder="Enter multiple words separated by new line (max 10 characters each word)"
+                placeholder="Enter multiple words [a-zA-Z0-9] separated by new line (max 10 characters each word)"
                 className="form-control w-100"
                 id="wordInput"
                 value={inputWords}
@@ -575,7 +601,7 @@ const WordSearch1: React.FC = () => {
                     {wordArray.map((word, index) => (
                       <tr key={index}>
                         <td style={{ width: "500px" }}>
-                          {index} - {word}
+                          {index+1} - {word}
                         </td>{" "}
                         <td>
                           <button
