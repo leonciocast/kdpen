@@ -1,5 +1,5 @@
 "use client";
-import React, {useMemo,useState} from "react";
+import React, { useMemo, useState } from "react";
 import { AlgorithmType, CWG, CellPropsType } from "./utils";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -58,9 +58,9 @@ const CrossWordGenerator: React.FC = () => {
   const handleAddWordMuqeet = () => {
     if (words.length >= 50) {
       toast.error("Word limit reached. Maximum 50 words allowed.");
-      return ;
+      return;
     }
-  
+
     const lines = textAreaInput.split("\n");
     lines.forEach((line) => {
       const [word, clue] = line.split("-").map((item) => item.trim());
@@ -68,14 +68,14 @@ const CrossWordGenerator: React.FC = () => {
         toast.error("Enter Word(s) and Clue(s) Both");
         return;
       }
-  
+
       const isValidWord = /^[a-zA-Z0-9]+$/.test(word);
       if (!isValidWord) {
-        
+
         toast.warning(`Word "${word}" contains special characters and will be skipped`)
         return;
       }
-  
+
       if (word.length > 12) {
         toast.error("Word should not exceed 12 characters");
         return;
@@ -85,26 +85,26 @@ const CrossWordGenerator: React.FC = () => {
         toast.error(`Word '${word}' contains four or more repeated characters`);
         return;
       }
-  
+
       if (words.some((w) => w.word.toUpperCase() === word.toUpperCase())) {
         toast.error(`Word already exists: ${word}`);
         return;
       }
-  
+
       const finalWord = {
         word: word.toUpperCase(),
         clue: clue,
       };
-  
+
       setWords((prevWords) => [...prevWords, finalWord]);
     });
     setTextAreaInput("");
   };
-  
 
-  const wordExists = (word: any) => {
-    return words.some((item) => item.word.toUpperCase() === word);
-  };
+
+  // const wordExists = (word: any) => {
+  //   return words.some((item) => item.word.toUpperCase() === word);
+  // };
   const dividedArray: SingleWordType[][] = useMemo(() => {
     const result = [];
     for (let i = 0; i < words.length; i += 10) {
@@ -114,31 +114,53 @@ const CrossWordGenerator: React.FC = () => {
   }, [words]);
 
   const handleRegenerate = () => {
+    // console.log(dividedArray)
     setPuzzles((prevPuzzles) => {
-      const updatedPuzzles = dividedArray.map((single_array) =>
-        generateNewPuzzle(single_array)
+
+      const updatedPuzzles = dividedArray.map((single_array) => {
+        return generateNewPuzzle(single_array)
+
+      }
       );
-      // console.log("updatedPuzzles", updatedPuzzles);
+
       return updatedPuzzles;
     });
   };
 
+  const returnGame = (words: string[]) => {
+    let result;
+    let count = 0;
+
+    // Clone the original array to avoid modifying the input array directly
+    let all_words = [...words];
+
+    do {
+      console.log("Attempt:", count);
+      result = CWG(all_words);
+
+
+      // If the result is false and there are still words left, pop a word from the array
+      if (result === false && all_words.length > 0) {
+        let centralIndex = Math.floor(all_words.length / 2);
+        all_words.splice(centralIndex, 1);
+      }
+
+      count++;
+    } while (result === false && all_words.length > 0);
+
+    // Return the result, or null if no successful result was found
+    return result
+  };
+
   const generateNewPuzzle = (input_words: SingleWordType[]) => {
+
     let words__ = input_words
       .filter(
         (word) => typeof word.word === "string" && word.word.trim() !== ""
       )
       .map((item) => item.word.trim());
-    let result = CWG(words__);
-    if (!result) {
-      result = {
-        positionObjArr: [],
-        width: 0,
-        height: 0,
-        ownerMap: [],
-      };
-    }
-    return result;
+    return returnGame(words__)
+
   };
 
   const handleCSVFile = (data: any, fileInfo: any) => {
@@ -152,20 +174,20 @@ const CrossWordGenerator: React.FC = () => {
       );
       return;
     }
-  
+
     const newWords = [];
     const uniqueWordsSet = new Set<string>();
-  
+
     for (let i = 0; i < data.length; i++) {
       const word = data[i][0].toUpperCase().trim();
       const clue = data[i][1].trim();
-  
+
       const isValidWord = /^[a-zA-Z0-9]+$/.test(word);
       if (!isValidWord) {
         toast.warning(`Invalid word format: ${word}. Only allowed [a-zA-Z0-9] characters: Remove Spaced between words .`);
         continue;
       }
-  
+
       if (word.length > 12) {
         toast.warning(`Word '${word}' should not exceed 12 characters`);
         continue;
@@ -176,26 +198,26 @@ const CrossWordGenerator: React.FC = () => {
         toast.warning(`Word '${word}' contains four or more repeated characters`);
         continue;
       }
-  
+
       if (!uniqueWordsSet.has(word)) {
         newWords.push({ word, clue });
         uniqueWordsSet.add(word);
       }
-  
+
       if (newWords.length === 50) {
         break;
       }
     }
-  
+
     if (newWords.length === 0) {
       toast.error("No valid words found in the CSV file.");
       return;
     }
-  
+
     setWords(newWords);
     toast.success("CSV file uploaded successfully.");
   };
-  
+
 
   const handleDeleteWord = (index: number) => {
     const newWords = words.filter((_, i) => i !== index);
@@ -336,12 +358,12 @@ const CrossWordGenerator: React.FC = () => {
 
   return (
     <div className="crossword-grid mainWrapper">
-      <div style={{ fontSize: "0" }}>
+      {/* <div style={{ fontSize: "0" }}>
         {puzzles[0]?.height == 0 &&
           toast.error(
             "Type words that are similar, especially in their few letters."
           )}
-      </div>
+      </div> */}
       <ToastContainer position="bottom-right" autoClose={3000} />
       <div className="">
         <div className="row ">
@@ -357,7 +379,7 @@ const CrossWordGenerator: React.FC = () => {
                       name="word"
                       rows={4}
                       onChange={handleChange}
-                    />                   
+                    />
                   </div>
                   <div className="mt-2 d-flex gap-2">
                     <button
@@ -704,8 +726,8 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
               cell?.vIdx === 0 || cell?.hIdx === 0
                 ? "gainsboro"
                 : cell?.vIdx || cell?.hIdx
-                ? "white"
-                : "gray",
+                  ? "white"
+                  : "gray",
             color: "black",
           }}
         >
@@ -750,6 +772,8 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
               {/* {JSON.stringify(algorithm, null, 2)} */}
               <ul className="list-unstyled">
                 <b>Across</b>
+
+
                 {wordsWithIndex
                   .filter((obj) => obj?.isHorizon)
                   .map((word, index) => (
@@ -761,26 +785,22 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
                           : { whiteSpace: "nowrap" }
                       }
                     >
-                      {word.index === 0 ? (
-                        ""
-                      ) : (
-                        <span>
-                          {word.index} -{/* {word?.wordStr}   */}
-                          {getClueFromWord(word?.wordStr)}
-                        </span>
-                      )}
+
+                      <span>
+                        {word.index} - {getClueFromWord(word?.wordStr)}
+                      </span>
                     </li>
                   ))}
               </ul>
               <ul className="list-unstyled">
                 <b>Down</b>
+
                 {wordsWithIndex
                   .filter((obj) => !obj?.isHorizon)
                   .map((word, index) => (
                     <li key={index} style={{ whiteSpace: "normal" }}>
                       <span>
-                        {word.index} -{/* {word?.wordStr} */}
-                        {getClueFromWord(word?.wordStr)}
+                        {word.index} - {getClueFromWord(word?.wordStr)}
                       </span>
                     </li>
                   ))}

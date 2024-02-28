@@ -43,7 +43,7 @@ export const CWG = (arr: string[]): any => {
     const cleanedArr = arr.map(word => word.replace(/\s/g, ''));
 
     const sortedArr = sortArr([...cleanedArr]);
-        return draw(
+    return draw(
         [{ wordStr: sortedArr.pop() as string, xNum: 0, yNum: 0, isHorizon: true }],
         sortedArr.pop() as string
     );
