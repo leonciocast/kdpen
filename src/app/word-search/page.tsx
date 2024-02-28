@@ -5,9 +5,9 @@ import React from 'react'
 const page = () => {
     return (
         <>
-        <div>
-            <WordSearch1/>
-        </div>
+
+            <WordSearch1 />
+
         </>
     )
 }

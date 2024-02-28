@@ -196,7 +196,7 @@ const WordSearch1: React.FC = () => {
   const MAX_WORD_LENGTH = 10;
   
   const handleAddWord = (): void => {
-    const MAX_WORDS_LIMIT = 50;
+    const MAX_WORDS_LIMIT = 200;
   
     if (inputWords.trim() !== "") {
       const lines = inputWords?.trim()?.split("\n");
@@ -208,7 +208,8 @@ const WordSearch1: React.FC = () => {
           .split(/\s+/)
           .map((word) => word.slice(0, MAX_WORD_LENGTH))
           .filter((word) => {
-            const validWordRegex = /^[a-zA-Z0-9]+$/;
+            const validWordRegex = /^[a-zA-Z0-9^\-Ññ]+$/
+
             if (!validWordRegex.test(word)) {
               toast.error(
                 `Word "${word}" contains invalid characters. Only alphanumeric characters & Numbers are allowed.`
