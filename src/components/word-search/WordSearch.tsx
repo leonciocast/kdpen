@@ -16,7 +16,7 @@ interface Orientation {
   dy: number;
 }
 
-const WordSearch1: React.FC = () => {
+const WordSearch: React.FC = () => {
   const [horizontal, setHorizontal] = useState<boolean>(true);
   const [vertical, setVertical] = useState<boolean>(true);
   const [diagonalTopLeft, setDiagonalTopLeft] = useState<boolean>(true);
@@ -29,13 +29,11 @@ const WordSearch1: React.FC = () => {
   const [dividedArray, setDividedArray] = useState<string[][]>([]);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
-  const [showToast, setShowToast] = useState<boolean>(false);
-  const [generatePuzzlesClicked, setGeneratePuzzlesClicked] = useState<boolean>(false);
+  const [show, setShow] = useState(false);
 
-  const handleGeneratePuzzlesClick = () => {
-    setGeneratePuzzlesClicked(true);
-  };
-  
+  const handleClose = () => setShow(false);
+  const handleShow = () => setShow(true);
+
   const handleDownloadClick = () => {
     const uploadedFilePath = "/assets/wordsearch.csv";
     window.open(uploadedFilePath);
@@ -192,7 +190,7 @@ const WordSearch1: React.FC = () => {
     setUniqueWords(updatedSet);
   };
 
-  const MAX_WORDS_LIMIT = 10;
+  // const MAX_WORDS_LIMIT = 10;
   const MAX_WORD_LENGTH = 10;
   
   const handleAddWord = (): void => {
@@ -243,16 +241,16 @@ const WordSearch1: React.FC = () => {
         (word, index, self) => self.indexOf(word) === index
       );
   
-      if (uniqueNewWords?.length === 0) {
-        toast.error("Please enter unique words before adding.");
-        return setInputWords("");
-      }
+      // if (uniqueNewWords?.length === 0) {
+      //   toast.error("Please enter unique words before adding.");
+      //   return setInputWords("");
+      // }
   
       const totalWords = wordArray?.length + uniqueNewWords?.length;
       if (totalWords > MAX_WORDS_LIMIT) {
         const remainingWords = MAX_WORDS_LIMIT - wordArray?.length;
         toast.error(
-          "Word limit reached. Maximum 50 words allowed."
+          "Word limit reached. Maximum 200 words allowed."
         );
         return;
       }
@@ -379,7 +377,7 @@ const WordSearch1: React.FC = () => {
       toast.success("Valid words from CSV file added successfully.");
     }
   
-    setWordArray(newWords.slice(0, 50)); 
+    setWordArray(newWords.slice(0, 200)); 
     setBoards([]);
     newWords.forEach(word => {
       const puzzle = generatePuzzleForWords([word]);
@@ -420,12 +418,69 @@ const WordSearch1: React.FC = () => {
                 rows={3}
               />
             </div>
+            <div className="d-flex justify-content-between me-2 mt-2">
             <button
-              className="btn btn-primary me-2 mt-2"
+              className="btn btn-primary "
               onClick={handleAddWord}
             >
               Add Word
             </button>
+            <div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleShow}
+                    >
+                      How to Play
+                    </button>
+
+                    <div
+                      className={`modal fade ${show ? "show" : ""}`}
+                      id="exampleModal"
+                      tabIndex={-1}
+                      aria-labelledby="exampleModalLabel"
+                      aria-hidden="true"
+                      style={{ display: show ? "block" : "none" }}
+                    >
+                      <div className="modal-dialog  modal-dialog-scrollable">
+                        <div className="modal-content">
+                          <div className="modal-header">
+                            <h5 className="modal-title" id="exampleModalLabel">
+                              How To Play Word Search
+                            </h5>
+                            <button
+                              type="button"
+                              className="btn-close"
+                              aria-label="Close"
+                              onClick={handleClose}
+                            ></button>
+                          </div>
+                          <div className="modal-body">
+                          <ul>
+                            <li>User Interface: Provides a textarea for users to input words.</li>
+                            <li>Only alphanumeric characters & Numbers are allowed otherwise show contains invalid characters.</li>
+                            <li>Words accept only [a-z:A-Z:0-9:-:Ññ].</li>
+                            <li>If word(s) are not entered in the textarea then show a message: Please enter words before adding.</li>
+                            <li>File format: only CSV file will be accepted otherwise show error: No valid words found in the CSV file.</li>
+                            <li>The file should have exactly one column for words. otherwise show error Invalid CSV file format.</li>
+                            <li>If Word already exists it will be skipped.</li>
+                            <li>Word limit: Maximum 200 words are allowed in the puzzle. When the word limit is reached, then show a message.</li>
+                          </ul>
+                          </div>
+                          <div className="modal-footer">
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              onClick={handleClose}
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    </div>
+                    </div>
           </div>
           <div className="d-flex flex-wrap justify-content-between align-items-center my-3">
             <div
@@ -603,7 +658,7 @@ const WordSearch1: React.FC = () => {
                       <tr key={index}>
                         <td style={{ width: "500px" }}>
                           {index+1} - {word}
-                        </td>{" "}
+                        </td>
                         <td>
                           <button
                             className="my-1 bg-white border-0"
@@ -703,7 +758,7 @@ const WordSearch1: React.FC = () => {
   );
 };
 
-export default WordSearch1;
+export default WordSearch;
 
 interface SinglePuzzleProp {
   board: string[][];
@@ -762,7 +817,7 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
           </tbody>
         </table>
         <div className="mt-3">
-          <h5 className="text-center py-2">Puzzle Words</h5>
+          <h5 className="text-center py-2">  <b> Puzzle: {board_index + 1}</b></h5>
           <div className="d-flex flex-wrap justify-content-start gap-3">
             {words_array.map((word, index) => (
               <>

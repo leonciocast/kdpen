@@ -29,6 +29,10 @@ const CrossWordGenerator: React.FC = () => {
   const [showSolution, setSolution] = useState(false);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [show, setShow] = useState(false);
+
+  const handleClose = () => setShow(false);
+  const handleShow = () => setShow(true);
 
   const handleDownloadClick = () => {
     const uploadedFilePath = "/assets/crossword.csv";
@@ -69,10 +73,11 @@ const CrossWordGenerator: React.FC = () => {
         return;
       }
 
-      const isValidWord = /^[a-zA-Z0-9]+$/.test(word);
+      const isValidWord = /^[a-zA-Z0-9^\-Ññ]+$/.test(word);
       if (!isValidWord) {
-
-        toast.warning(`Word "${word}" contains special characters and will be skipped`)
+        toast.warning(
+          `Word "${word}" contains special characters and will be skipped`
+        );
         return;
       }
 
@@ -101,7 +106,6 @@ const CrossWordGenerator: React.FC = () => {
     setTextAreaInput("");
   };
 
-
   // const wordExists = (word: any) => {
   //   return words.some((item) => item.word.toUpperCase() === word);
   // };
@@ -116,12 +120,9 @@ const CrossWordGenerator: React.FC = () => {
   const handleRegenerate = () => {
     // console.log(dividedArray)
     setPuzzles((prevPuzzles) => {
-
       const updatedPuzzles = dividedArray.map((single_array) => {
-        return generateNewPuzzle(single_array)
-
-      }
-      );
+        return generateNewPuzzle(single_array);
+      });
 
       return updatedPuzzles;
     });
@@ -138,7 +139,6 @@ const CrossWordGenerator: React.FC = () => {
       console.log("Attempt:", count);
       result = CWG(all_words);
 
-
       // If the result is false and there are still words left, pop a word from the array
       if (result === false && all_words.length > 0) {
         let centralIndex = Math.floor(all_words.length / 2);
@@ -149,18 +149,16 @@ const CrossWordGenerator: React.FC = () => {
     } while (result === false && all_words.length > 0);
 
     // Return the result, or null if no successful result was found
-    return result
+    return result;
   };
 
   const generateNewPuzzle = (input_words: SingleWordType[]) => {
-
     let words__ = input_words
       .filter(
         (word) => typeof word.word === "string" && word.word.trim() !== ""
       )
       .map((item) => item.word.trim());
-    return returnGame(words__)
-
+    return returnGame(words__);
   };
 
   const handleCSVFile = (data: any, fileInfo: any) => {
@@ -182,9 +180,11 @@ const CrossWordGenerator: React.FC = () => {
       const word = data[i][0].toUpperCase().trim();
       const clue = data[i][1].trim();
 
-      const isValidWord = /^[a-zA-Z0-9]+$/.test(word);
+      const isValidWord = /^[a-zA-Z0-9^\-Ññ]+$/.test(word);
       if (!isValidWord) {
-        toast.warning(`Invalid word format: ${word}. Only allowed [a-zA-Z0-9] characters: Remove Spaced between words .`);
+        toast.warning(
+          `Invalid word format: ${word}. Only allowed [a-zA-Z0-9] characters: Remove Spaced between words .`
+        );
         continue;
       }
 
@@ -195,7 +195,9 @@ const CrossWordGenerator: React.FC = () => {
 
       const repeatedCharacters = hasRepeatedCharacters(word);
       if (repeatedCharacters) {
-        toast.warning(`Word '${word}' contains four or more repeated characters`);
+        toast.warning(
+          `Word '${word}' contains four or more repeated characters`
+        );
         continue;
       }
 
@@ -217,7 +219,6 @@ const CrossWordGenerator: React.FC = () => {
     setWords(newWords);
     toast.success("CSV file uploaded successfully.");
   };
-
 
   const handleDeleteWord = (index: number) => {
     const newWords = words.filter((_, i) => i !== index);
@@ -330,7 +331,7 @@ const CrossWordGenerator: React.FC = () => {
         .then((canvas) => {
           try {
             const imgData = canvas.toDataURL("image/png");
-            const imgWidth = 230;
+            const imgWidth = 210;
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
             if (index !== 0) {
@@ -358,12 +359,12 @@ const CrossWordGenerator: React.FC = () => {
 
   return (
     <div className="crossword-grid mainWrapper">
-      {/* <div style={{ fontSize: "0" }}>
-        {puzzles[0]?.height == 0 &&
-          toast.error(
-            "Type words that are similar, especially in their few letters."
-          )}
-      </div> */}
+        {/*   <div style={{ fontSize: "0" }}>
+          {puzzles[0]?.height == 0 &&
+            toast.error(
+              "Type words that are similar, especially in their few letters."
+            )}
+        </div> */}
       <ToastContainer position="bottom-right" autoClose={3000} />
       <div className="">
         <div className="row ">
@@ -381,7 +382,7 @@ const CrossWordGenerator: React.FC = () => {
                       onChange={handleChange}
                     />
                   </div>
-                  <div className="mt-2 d-flex gap-2">
+                  <div className="mt-2 d-flex justify-content-between ">
                     <button
                       type="button"
                       style={{ fontSize: "14px" }}
@@ -391,86 +392,63 @@ const CrossWordGenerator: React.FC = () => {
                     >
                       Add Word
                     </button>
-                    {words.length > 1 && (
-                      <button
-                        type="button"
-                        className="btn btn-success text-nowrap"
-                        style={{ fontSize: "14px" }}
-                        disabled={isPrinting || isDownloading}
-                        onClick={() => handleRegenerate()}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "5px",
-                            alignItems: "center",
-                          }}
-                        >
-                          <span>Generate Puzzle</span>
-                        </div>
-                      </button>
-                    )}
-                    {puzzles[0]?.height > 0 && (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-dark text-nowrap"
-                          style={{ fontSize: "14px" }}
-                          disabled={isPrinting || isDownloading}
-                          onClick={() => setSolution(!showSolution)}
-                        >
-                          {showSolution ? (
-                            <>
-                              <BsEyeSlash className="me-2 top-0" />
-                              Hide Solution
-                            </>
-                          ) : (
-                            <>
-                              <BsEye className="me-2 top-0" />
-                              Show Solution
-                            </>
-                          )}
-                        </button>
-                        <button
-                          className="btn btn-success text-white text-nowrap"
-                          style={{ fontSize: "14px" }}
-                          onClick={printAllPuzzles}
-                          disabled={isPrinting || isDownloading}
-                        >
-                          {isPrinting && (
-                            <div
-                              className="spinner-border spinner-border-sm me-2"
-                              role="status"
-                            ></div>
-                          )}
-                          <BsPrinter />
-                          <span className="ms-1">Print</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-primary text-nowrap"
-                          style={{ fontSize: "14px", display: "flex" }}
-                          onClick={generateAllPuzzlesPDF}
-                          disabled={isPrinting || isDownloading}
-                        >
-                          {isDownloading && (
-                            <div
-                              className="spinner-border spinner-border-sm me-2"
-                              role="status"
-                            ></div>
-                          )}
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: "5px",
-                              alignItems: "center",
-                            }}
-                          >
-                            <span>Download PDF</span>
+                    <div>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleShow}
+                    >
+                      How to Play
+                    </button>
+
+                    <div
+                      className={`modal fade ${show ? "show" : ""}`}
+                      id="exampleModal"
+                      tabIndex={-1}
+                      aria-labelledby="exampleModalLabel"
+                      aria-hidden="true"
+                      style={{ display: show ? "block" : "none" }}
+                    >
+                      <div className="modal-dialog  modal-dialog-scrollable">
+                        <div className="modal-content">
+                          <div className="modal-header">
+                            <h5 className="modal-title" id="exampleModalLabel">
+                              How To Play Crossword Game
+                            </h5>
+                            <button
+                              type="button"
+                              className="btn-close"
+                              aria-label="Close"
+                              onClick={handleClose}
+                            ></button>
                           </div>
-                        </button>
-                      </>
-                    )}
+                          <div className="modal-body">
+                          <ul>
+                              <li>User Interface: Provides a textarea for users to input words and clues separated by a dash (-). example Lion-king of jungle</li>                              
+                              <li>If the words contain special characters it will be skipped expected: [a-z-A-Z-0-9-Ññ]</li>
+                              <li>Word limit: Maximum 50 words are allowed.</li>
+                              <li>When the user enters words and clue make sure to enter both words and clues otherwise show an error.</li>
+                              <li>Characters Limit: Make sure Words should not exceed 12 characters, otherwise morethen 12 then skip the words after 12.</li>
+                              <li>Repeated Characters: If any word contains four or more repeated characters once it will be skipped.for example: 2222,eeee, rrrr, iiii </li>
+                              <li>Repeated Words:If Word already exists in puzzle it will be skipped.</li>
+                              <li>CSV File Formate: The file should have exactly two columns for words and clues otherwise show error Invalid CSV file format.</li>
+                              <li>File Format: only CSV file will be accepted otherwise show error: No valid words found in the CSV file.</li>
+                            </ul>
+
+                          </div>
+                          <div className="modal-footer">
+                            <button
+                              type="button"
+                              className="btn btn-danger"
+                              onClick={handleClose}
+                            >
+                              Close
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    </div>
                   </div>
                 </form>
 
@@ -487,7 +465,7 @@ const CrossWordGenerator: React.FC = () => {
                         margin: "auto",
                       }}
                     >
-                      Upload CSV{" "}
+                      Upload CSV
                     </p>
                     <div style={{ marginLeft: "7px" }}>
                       <CSVReader
@@ -508,6 +486,88 @@ const CrossWordGenerator: React.FC = () => {
                   </div>
                 </div>
               </div>
+            </div>
+            <div className="mt-2 d-flex gap-2">
+              {words.length > 1 && (
+                <button
+                  type="button"
+                  className="btn btn-success text-nowrap"
+                  style={{ fontSize: "14px" }}
+                  disabled={isPrinting || isDownloading}
+                  onClick={() => handleRegenerate()}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "5px",
+                      alignItems: "center",
+                    }}
+                  >
+                    <span>Generate Puzzle</span>
+                  </div>
+                </button>
+              )}
+              {puzzles[0]?.height > 0 && (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-dark text-nowrap"
+                    style={{ fontSize: "14px" }}
+                    disabled={isPrinting || isDownloading}
+                    onClick={() => setSolution(!showSolution)}
+                  >
+                    {showSolution ? (
+                      <>
+                        <BsEyeSlash className="me-2 top-0" />
+                        Hide Solution
+                      </>
+                    ) : (
+                      <>
+                        <BsEye className="me-2 top-0" />
+                        Show Solution
+                      </>
+                    )}
+                  </button>
+                  <button
+                    className="btn btn-success text-white text-nowrap"
+                    style={{ fontSize: "14px" }}
+                    onClick={printAllPuzzles}
+                    disabled={isPrinting || isDownloading}
+                  >
+                    {isPrinting && (
+                      <div
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                      ></div>
+                    )}
+                    <BsPrinter />
+                    <span className="ms-1">Print</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary text-nowrap"
+                    style={{ fontSize: "14px", display: "flex" }}
+                    onClick={generateAllPuzzlesPDF}
+                    disabled={isPrinting || isDownloading}
+                  >
+                    {isDownloading && (
+                      <div
+                        className="spinner-border spinner-border-sm me-2"
+                        role="status"
+                      ></div>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "5px",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>Download PDF</span>
+                    </div>
+                  </button>
+                </>
+              )}
             </div>
             <div className="mt-3">
               {words.length > 0 && (
@@ -724,10 +784,10 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
             padding: "0",
             background:
               cell?.vIdx === 0 || cell?.hIdx === 0
-                ? "gainsboro"
+                ? "white"
                 : cell?.vIdx || cell?.hIdx
-                  ? "white"
-                  : "gray",
+                ? "white"
+                : "gray",
             color: "black",
           }}
         >
@@ -759,7 +819,7 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
     <>
       <div id={`wordsearch`} className={className}>
         <div className="row">
-          <div className="col-6">
+          <div className="col-5">
             <table>
               <tbody>{renderGrid()}</tbody>
             </table>
@@ -769,42 +829,47 @@ const SinglePuzzle: React.FC<SinglePuzzleType> = ({
         <div className="">
           <div className="">
             <div className="d-flex my-3 gap-4">
-              {/* {JSON.stringify(algorithm, null, 2)} */}
-              <ul className="list-unstyled">
-                <b>Across</b>
+              <div className="row">
+                {/* {JSON.stringify(algorithm, null, 2)}  */}
+                <b> Puzzle: {board_index + 1}</b>
+                <div className="col-md-5">
+                  <ul className="list-unstyled">
+                    <b>Across</b>
 
+                    {wordsWithIndex
+                      .filter((obj) => obj?.isHorizon)
+                      .map((word, index) => (
+                        <li
+                          key={index}
+                          style={
+                            word.index === 0
+                              ? { listStyle: "none", paddingRight: "5px" }
+                              : {}
+                          }
+                        >
+                          <span>
+                            {word.index} - {getClueFromWord(word?.wordStr)}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+                <div className="col-md-6">
+                  <ul className="list-unstyled">
+                    <b>Down</b>
 
-                {wordsWithIndex
-                  .filter((obj) => obj?.isHorizon)
-                  .map((word, index) => (
-                    <li
-                      key={index}
-                      style={
-                        word.index === 0
-                          ? { listStyle: "none", whiteSpace: "nowrap" }
-                          : { whiteSpace: "nowrap" }
-                      }
-                    >
-
-                      <span>
-                        {word.index} - {getClueFromWord(word?.wordStr)}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-              <ul className="list-unstyled">
-                <b>Down</b>
-
-                {wordsWithIndex
-                  .filter((obj) => !obj?.isHorizon)
-                  .map((word, index) => (
-                    <li key={index} style={{ whiteSpace: "normal" }}>
-                      <span>
-                        {word.index} - {getClueFromWord(word?.wordStr)}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
+                    {wordsWithIndex
+                      .filter((obj) => !obj?.isHorizon)
+                      .map((word, index) => (
+                        <li key={index} style={{ listStyle: "none" }}>
+                          <span>
+                            {word.index} - {getClueFromWord(word?.wordStr)}
+                          </span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </div>
