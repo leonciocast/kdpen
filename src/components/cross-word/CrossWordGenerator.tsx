@@ -487,7 +487,7 @@ const CrossWordGenerator: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="mt-2 d-flex gap-2">
+            <div className="d-flex gap-2" style={{height:"36px"}}>
               {words.length > 1 && (
                 <button
                   type="button"

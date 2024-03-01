@@ -511,7 +511,7 @@ const WordSearch: React.FC = () => {
             " "
           ) : (
             <>
-              <div className="mb-3">
+              <div >
                 <label className="form-check-label me-2">
                   <input
                     type="checkbox"
