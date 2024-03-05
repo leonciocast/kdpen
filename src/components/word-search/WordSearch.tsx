@@ -15,10 +15,18 @@ interface Orientation {
   dx: number;
   dy: number;
 }
+interface CellPositioning {
+  start? : boolean
+  end? : boolean
+  middle ? : boolean
+}
 interface SingleCell {
   letter : string ;
   random : boolean ;
   color? : string;
+  wordId? : number | null;
+  positioning? : string | null;
+  orientation_direction? : string;
 }
 type SingleCellType = SingleCell | null;
 const WordSearch: React.FC = () => {
@@ -119,14 +127,15 @@ const WordSearch: React.FC = () => {
 
     return `#${r.toString(16)}${g.toString(16)}${b.toString(16)}`;
   };
-
+  let wordNumber = 1;
   const placeWord = (
     board: SingleCellType[][],
     word: string,
     directions: Orientation[]
   ): SingleCellType[][] => {
     let placed = false;
-
+   
+    
     const r_color = getRandomColor();
 
     while (!placed) {
@@ -146,6 +155,7 @@ const WordSearch: React.FC = () => {
         endCol < board[startRow].length
       ) {
         let spaceAvailable = true;
+        
 
         for (let i = 0; i < word.length; i++) {
           const row = startRow + i * orientation.dy;
@@ -153,25 +163,61 @@ const WordSearch: React.FC = () => {
 
           if (board[row][col] !== null && board[row][col]?.letter !== word[i]) {
             spaceAvailable = false;
+            
             break;
           }
         }
 
         if (spaceAvailable) {
+
+          
+
           for (let i = 0; i < word.length; i++) {
+
+            
             const row = startRow + i * orientation.dy;
             const col = startCol + i * orientation.dx;
+            
+            console.log("Here",word[i], "Row",row, "Col",col, "Word Index",wordNumber)
+
+
+            let positioning = null;
+          
+            if (i === 0) {
+              positioning = reverse ? "end" : "start"; // Mark the start position
+            } else if (i === word.length - 1) {
+              positioning = reverse ? "start" : "end"; // Mark the end position
+            } else {
+              positioning = "middle"; // Mark the middle positions
+            }
+            let orientation_direction = '';
+
+            if (orientation.dx ===1 && orientation.dy ===0){
+              orientation_direction = "horizontal";
+            }else if(orientation.dx ===0 && orientation.dy ===1){
+              orientation_direction = "vertical";
+            }
+            else if(orientation.dx ===1 && orientation.dy ===1){
+              orientation_direction = "diagonalTopLeft";
+            }
+            else if(orientation.dx ===1 && orientation.dy ===-1){
+              orientation_direction = "diagonalBottomLeft";
+            }
 
             board[row][col] = {
               letter : reverse ? word[word.length - 1 - i] : word[i],
               random : false,
-              // randomLetter: null,
-              // orignalLetter: reverse ? word[word.length - 1 - i] : word[i],
               color: r_color,
+              wordId: wordNumber,
+              orientation_direction : orientation_direction,
+              positioning,
             };
           }
           placed = true;
+          wordNumber++;
+         
         }
+
       }
     }
 
@@ -249,6 +295,9 @@ const WordSearch: React.FC = () => {
       const uniqueNewWords = newWords?.filter(
         (word, index, self) => self.indexOf(word) === index
       );
+      uniqueNewWords.forEach(word =>{
+         console.log(`Word: ${word}, Start Letter: ${word[0]}, End Letter: ${word[word.length - 1]}`);
+      })
   
       // if (uniqueNewWords?.length === 0) {
       //   toast.error("Please enter unique words before adding.");
@@ -267,6 +316,7 @@ const WordSearch: React.FC = () => {
       setWordArray((prevWordArray) => [...prevWordArray, ...uniqueNewWords]);
       addUniqueWords(uniqueNewWords);
       setInputWords("");
+      console.log(uniqueNewWords,"uniquewords");      
     } else {
       toast.error("Please enter words before adding.");
     }
@@ -388,10 +438,10 @@ const WordSearch: React.FC = () => {
   
     setWordArray(newWords.slice(0, 200)); 
     setBoards([]);
-    newWords.forEach(word => {
-      const puzzle = generatePuzzleForWords([word]);
-      setBoards(prevBoards => [...prevBoards, puzzle]);
-    });
+    // newWords.forEach(word => {
+    //   const puzzle = generatePuzzleForWords([word]);
+    //   setBoards(prevBoards => [...prevBoards, puzzle]);
+    // });
   };   
 
   function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
@@ -796,15 +846,18 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
 
                   return (
                     <td
-                      className="p-1"
+                      className={`p-1 ${cell?.positioning ? cell.positioning : ''} ${cell?.wordId ? `word_${cell?.wordId}` : "empty"}`}
                       key={colIndex}
                       style={{
                         width: "25px",
                         height: "25px",
                       }}
+                      onClick={()=>{
+                        console.log(cell)
+                      }}
                     >
                       <span
-                        className="rounded"
+                        className={`rounded`}
                         style={{
                           background:
                             !cell?.random && showSolution
@@ -813,7 +866,12 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
                           padding: "4px 6px", // Adjust padding as needed
                         }}
                       >
+                        {/* <span > */}
                         {cell?.letter}
+
+                        {/* </span> */}
+                        {/* <small>{cell?.wordId}</small> */}
+                        {/* <small className="bg-success text-white">{cell?.positioning}</small> */}
                         {/* {!cell?.random
                           ? parsedCell?.orignalLetter
                           : parsedCell?.randomLetter} */}
