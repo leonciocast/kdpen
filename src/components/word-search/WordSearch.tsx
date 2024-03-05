@@ -15,7 +15,12 @@ interface Orientation {
   dx: number;
   dy: number;
 }
-
+interface SingleCell {
+  letter : string ;
+  random : boolean ;
+  color? : string;
+}
+type SingleCellType = SingleCell | null;
 const WordSearch: React.FC = () => {
   const [horizontal, setHorizontal] = useState<boolean>(true);
   const [vertical, setVertical] = useState<boolean>(true);
@@ -24,12 +29,14 @@ const WordSearch: React.FC = () => {
   const [showSolution, setShowSolution] = useState<boolean>(false);
   const [inputWords, setInputWords] = useState<string>("");
   const [uniqueWords, setUniqueWords] = useState<Set<string>>(new Set());
-  const [boards, setBoards] = useState<string[][][]>([]);
+  const [boards, setBoards] = useState<SingleCellType[][][]>([]);
   const [wordArray, setWordArray] = useState<string[]>([]);
   const [dividedArray, setDividedArray] = useState<string[][]>([]);
   const [isPrinting, setIsPrinting] = useState<boolean>(false);
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [show, setShow] = useState(false);
+
+  console.log(boards)
 
   const handleClose = () => setShow(false);
   const handleShow = () => setShow(true);
@@ -114,10 +121,10 @@ const WordSearch: React.FC = () => {
   };
 
   const placeWord = (
-    board: string[][],
+    board: SingleCellType[][],
     word: string,
     directions: Orientation[]
-  ): string[][] => {
+  ): SingleCellType[][] => {
     let placed = false;
 
     const r_color = getRandomColor();
@@ -144,7 +151,7 @@ const WordSearch: React.FC = () => {
           const row = startRow + i * orientation.dy;
           const col = startCol + i * orientation.dx;
 
-          if (board[row][col] !== "-" && board[row][col] !== word[i]) {
+          if (board[row][col] !== null && board[row][col]?.letter !== word[i]) {
             spaceAvailable = false;
             break;
           }
@@ -155,11 +162,13 @@ const WordSearch: React.FC = () => {
             const row = startRow + i * orientation.dy;
             const col = startCol + i * orientation.dx;
 
-            board[row][col] = JSON.stringify({
-              randomLetter: null,
-              orignalLetter: reverse ? word[word.length - 1 - i] : word[i],
+            board[row][col] = {
+              letter : reverse ? word[word.length - 1 - i] : word[i],
+              random : false,
+              // randomLetter: null,
+              // orignalLetter: reverse ? word[word.length - 1 - i] : word[i],
               color: r_color,
-            });
+            };
           }
           placed = true;
         }
@@ -169,14 +178,14 @@ const WordSearch: React.FC = () => {
     return board;
   };
 
-  const fillEmpty = (board: string[][]): string[][] => {
+  const fillEmpty = (board: SingleCellType[][]): SingleCellType[][] => {
     for (let row = 0; row < board.length; row++) {
       for (let col = 0; col < board[row].length; col++) {
-        if (board[row][col] === "-") {
-          board[row][col] = JSON.stringify({
-            randomLetter: String?.fromCharCode(65 + getRandomInt(26)),
-            orignalLetter: null,
-          });
+        if (board[row][col] === null) {
+          board[row][col] ={
+            letter: String?.fromCharCode(65 + getRandomInt(26)),
+            random : true,
+          };
         }
       }
     }
@@ -272,10 +281,10 @@ const WordSearch: React.FC = () => {
     setWordArray(updatedWordsArray);
   };
 
-  const generatePuzzleForWords = (wordsArray: string[]): string[][] => {
+  const generatePuzzleForWords = (wordsArray: string[]): SingleCellType[][] => {
     let newBoard = Array.from({ length: 13 }, () =>
-      Array(13).fill("-")
-    ) as string[][];
+      Array(13).fill(null)
+    ) as SingleCellType[][];
 
     const selectedDirections: Orientation[] = [];
     if (horizontal) selectedDirections.push({ dx: 1, dy: 0 });
@@ -721,7 +730,6 @@ const WordSearch: React.FC = () => {
                               board_index={single_board_index}
                               key={single_board_index}
                               showSolution={showSolution}
-                              boards={boards}
                               className="single-puzzle-component" // Add this class name
                             />
                           </div>
@@ -761,11 +769,11 @@ const WordSearch: React.FC = () => {
 export default WordSearch;
 
 interface SinglePuzzleProp {
-  board: string[][];
+  board: SingleCellType[][];
   words_array: string[];
   board_index: number;
   showSolution: boolean;
-  boards: string[][][];
+  // boards: string[][][];
   className?: string;
 }
 const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
@@ -774,7 +782,6 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
   board_index,
   showSolution,
   className,
-  boards,
 }) => {
   return (
     <>
@@ -784,7 +791,8 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
             {board.map((row, rowIndex) => (
               <tr key={rowIndex}>
                 {row.map((cell, colIndex) => {
-                  let parsedCell = JSON.parse(cell);
+                 
+                  // let parsedCell = JSON.parse(cell);
 
                   return (
                     <td
@@ -799,15 +807,16 @@ const SinglePuzzle: React.FC<SinglePuzzleProp> = ({
                         className="rounded"
                         style={{
                           background:
-                            parsedCell?.orignalLetter && showSolution
-                              ? parsedCell?.color
+                            !cell?.random && showSolution
+                              ? cell?.color
                               : "white",
                           padding: "4px 6px", // Adjust padding as needed
                         }}
                       >
-                        {parsedCell?.orignalLetter
+                        {cell?.letter}
+                        {/* {!cell?.random
                           ? parsedCell?.orignalLetter
-                          : parsedCell?.randomLetter}
+                          : parsedCell?.randomLetter} */}
                       </span>
                     </td>
                   );
