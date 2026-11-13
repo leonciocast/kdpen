@@ -1,5 +1,6 @@
 /** Pure crossword layout engine: free-form, connected, numbered. Always terminates. */
 import { Rng, mulberry32 } from "../wordsearch/engine";
+import { tidySpaces } from "../text";
 
 export interface ClueEntry {
   answer: string; // as typed (uppercase); spaces/hyphens allowed
@@ -53,8 +54,8 @@ export function parseClueLine(line: string): { answer: string; clue: string } | 
     }
   }
   if (idx < 0) return { error: `"${text}" needs a clue. Write it as WORD - clue.` };
-  const answer = text.slice(0, idx).trim().replace(/\s+/g, " ").toUpperCase();
-  const clue = text.slice(idx + sepLen).trim();
+  const answer = tidySpaces(text.slice(0, idx)).toUpperCase();
+  const clue = tidySpaces(text.slice(idx + sepLen));
   if (!answer || !clue) return { error: `"${text}" needs both a word and a clue.` };
   return { answer, clue };
 }

@@ -1,4 +1,6 @@
 "use client";
+import { tidyHandlers } from "@/components/ui/tidyText";
+import { tidyLines, tidySpaces } from "@/lib/text";
 import { plural } from "@/lib/plural";
 import React, { useState } from "react";
 import { BsArrowRepeat, BsDownload, BsGrid1X2, BsLightningCharge, BsListUl, BsMagic, BsPlusLg, BsPuzzle, BsTrash } from "react-icons/bs";
@@ -60,7 +62,7 @@ export default function CrossWordGenerator() {
   };
 
   const handleAdd = () => {
-    const lines = input.split(/\r?\n/).filter((l) => l.trim());
+    const lines = tidyLines(input, { keepTabs: true }).split("\n").filter(Boolean);
     if (!lines.length) return toast.error("Please type at least one word and clue first.");
     const cands: { answer: string; clue: string }[] = [];
     const bad: string[] = [];
@@ -79,12 +81,12 @@ export default function CrossWordGenerator() {
   const handleCsv = (rows: string[][]) => {
     const cands: { answer: string; clue: string }[] = [];
     rows.forEach((row, i) => {
-      const cells = row.map((c) => String(c ?? "").trim());
+      const cells = row.map((c) => tidySpaces(String(c ?? "")));
       if (!cells[0]) return;
       if (i === 0 && /^(word|answer)s?$/i.test(cells[0])) return;
       const clue = cells.slice(1).filter(Boolean).join(", ");
       if (!clue) return;
-      cands.push({ answer: cells[0].replace(/\s+/g, " ").toUpperCase(), clue });
+      cands.push({ answer: cells[0].toUpperCase(), clue });
     });
     if (!cands.length) return toast.error("No words with clues found. The CSV needs two columns: word, clue.");
     add(cands, " from your CSV");
@@ -128,7 +130,7 @@ export default function CrossWordGenerator() {
                     Words and clues
                     <InfoTip text={`Separate the word and clue with " - ", ":" or a tab. Up to ${CROSSWORD_MAX_LETTERS} letters per word and ${CROSSWORD_MAX_WORDS} words in total.`} />
                   </label>
-                  <textarea id="clueInput" className="form-control" rows={7} placeholder={"LION - King of the jungle\nICE CREAM - Frozen summer treat\nPIANO - Instrument with 88 keys"} value={input} onChange={(e) => setInput(e.target.value)} />
+                  <textarea id="clueInput" className="form-control" rows={7} placeholder={"LION - King of the jungle\nICE CREAM - Frozen summer treat\nPIANO - Instrument with 88 keys"} value={input} onChange={(e) => setInput(e.target.value)} {...tidyHandlers(setInput, { keepTabs: true })} />
                   <div className="d-flex flex-wrap gap-2 mt-2">
                     <button type="button" className="btn btn-primary" onClick={handleAdd}>
                       <BsPlusLg /> Add to list

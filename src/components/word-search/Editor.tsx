@@ -16,12 +16,13 @@ import {
   checkPlacement,
   containedWordWarnings,
   fillGrid,
-  lineBetween,
   makePlacement,
   mulberry32,
   placementCells,
+  placementEnd,
   randomSeed,
 } from "@/lib/wordsearch/engine";
+import { Resolution, resolveFixed, resolveFreeEnd, validDirectionsFrom, validStartCells } from "@/lib/wordsearch/snap";
 import { DIR_ARROWS, DIR_NAMES, DirMode, PuzzleModel, colorsFor } from "./model";
 
 interface Props {
@@ -56,25 +57,60 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
 
   const placing = selected !== null && !placed.has(selected);
 
-  const candidate = (start: Cell, target: Cell | null): Placement | null => {
-    if (!placing || !selected) return null;
-    let dir: DirectionKey | null = null;
-    if (dirMode !== "free") dir = dirMode;
-    else if (target) dir = lineBetween(start, target)?.dir ?? null;
-    return dir ? makePlacement(selected, start[0], start[1], dir) : null;
+  const word = placing ? selected : null;
+
+  /** What a click/hover on `cell` would do. Every placement returned lies fully inside the grid. */
+  const resolveAt = (cell: Cell): Resolution | null => {
+    if (!word || filled) return null;
+    if (dirMode !== "free") return resolveFixed(puzzle.size, puzzle.placements, word, dirMode, cell);
+    if (pendingStart) return resolveFreeEnd(puzzle.size, puzzle.placements, word, pendingStart, cell);
+    return null;
   };
 
+  // Shade valid squares and mark the ones that can't be used (not-allowed cursor).
+  const cellStates = useMemo(() => {
+    if (!word || filled) return null;
+    const starts = new Set<string>();
+    const blocked = new Set<string>();
+    const size = puzzle.size;
+    if (dirMode !== "free") {
+      validStartCells(size, puzzle.placements, word, dirMode).forEach((k) => starts.add(k));
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++) if (resolveFixed(size, puzzle.placements, word, dirMode, [r, c]).kind !== "place") blocked.add(`${r},${c}`);
+    } else if (!pendingStart) {
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++) (validDirectionsFrom(size, puzzle.placements, word, [r, c]).length ? starts : blocked).add(`${r},${c}`);
+    } else {
+      validDirectionsFrom(size, puzzle.placements, word, pendingStart).forEach((d) => {
+        const end = placementEnd(makePlacement(word, pendingStart[0], pendingStart[1], d));
+        starts.add(`${end[0]},${end[1]}`);
+      });
+      for (let r = 0; r < size; r++)
+        for (let c = 0; c < size; c++) {
+          if (r === pendingStart[0] && c === pendingStart[1]) continue;
+          if (resolveFreeEnd(size, puzzle.placements, word, pendingStart, [r, c]).kind !== "place") blocked.add(`${r},${c}`);
+        }
+    }
+    return { starts, blocked };
+  }, [word, filled, dirMode, pendingStart, puzzle.size, puzzle.placements]);
+
   const preview = useMemo(() => {
-    if (filled || !hover || !placing) return null;
-    let cand: Placement | null = null;
-    if (dirMode !== "free") cand = candidate(hover, null);
-    else if (pendingStart) cand = candidate(pendingStart, hover);
-    else return { cells: [hover], valid: true, cand: null as Placement | null };
-    if (!cand) return { cells: [hover], valid: false, cand: null };
-    const check = checkPlacement(puzzle.size, puzzle.placements, cand);
-    return { cells: cellsOf(cand.row, cand.col, cand.dir, cand.letters.length), valid: check.ok, cand, message: check.message };
+    if (!hover || !word || filled) return null;
+    if (dirMode === "free" && !pendingStart) {
+      const ok = !cellStates?.blocked.has(`${hover[0]},${hover[1]}`);
+      return { cells: [hover], valid: ok, cand: null as Placement | null, message: ok ? undefined : `“${word}” can't start here in any direction. Pick a highlighted square.` };
+    }
+    const res = resolveAt(hover);
+    if (!res) return null;
+    if (res.kind === "none") return { cells: [] as Cell[], valid: false, cand: null as Placement | null, message: res.message };
+    return {
+      cells: placementCells(res.placement),
+      valid: res.kind === "place",
+      cand: res.placement,
+      message: res.kind === "conflict" ? res.message : res.snapped ? `Moved so all of “${word}” stays inside the grid. Click to place it here.` : undefined,
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hover, placing, dirMode, pendingStart, puzzle, selected, filled]);
+  }, [hover, word, filled, dirMode, pendingStart, puzzle, cellStates]);
 
   const place = (cand: Placement) => {
     const check = checkPlacement(puzzle.size, puzzle.placements, cand);
@@ -85,11 +121,12 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
     update((p) => ({ ...p, placements: [...p.placements, cand], grid: null, unplaced: p.unplaced.filter((w) => w !== cand.word) }));
     setSelected(puzzle.words.find((w) => w !== cand.word && !placed.has(w)) ?? null);
     setPendingStart(null);
+    setHover(null);
   };
 
   const onCellClick = (r: number, c: number) => {
     if (filled) return;
-    if (!placing) {
+    if (!word) {
       const hits = puzzle.placements.filter((p) => placementCells(p).some(([pr, pc]) => pr === r && pc === c));
       if (hits.length) {
         const idx = hits.findIndex((h) => h.word === selected);
@@ -97,19 +134,19 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
       } else setSelected(null);
       return;
     }
-    if (dirMode !== "free") {
-      const cand = candidate([r, c], null);
-      if (cand) place(cand);
+    if (dirMode === "free" && !pendingStart) {
+      if (cellStates?.blocked.has(`${r},${c}`)) {
+        toast.info(`“${word}” can't start on that square in any direction. Pick a highlighted square.`, { toastId: "blocked" });
+        return;
+      }
+      setPendingStart([r, c]);
       return;
     }
-    if (!pendingStart) return setPendingStart([r, c]);
-    if (pendingStart[0] === r && pendingStart[1] === c) return setPendingStart(null);
-    const cand = candidate(pendingStart, [r, c]);
-    if (!cand) {
-      toast.info("Pick a square in a straight line from the first letter: across, down or diagonal.");
-      return;
-    }
-    place(cand);
+    if (dirMode === "free" && pendingStart && pendingStart[0] === r && pendingStart[1] === c) return setPendingStart(null);
+    const res = resolveAt([r, c]);
+    if (!res) return;
+    if (res.kind === "place") place(res.placement);
+    else toast.info(res.message, { toastId: "blocked" });
   };
 
   const removeWord = (word: string, move: boolean) => {
@@ -180,9 +217,13 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
             selectedWord={selected}
             onCellClick={filled ? undefined : onCellClick}
             onCellHover={filled ? undefined : setHover}
+            startCells={cellStates?.starts}
+            blockedCells={cellStates?.blocked}
           />
         </div>
-        {preview && !preview.valid && preview.message && <div className="small text-danger mt-1">{preview.message}</div>}
+        <div className={`small mt-1 ${preview?.valid ? "text-success" : "text-danger"}`} style={{ minHeight: "1.5em" }} aria-live="polite" data-testid="placement-message">
+          {preview?.message ?? ""}
+        </div>
       </div>
 
       <div className="col-lg-5 col-xl-4">
@@ -245,7 +286,7 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
                   </div>
                 </div>
                 <div className="form-label mb-1">3. Click the grid</div>
-                <div className="small text-muted mb-3">Green shows where it will go. Red means it doesn&apos;t fit or a letter clashes. Words may share matching letters.</div>
+                <div className="small text-muted mb-3">Shaded squares are where the word can start. Near an edge the word slides back so it always stays inside the grid. Red means a letter clashes; words may share matching letters.</div>
               </>
             ) : selected ? (
               <div className="d-flex gap-2 mb-3">

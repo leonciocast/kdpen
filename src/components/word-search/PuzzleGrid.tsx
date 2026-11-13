@@ -18,6 +18,10 @@ export interface PuzzleGridProps {
   selectedWord?: string | null;
   onCellClick?: (row: number, col: number) => void;
   onCellHover?: (cell: Cell | null) => void;
+  /** Squares where the selected word can go (subtly shaded). */
+  startCells?: Set<string>;
+  /** Squares that can't be used right now (not-allowed cursor). */
+  blockedCells?: Set<string>;
   maxWidth?: number;
   id?: string;
 }
@@ -36,6 +40,8 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   selectedWord,
   onCellClick,
   onCellHover,
+  startCells,
+  blockedCells,
   maxWidth = 640,
   id,
 }) => {
@@ -75,6 +81,13 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
               strokeWidth={isSel ? 2.5 : 1.4}
             />
           );
+        })}
+
+      {/* Valid squares for the word being placed */}
+      {startCells &&
+        Array.from(startCells).map((k) => {
+          const [r, c] = k.split(",").map(Number);
+          return <rect key={`ok-${k}`} x={c * CELL + 1} y={r * CELL + 1} width={CELL - 2} height={CELL - 2} rx={5} fill="#4f46e5" fillOpacity={0.09} pointerEvents="none" />;
         })}
 
       {/* Preview of where the selected word would go */}
@@ -121,7 +134,8 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
                   width={CELL}
                   height={CELL}
                   fill="transparent"
-                  style={{ cursor: "pointer" }}
+                  style={{ cursor: blockedCells?.has(key) ? "not-allowed" : "pointer" }}
+                  data-state={blockedCells?.has(key) ? "blocked" : startCells?.has(key) ? "start" : "ok"}
                   onClick={() => onCellClick?.(r, c)}
                   onMouseEnter={() => onCellHover?.([r, c])}
                   data-cell={key}

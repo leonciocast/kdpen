@@ -3,6 +3,8 @@ import React, { useState } from "react";
 import { BsDownload, BsListUl, BsMagic, BsPlusLg, BsTrash } from "react-icons/bs";
 import { toast } from "react-toastify";
 import CsvDrop, { downloadText } from "@/components/ui/CsvDrop";
+import { tidyHandlers } from "@/components/ui/tidyText";
+import { tidyLines } from "@/lib/text";
 import EmptyState from "@/components/ui/EmptyState";
 import InfoTip from "@/components/ui/InfoTip";
 import { StepIntro } from "@/components/ui/Wizard";
@@ -41,7 +43,7 @@ export default function StepWords({ words, setWords, gridSize }: Props) {
     }
     const res = addTokens(tokens, "typed");
     // Keep only the entries that need fixing.
-    setInput(res.rejected.join("\n"));
+    setInput(tidyLines(res.rejected.join("\n")));
   };
 
   const handleCsv = (rows: string[][]) => {
@@ -71,6 +73,7 @@ export default function StepWords({ words, setWords, gridSize }: Props) {
             placeholder={"One per line, for example:\nICE CREAM\nSUNSHINE\nBEACH BALL"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            {...tidyHandlers(setInput)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();

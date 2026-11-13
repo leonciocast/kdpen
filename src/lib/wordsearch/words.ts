@@ -1,4 +1,5 @@
 import { gridForm } from "./engine";
+import { tidySpaces } from "../text";
 
 /**
  * Same rule for typed words and CSV uploads: letters, digits, Ñ/ñ, hyphens and
@@ -20,7 +21,7 @@ export interface ParseResult {
 
 /** Tidy one entry: trim, collapse repeated spaces, uppercase. */
 export function normalizeEntry(raw: string): string {
-  return raw.trim().replace(/\s+/g, " ").toUpperCase();
+  return tidySpaces(raw).toUpperCase();
 }
 
 /**
@@ -30,7 +31,7 @@ export function normalizeEntry(raw: string): string {
 export function tokenize(text: string): string[] {
   return text
     .split(/[\r\n,;]+/)
-    .map((t) => t.trim().replace(/\s+/g, " "))
+    .map(tidySpaces)
     .filter(Boolean);
 }
 
@@ -92,13 +93,13 @@ export function parseWords(
 export function csvRowsToTokens(rows: unknown[][]): { tokens: string[]; error?: string } {
   const tokens: string[] = [];
   for (let i = 0; i < rows.length; i++) {
-    const cells = (rows[i] ?? []).map((v) => (v === null || v === undefined ? "" : String(v).trim())).filter(Boolean);
+    const cells = (rows[i] ?? []).map((v) => (v === null || v === undefined ? "" : tidySpaces(String(v)))).filter(Boolean);
     if (cells.length === 0) continue;
     if (cells.length > 1) {
       return { tokens: [], error: "Invalid CSV file format. The file should have exactly one column for words." };
     }
     if (i === 0 && /^(word|words|word\/phrase|phrase)$/i.test(cells[0])) continue;
-    tokens.push(cells[0].replace(/\s+/g, " "));
+    tokens.push(cells[0]);
   }
   return { tokens };
 }
