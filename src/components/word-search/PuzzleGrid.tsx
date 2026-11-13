@@ -53,7 +53,7 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   return (
     <svg
       id={id}
-      viewBox={`${-pad} ${-pad} ${side + pad * 2} ${side + pad * 2}`}
+      viewBox={`${-pad - 2} ${-pad - 2} ${side + pad * 2 + 4} ${side + pad * 2 + 4}`}
       style={{ width: "100%", maxWidth, userSelect: "none", touchAction: "manipulation" }}
       role="grid"
       aria-label="Word search grid"

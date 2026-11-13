@@ -1,9 +1,10 @@
-import { readFileSync } from "fs";
-import { join } from "path";
 import { describe, expect, it } from "vitest";
 import { generatePuzzle, allowedDirections, mulberry32 } from "../src/lib/wordsearch/engine";
-import { insideMargin, makePageSpec, marginsForPage, paddedPageCount, outsideMargin } from "../src/lib/wordsearch/kdp";
-import { buildBookPdf, planBook, BookPuzzle } from "../src/lib/wordsearch/pdf";
+import { insideMargin, makePageSpec, marginsForPage, paddedPageCount, outsideMargin } from "../src/lib/print/kdp";
+import { buildWordSearchBook, BookPuzzle } from "../src/lib/wordsearch/pdf";
+import { DEFAULT_FRONT_MATTER } from "../src/lib/print/frontMatter";
+import { planKinds } from "../src/lib/print/book";
+import { nodeFonts } from "../src/lib/print/nodeFonts";
 
 describe("KDP rules", () => {
   it("gutter follows page-count brackets", () => {
@@ -31,27 +32,33 @@ describe("KDP rules", () => {
   });
 });
 
-describe("book PDF", () => {
+describe("book plan", () => {
+  const noop = () => {};
+  it("puts title, copyright, dedication, how-to before content and pads", () => {
+    const kinds = planKinds({ frontMatter: { ...DEFAULT_FRONT_MATTER, dedication: "For Mom" }, howTo: { heading: "x", paragraphs: [] }, content: [noop, noop, noop] });
+    expect(kinds.slice(0, 7)).toEqual(["title", "copyright", "dedication", "howto", "content", "content", "content"]);
+    expect(kinds.length).toBe(24);
+  });
+  it("skips dedication when empty and front matter when off", () => {
+    expect(planKinds({ frontMatter: DEFAULT_FRONT_MATTER, content: [noop] }).slice(0, 3)).toEqual(["title", "copyright", "content"]);
+    expect(planKinds({ frontMatter: null, content: [noop], padForKdp: false })).toEqual(["content", "blank"]);
+  });
+});
+
+describe("word search book PDF", () => {
   const dirs = allowedDirections({ horizontal: true, vertical: true, diagonalDown: true, diagonalUp: true, reversed: false });
   const puzzles: BookPuzzle[] = [0, 1, 2].map((i) => {
-    const g = generatePuzzle(["APPLE", "BANANA", "CHERRY", "GRAPE", "LEMON", "MANGO"], 12, dirs, mulberry32(i + 1));
-    return { title: `Puzzle ${i + 1}`, size: 12, grid: g.grid, words: g.placements.map((p) => p.word), placements: g.placements };
-  });
-  const opts = { trim: "6x9" as const, bleed: false, title: "Test", author: "Me", answersPerPage: 2 as const, includeFrontMatter: true };
-
-  it("plans puzzle pages then answer pages, padded", () => {
-    const plan = planBook(puzzles, opts);
-    expect(plan.pages.map((p) => p.kind).slice(0, 7)).toEqual(["title", "intro", "puzzle", "puzzle", "puzzle", "answers", "answers"]);
-    expect(plan.pageCount).toBe(24);
+    const words = ["ICE CREAM", "BANANA", "CHERRY", "GRAPE", "LEMON", "MANGO"];
+    const g = generatePuzzle(words, 12, dirs, mulberry32(i + 1));
+    return { title: `Puzzle ${i + 1}`, size: 12, grid: g.grid, words, placements: g.placements };
   });
 
-  it("renders a vector PDF with the right page size and embedded font", () => {
-    const dir = join(__dirname, "..", "public", "fonts");
-    const fonts = {
-      regular: readFileSync(join(dir, "DejaVuSans.ttf")).toString("base64"),
-      bold: readFileSync(join(dir, "DejaVuSans-Bold.ttf")).toString("base64"),
-    };
-    const { pdf } = buildBookPdf(puzzles, { ...opts, bleed: true }, fonts);
+  it("renders a vector PDF with front matter, right page size and embedded fonts", () => {
+    const fm = { ...DEFAULT_FRONT_MATTER, title: "My Test Book", author: "Test Author", isbn: "978-1-23456-789-7" };
+    const book = buildWordSearchBook(puzzles, { trim: "6x9", bleed: true, answersPerPage: 2, frontMatter: fm }, nodeFonts());
+    expect(book.pageCount).toBe(24);
+    expect(book.kinds.slice(0, 3)).toEqual(["title", "copyright", "howto"]);
+    const pdf = book.pdf;
     expect(pdf.getNumberOfPages()).toBe(24);
     expect(pdf.internal.pageSize.getWidth()).toBeCloseTo(6.125 * 72);
     expect(pdf.internal.pageSize.getHeight()).toBeCloseTo(9.25 * 72);
@@ -59,5 +66,6 @@ describe("book PDF", () => {
     expect(raw).toContain("/FontFile2");
     expect(raw).not.toContain("/Helvetica");
     expect(raw).not.toContain("/Subtype /Image");
+    expect(raw).toContain("My Test Book"); // document info title
   });
 });
