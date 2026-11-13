@@ -136,7 +136,6 @@ const CrossWordGenerator: React.FC = () => {
     let all_words = [...words];
 
     do {
-      console.log("Attempt:", count);
       result = CWG(all_words);
 
       // If the result is false and there are still words left, pop a word from the array
