@@ -279,7 +279,7 @@ export default function WordSearch() {
           {step === 3 && (
             <StepReview puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} solution={solution} setSolution={setSolution} reshuffle={reshuffle} regenerate={regenerate} edit={() => goTo(2, "puzzles")} flow={flow(3)} />
           )}
-          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" shapeStatus={shapeStatus} busy={!!refit} flow={flow(4)} themes={[...new Set(finished.map((p) => p.theme).filter((t): t is string => !!t))]} />}
+          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" shapeStatus={shapeStatus} busy={!!refit} flow={flow(4)} themes={[...new Set(finished.map((p) => p.theme).filter((t): t is string => !!t))]} previewKey={`${rawDesignApi.design.shape.kind}:${rawDesignApi.design.shape.mix}:${finished.map((p) => `${p.shape ?? "square"}:${p.size}`).join("|")}`} />}
           {step === 5 && (
             <BookExport
               tool="word-search"

@@ -78,6 +78,8 @@ interface Props {
   flow: FlowCtl;
   /** Puzzle themes, used to suggest a matching animal shape. */
   themes?: string[];
+  /** Changes when the puzzles themselves are re-shaped, so the preview reloads. */
+  previewKey?: string;
 }
 
 const SHAPE_LEAD: Record<ToolKind, string> = {
@@ -86,7 +88,7 @@ const SHAPE_LEAD: Record<ToolKind, string> = {
   sudoku: "A sudoku must stay a 9×9 square to be solvable, so the shape is a decorative frame around the grid (animals sit the grid in the body). You can also round or circle the cells in the next step.",
 };
 
-export default function DesignStep({ tool, api, buildSample, listName, shapeStatus, busy, flow, themes = [] }: Props) {
+export default function DesignStep({ tool, api, buildSample, listName, shapeStatus, busy, flow, themes = [], previewKey }: Props) {
   const [customizing, setCustomizingState] = useState(() => flow.sub === "customize" || !!customizingByTool.get(tool));
   const setCustomizing = (v: boolean) => {
     customizingByTool.set(tool, v);
@@ -122,7 +124,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
       cancelled = true;
       clearTimeout(t);
     };
-  }, [design]);
+  }, [design, previewKey]);
 
   const set = (fn: (d: Design) => void) => {
     const d: Design = JSON.parse(JSON.stringify(design));

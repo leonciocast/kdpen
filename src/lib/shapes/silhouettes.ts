@@ -1,7 +1,8 @@
 /**
- * Original silhouette helpers: a shape is a union of ellipses (and optional
- * polygons). The outline is traced with marching squares so the PDF can draw
- * it as a crisp vector. Nothing here is copied from a commercial puzzle.
+ * Original silhouette helpers. Animal shapes are SVG path outlines (cubic /
+ * quadratic Béziers) sampled into a polygon; the same polygon is the PDF
+ * outline, so the edge stays smooth. Ellipse-union helpers remain for tests
+ * of older geometry. Nothing here is copied from a commercial puzzle.
  */
 export type Pt = [number, number];
 
@@ -203,4 +204,205 @@ export function unitRect(blobs: Blob[], rect: [number, number, number, number]):
 export function naturalAspect(blobs: Blob[]): number {
   const [x0, y0, x1, y1] = unionBox(blobs);
   return (x1 - x0) / (y1 - y0 || 1);
+}
+
+
+// ---------------------------------------------------------------- SVG paths
+
+function tokenizePath(d: string): (string | number)[] {
+  const out: (string | number)[] = [];
+  let i = 0;
+  const isCmd = (c: string) => /[MmLlHhVvCcSsQqTtAaZz]/.test(c);
+  while (i < d.length) {
+    const c = d[i];
+    if (c === "," || c === " " || c === "\t" || c === "\n" || c === "\r") {
+      i++;
+      continue;
+    }
+    if (isCmd(c)) {
+      out.push(c);
+      i++;
+      continue;
+    }
+    let s = "";
+    if (c === "+" || c === "-") {
+      s += c;
+      i++;
+    }
+    let dotted = false;
+    let exp = false;
+    while (i < d.length) {
+      const ch = d[i];
+      if (ch >= "0" && ch <= "9") {
+        s += ch;
+        i++;
+      } else if (ch === "." && !dotted && !exp) {
+        dotted = true;
+        s += ch;
+        i++;
+      } else if ((ch === "e" || ch === "E") && !exp) {
+        exp = true;
+        dotted = true;
+        s += ch;
+        i++;
+        if (d[i] === "+" || d[i] === "-") {
+          s += d[i];
+          i++;
+        }
+      } else break;
+    }
+    if (s !== "" && s !== "+" && s !== "-" && s !== "." && s !== "-." && s !== "+.") out.push(parseFloat(s));
+  }
+  return out;
+}
+
+function cubic(p0: Pt, p1: Pt, p2: Pt, p3: Pt, t: number): Pt {
+  const u = 1 - t;
+  const x = u * u * u * p0[0] + 3 * u * u * t * p1[0] + 3 * u * t * t * p2[0] + t * t * t * p3[0];
+  const y = u * u * u * p0[1] + 3 * u * u * t * p1[1] + 3 * u * t * t * p2[1] + t * t * t * p3[1];
+  return [x, y];
+}
+
+function quad(p0: Pt, p1: Pt, p2: Pt, t: number): Pt {
+  const u = 1 - t;
+  return [u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0], u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]];
+}
+
+function sampleCubic(out: Pt[], a: Pt, b: Pt, c: Pt, d: Pt, steps: number) {
+  for (let i = 1; i <= steps; i++) out.push(cubic(a, b, c, d, i / steps));
+}
+
+function sampleQuad(out: Pt[], a: Pt, b: Pt, c: Pt, steps: number) {
+  for (let i = 1; i <= steps; i++) out.push(quad(a, b, c, i / steps));
+}
+
+/**
+ * Sample an SVG path (M/L/H/V/C/S/Q/T/Z, absolute and relative) into a
+ * dense polygon in the author's coordinates. Arcs are not used by our animals.
+ */
+export function pathToPoly(d: string, steps = 16): Pt[] {
+  const tok = tokenizePath(d);
+  let i = 0;
+  let cmd = "M";
+  let x = 0, y = 0, sx = 0, sy = 0;
+  let cx = 0, cy = 0; // last cubic control
+  let qx = 0, qy = 0; // last quad control
+  let prev = "";
+  const out: Pt[] = [];
+  const push = (px: number, py: number) => {
+    const last = out[out.length - 1];
+    if (!last || Math.hypot(last[0] - px, last[1] - py) > 1e-6) out.push([px, py]);
+  };
+  const num = (): number => {
+    const v = tok[i++];
+    if (typeof v !== "number") throw new Error(`SVG path: expected number, got ${v}`);
+    return v;
+  };
+  const hasNum = () => typeof tok[i] === "number";
+  while (i < tok.length) {
+    if (typeof tok[i] === "string") {
+      cmd = tok[i++] as string;
+    } else if (cmd === "M") cmd = "L";
+    else if (cmd === "m") cmd = "l";
+    const rel = cmd === cmd.toLowerCase();
+    const k = cmd.toUpperCase();
+    const nx = (v: number) => (rel ? x + v : v);
+    const ny = (v: number) => (rel ? y + v : v);
+    if (k === "M") {
+      x = nx(num());
+      y = ny(num());
+      sx = x;
+      sy = y;
+      push(x, y);
+      cx = x;
+      cy = y;
+      prev = k;
+    } else if (k === "L") {
+      x = nx(num());
+      y = ny(num());
+      push(x, y);
+      prev = k;
+    } else if (k === "H") {
+      x = nx(num());
+      push(x, y);
+      prev = k;
+    } else if (k === "V") {
+      y = ny(num());
+      push(x, y);
+      prev = k;
+    } else if (k === "C") {
+      const x1 = nx(num()), y1 = ny(num());
+      const x2 = nx(num()), y2 = ny(num());
+      const x3 = nx(num()), y3 = ny(num());
+      sampleCubic(out, [x, y], [x1, y1], [x2, y2], [x3, y3], steps);
+      cx = x2;
+      cy = y2;
+      x = x3;
+      y = y3;
+      prev = k;
+    } else if (k === "S") {
+      const rx = prev === "C" || prev === "S" ? 2 * x - cx : x;
+      const ry = prev === "C" || prev === "S" ? 2 * y - cy : y;
+      const x2 = nx(num()), y2 = ny(num());
+      const x3 = nx(num()), y3 = ny(num());
+      sampleCubic(out, [x, y], [rx, ry], [x2, y2], [x3, y3], steps);
+      cx = x2;
+      cy = y2;
+      x = x3;
+      y = y3;
+      prev = k;
+    } else if (k === "Q") {
+      const x1 = nx(num()), y1 = ny(num());
+      const x2 = nx(num()), y2 = ny(num());
+      sampleQuad(out, [x, y], [x1, y1], [x2, y2], steps);
+      qx = x1;
+      qy = y1;
+      x = x2;
+      y = y2;
+      prev = k;
+    } else if (k === "T") {
+      const x1 = prev === "Q" || prev === "T" ? 2 * x - qx : x;
+      const y1 = prev === "Q" || prev === "T" ? 2 * y - qy : y;
+      const x2 = nx(num()), y2 = ny(num());
+      sampleQuad(out, [x, y], [x1, y1], [x2, y2], steps);
+      qx = x1;
+      qy = y1;
+      x = x2;
+      y = y2;
+      prev = k;
+    } else if (k === "Z") {
+      x = sx;
+      y = sy;
+      push(x, y);
+      prev = k;
+    } else {
+      throw new Error(`SVG path: unsupported command ${cmd}`);
+    }
+  }
+  return out;
+}
+
+export function polyBox(pts: Pt[]): [number, number, number, number] {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+/** Sample a path and normalise it to the unit box [0,1]²; `aspect` is the natural width/height. */
+export function pathToUnit(d: string): { poly: Pt[]; aspect: number; bbox: [number, number, number, number] } {
+  const raw = pathToPoly(d);
+  if (raw.length < 3) throw new Error("SVG path produced too few points");
+  const bbox = polyBox(raw);
+  const [x0, y0, x1, y1] = bbox;
+  const w = x1 - x0 || 1;
+  const h = y1 - y0 || 1;
+  return { poly: raw.map(([x, y]) => [(x - x0) / w, (y - y0) / h]), aspect: w / h, bbox };
+}
+
+/** Map a rectangle in authoring coordinates into the unit box of `bbox`. */
+export function mapRect(bbox: [number, number, number, number], rect: [number, number, number, number]): [number, number, number, number] {
+  const [x0, y0, x1, y1] = bbox;
+  const w = x1 - x0 || 1;
+  const h = y1 - y0 || 1;
+  return [(rect[0] - x0) / w, (rect[1] - y0) / h, (rect[2] - x0) / w, (rect[3] - y0) / h];
 }

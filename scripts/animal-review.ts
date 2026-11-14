@@ -22,8 +22,10 @@ import { templateDesign } from "../src/lib/design/templates";
 import type { Design } from "../src/lib/design/types";
 
 const out = process.argv[2] ?? "review/animals";
-rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
+for (const name of readdirSync(out)) {
+  if (!name.startsWith("silhouettes-")) rmSync(join(out, name), { recursive: true, force: true });
+}
 const fonts = nodeFonts();
 const WORDS = ["ELEPHANT", "GIRAFFE", "PENGUIN", "DOLPHIN", "KANGAROO", "BUTTERFLY", "OCTOPUS", "FLAMINGO", "PANDA", "HEDGEHOG", "SQUIRREL", "RABBIT", "CHEETAH", "PELICAN", "WALRUS", "IBEX"];
 const d = presetFor("medium");

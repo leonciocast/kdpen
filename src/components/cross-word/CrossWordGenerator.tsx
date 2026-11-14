@@ -558,7 +558,7 @@ export default function CrossWordGenerator() {
       <div className="pg-card pg-wizard-card">
         {step === 0 && <QuestionFlow flow={stage(0)} questions={wordsQs} />}
         {step === 1 && <QuestionFlow flow={stage(1)} questions={buildQs} />}
-        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" shapeStatus={shapeStatus} busy={!!refit} flow={stage(2)} themes={[...new Set(usable.map((p) => p.theme).filter((x): x is string => !!x))]} />}
+        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" shapeStatus={shapeStatus} busy={!!refit} flow={stage(2)} themes={[...new Set(usable.map((p) => p.theme).filter((x): x is string => !!x))]} previewKey={`${rawDesignApi.design.shape.kind}:${rawDesignApi.design.shape.mix}:${usable.map((p) => p.cw.shape ?? "square").join("|")}`} />}
         {step === 3 && (
           <BookExport
             tool="crossword"

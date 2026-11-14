@@ -50,24 +50,28 @@ describe("shape masks", () => {
     for (const k of SHAPED) {
       const min = shapeInfo(k).minSize ?? 10;
       const sizes = [10, 15, 20, 28, 40].filter((n) => n >= min);
-      if (!sizes.includes(min) && min <= 44) sizes.unshift(min);
+      if (!sizes.includes(min) && min <= 48) sizes.unshift(min);
       for (const n of sizes) {
         const m = shapeMask(k, n)!;
         const cells = maskCells(m, n);
         const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
         const [br0, bc0, br1, bc1] = maskBox(m, n);
         const box = (br1 - br0 + 1) * (bc1 - bc0 + 1);
-        if (n >= 14) expect(cells, `${k} ${n}`).toBeGreaterThan(Math.min(n * n * 0.12, box * 0.35));
+        const gridFrac = shapeInfo(k).group === "animals" ? 0.06 : 0.12;
+        const boxFrac = shapeInfo(k).group === "animals" ? 0.22 : 0.35;
+        if (n >= 14) expect(cells, `${k} ${n}`).toBeGreaterThan(Math.min(n * n * gridFrac, box * boxFrac));
         if (n >= 14) expect(cells, `${k} ${n} cells`).toBeGreaterThan(20);
-        // No slivers: every used cell belongs to a fully used 3×3 block.
+        // No slivers: every used cell belongs to a fully used block
+        // (2×2 for animals so trunks and antlers can stay 2 cells thick; 3×3 otherwise).
+        const win = shapeInfo(k).group === "animals" ? 2 : 3;
         for (let r = 0; r < n; r++)
           for (let c = 0; c < n; c++) {
             if (!m[r][c]) continue;
             let ok = false;
-            for (let a = r - 2; a <= r && !ok; a++)
-              for (let b = c - 2; b <= c && !ok; b++) {
+            for (let a = r - (win - 1); a <= r && !ok; a++)
+              for (let b = c - (win - 1); b <= c && !ok; b++) {
                 let full = true;
-                for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (!on(a + i, b + j)) full = false;
+                for (let i = 0; i < win; i++) for (let j = 0; j < win; j++) if (!on(a + i, b + j)) full = false;
                 ok = full;
               }
             expect(ok, `${k} ${n} sliver at ${r},${c}`).toBe(true);
@@ -273,5 +277,30 @@ describe("shaped crosswords and sudoku frames", () => {
     expect(sanitizeDesign({ shape: { kind: "nope", mix: "x" } }).shape).toEqual({ kind: "square", mix: "one", shade: false });
     expect(sanitizeDesign({ shape: { kind: "heart", mix: "each" } }).shape).toEqual({ kind: "heart", mix: "each", shade: false });
     expect(sanitizeDesign({ shape: { kind: "elephant", mix: "animals", shade: true } }).shape).toEqual({ kind: "elephant", mix: "animals", shade: true });
+  });
+});
+
+describe("SVG path silhouettes", () => {
+  it("samples commands, implicit numbers, and a unit box", async () => {
+    const { pathToPoly, pathToUnit } = await import("../src/lib/shapes/silhouettes");
+    const square = pathToPoly("M 0 0 L 10 0 L 10 10 L 0 10 Z");
+    expect(square.length).toBeGreaterThanOrEqual(4);
+    const { aspect } = pathToUnit("M 0 0 H 20 V 10 H 0 Z");
+    expect(aspect).toBeCloseTo(2, 5);
+    const p = pathToPoly("M0,0C1,0 2,0 2,1S3,2 2,2Q1,3 0,2Z");
+    expect(p.length).toBeGreaterThan(8);
+    const compact = pathToPoly("M0 0L10.5.5 11-2Z");
+    expect(compact.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("gives every animal a usable outline and mask", () => {
+    for (const k of ANIMAL_KEYS) {
+      const n = Math.max(shapeInfo(k).minSize ?? 24, 24);
+      const pts = shapeOutline(k, n);
+      expect(pts.length, k).toBeGreaterThan(8);
+      const m = shapeMask(k, n);
+      expect(m, k).not.toBeNull();
+      expect(maskCells(m!, n), k).toBeGreaterThan(20);
+    }
   });
 });

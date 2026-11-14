@@ -7,7 +7,7 @@
  */
 
 import { ANIMALS } from "./animals";
-import { blobsToPoly, naturalAspect, unitRect } from "./silhouettes";
+import { mapRect, pathToUnit } from "./silhouettes";
 
 
 export type ShapeKey =
@@ -52,7 +52,6 @@ export type ShapeKey =
   | "panda"
   | "koala"
   | "cat"
-  | "tiger"
   | "lion"
   | "dog"
   | "wolf"
@@ -60,7 +59,6 @@ export type ShapeKey =
   | "rabbit"
   | "squirrel"
   | "mouse"
-  | "hamster"
   | "hedgehog"
   | "raccoon"
   | "otter"
@@ -74,7 +72,6 @@ export type ShapeKey =
   | "chicken"
   | "rooster"
   | "turkey"
-  | "chick"
   | "penguin"
   | "flamingo"
   | "parrot"
@@ -98,7 +95,11 @@ export type ShapeKey =
   | "trex"
   | "longneck"
   | "dragon"
-  | "seal";
+  | "seal"
+  | "ostrich"
+  | "pelican"
+  | "snake"
+  | "scorpion";
 
 export type Pt = [number, number];
 
@@ -180,16 +181,16 @@ function radialUnion(circles: [number, number, number][], c: Pt, n = 120): Pt[] 
 }
 
 function animalShape(a: (typeof ANIMALS)[number]): ShapeInfo {
-  let cached: Pt[] | null = null;
+  const packed = pathToUnit(a.path);
   return {
     key: a.key as ShapeKey,
     label: a.label,
-    aspect: a.aspect ?? naturalAspect(a.blobs),
+    aspect: a.aspect ?? packed.aspect,
     group: "animals",
     minSize: a.minSize,
     aliases: a.aliases,
-    focus: a.focus ? unitRect(a.blobs, a.focus) : undefined,
-    poly: () => (cached ??= blobsToPoly(a.blobs)),
+    focus: a.focus ? mapRect(packed.bbox, a.focus) : undefined,
+    poly: () => packed.poly,
   };
 }
 
@@ -309,8 +310,12 @@ export function shapeOutline(key: ShapeKey | undefined, size: number): Pt[] {
 
 export type Mask = boolean[][];
 
-/** Remove cells that can't hold words (slivers under 3 cells wide) and keep the biggest connected piece. */
-function clean(m: Mask): Mask {
+/**
+ * Remove cells that can't hold words and keep the biggest connected piece.
+ * `open` is the opening block (3 for geometric shapes, 2 for animals so trunks,
+ * antlers and legs survive).
+ */
+function clean(m: Mask, open = 3): Mask {
   const n = m.length;
   const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
   let changed = true;
@@ -326,15 +331,16 @@ function clean(m: Mask): Mask {
         }
       }
   }
-  // Opening with a 3×3 block: keep only cells that belong to a fully used 3×3 square,
-  // so thin tails (heart tip, star points) never become 1–2 cell slivers.
-  if (n >= 6) {
+  // Opening: keep only cells that belong to a fully used open×open square.
+  const k = n >= 6 ? 3 : 0;
+  const win = k ? Math.min(open, k) : 0;
+  if (win >= 2 && n >= win + 2) {
     const keep = m.map((row) => row.map(() => false));
-    for (let r = 0; r + 2 < n; r++)
-      for (let c = 0; c + 2 < n; c++) {
+    for (let r = 0; r + win - 1 < n; r++)
+      for (let c = 0; c + win - 1 < n; c++) {
         let full = true;
-        for (let a = 0; a < 3 && full; a++) for (let b = 0; b < 3 && full; b++) if (!m[r + a][c + b]) full = false;
-        if (full) for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) keep[r + a][c + b] = true;
+        for (let a = 0; a < win && full; a++) for (let b = 0; b < win && full; b++) if (!m[r + a][c + b]) full = false;
+        if (full) for (let a = 0; a < win; a++) for (let b = 0; b < win; b++) keep[r + a][c + b] = true;
       }
     for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) m[r][c] = keep[r][c];
   }
@@ -375,7 +381,8 @@ export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null 
   if (hit) return hit;
   const pts = shapeOutline(key, size);
   const m: Mask = Array.from({ length: size }, (_, r) => Array.from({ length: size }, (_, c) => inside(pts, c + 0.5, r + 0.5) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6));
-  const out = clean(m);
+  const open = shapeInfo(key).group === "animals" ? 2 : 3;
+  const out = clean(m, open);
   cache.set(id, out);
   return out;
 }
@@ -482,7 +489,7 @@ export function suggestShapeForTheme(theme: string | undefined, allowed?: ShapeK
  */
 export const CROSSWORD_SHAPES: ShapeKey[] = [
   "square", "rounded", "landscape", "circle", "oval", "octagon", "hexagon", "heart", "egg", "apple", "pumpkin", "house", "cloud",
-  ...ANIMAL_KEYS.filter((k) => !(["rabbit", "mouse", "dolphin", "seal"] as ShapeKey[]).includes(k)),
+  ...ANIMAL_KEYS.filter((k) => !(["horse", "fox", "raccoon", "bat", "seahorse", "snake", "scorpion"] as ShapeKey[]).includes(k)),
 ];
 
 /** Shapes used when "mix shapes" is on (basics plus a rotation of favourite animals). */
@@ -532,7 +539,7 @@ export function shapeStartSize(shape: ShapeKey | undefined, base: number, longes
  * Animals whose silhouette would dwarf the grid (giraffe, flamingo, antlers, etc.)
  * are left out so the page stays print-friendly; the rest place the 9×9 in the body.
  */
-const SUDOKU_SKIP: ShapeKey[] = ["giraffe", "bat", "flamingo", "llama", "unicorn", "moose", "deer", "donkey", "longneck", "goat"];
+const SUDOKU_SKIP: ShapeKey[] = ["deer", "moose", "llama", "giraffe", "flamingo", "peacock", "bat", "longneck", "ostrich"];
 export const SUDOKU_SHAPES: ShapeKey[] = ["square", "rounded", "circle", "octagon", "hexagon", ...ANIMAL_KEYS.filter((k) => !SUDOKU_SKIP.includes(k))];
 
 /**

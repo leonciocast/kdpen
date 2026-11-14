@@ -99,7 +99,6 @@ await pause(300);
 check((await page.$('[data-testid="shape-elephant"]')) !== null, "ws: elephant is in the Animals tab");
 const animalCards = await page.$$eval('[data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid^="shape-cat"]):not([data-testid="shape-picker"]):not([data-testid="shape-search"]):not([data-testid="shape-shade"]):not([data-testid^="shape-suggest"])', (els) => els.length);
 check(animalCards >= 40, `ws: many animals are listed (${animalCards})`);
-await shot("picker-animals");
 await page.fill('[data-testid="shape-search"]', "eleph");
 await pause(300);
 check((await page.$('[data-testid="shape-elephant"]')) !== null, "ws: search finds elephant");
@@ -111,6 +110,7 @@ await page.waitForSelector('[data-testid="reshape-done"]:has-text("elephant")', 
 await waitPreview(sig);
 check((await page.getAttribute('[data-testid="shape-elephant"]', "aria-checked")) === "true", "ws: elephant selected");
 check(await page.isChecked('[data-testid="shape-shade"]'), "ws: picking an animal turns the shaded silhouette on");
+await shot("picker-animals");
 await shot("picker-elephant");
 await page.click('[data-testid="shape-mix-animals"]');
 await page.waitForFunction(() => document.querySelector('[data-testid="shape-mix-animals"]')?.getAttribute("aria-checked") === "true", null, { timeout: 10000 });
