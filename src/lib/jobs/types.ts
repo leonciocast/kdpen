@@ -1,3 +1,4 @@
+import type { ShapeKey } from "../shapes/shapes";
 import type { DecoyLevel, DirectionKey, Placement } from "../wordsearch/engine";
 import type { PuzzleSpec } from "../wordsearch/bulk";
 import type { ClueEntry, Crossword } from "../crossword/engine";
@@ -25,6 +26,10 @@ export interface GeneratedWs {
   grid: string[][];
   unplaced: string[];
   warnings: string[];
+  /** Grid shape (square when missing). Cells outside it hold "". */
+  shape?: ShapeKey;
+  /** The size the puzzle would have as a plain square (used when the shape changes). */
+  baseSize?: number;
 }
 
 export interface BookSettings {
@@ -43,7 +48,7 @@ export type BuildItems = { tool: "word-search"; items: BookPuzzle[] } | { tool: 
 
 export type Job =
   | { type: "ws-generate"; specs: PuzzleSpec[]; settings: WsGenSettings }
-  | { type: "cw-generate"; groups: { title: string; theme?: string; entries: ClueEntry[] }[] }
+  | { type: "cw-generate"; groups: { title: string; theme?: string; entries: ClueEntry[]; shape?: ShapeKey }[] }
   | { type: "sd-generate"; plan: SudokuDifficulty[] }
   | ({ type: "build"; settings: BookSettings; volumes: [number, number][]; fileBase: string; /** Custom page order (single-volume books only). */ slots?: Slot[] } & BuildItems);
 

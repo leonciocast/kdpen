@@ -5,6 +5,8 @@
  * written from its start cell in one of eight directions.
  */
 
+import { longestRun } from "../shapes/shapes";
+
 export type DirectionKey = "E" | "W" | "S" | "N" | "SE" | "NW" | "NE" | "SW";
 
 export interface Direction {
@@ -87,16 +89,44 @@ export function placementEnd(p: Placement): Cell {
   return cells[cells.length - 1];
 }
 
-export function inBounds(size: number, [r, c]: Cell): boolean {
-  return r >= 0 && c >= 0 && r < size && c < size;
+/**
+ * A grid is either a plain N×N square (a number) or a shaped grid: N×N with a
+ * mask of the cells inside the shape. Cells outside the shape hold "" in every
+ * letter grid, so no word, filler letter or search ever uses them.
+ */
+export type ShapedGrid = { size: number; mask: boolean[][] | null };
+export type GridArg = number | ShapedGrid;
+
+export const gsize = (g: GridArg): number => (typeof g === "number" ? g : g.size);
+export const gmask = (g: GridArg): boolean[][] | null => (typeof g === "number" ? null : g.mask);
+/** True when the cell is part of the puzzle (inside the shape). */
+export const isActive = (g: GridArg, r: number, c: number): boolean => {
+  const m = gmask(g);
+  return !m || !!m[r]?.[c];
+};
+
+/** Longest straight line of usable cells (a longer word can never fit). */
+export function longestLine(g: GridArg): number {
+  return longestRun(gmask(g), gsize(g));
 }
 
-export function emptyGrid(size: number): LetterGrid {
-  return Array.from({ length: size }, () => Array<string | null>(size).fill(null));
+/** Marker for cells outside the shape. */
+export const OUTSIDE = "";
+
+export function inBounds(g: GridArg, [r, c]: Cell): boolean {
+  const size = gsize(g);
+  return r >= 0 && c >= 0 && r < size && c < size && isActive(g, r, c);
 }
 
-export function buildLetterGrid(size: number, placements: Placement[]): LetterGrid {
-  const grid = emptyGrid(size);
+export function emptyGrid(g: GridArg): LetterGrid {
+  const size = gsize(g);
+  const m = gmask(g);
+  return Array.from({ length: size }, (_, r) => Array.from({ length: size }, (_, c) => (m && !m[r][c] ? OUTSIDE : null)));
+}
+
+export function buildLetterGrid(g: GridArg, placements: Placement[]): LetterGrid {
+  const size = g;
+  const grid = emptyGrid(g);
   for (const p of placements) {
     placementCells(p).forEach(([r, c], i) => {
       if (inBounds(size, [r, c])) grid[r][c] = p.letters[i];
@@ -131,7 +161,7 @@ export interface PlacementCheck {
  * exact same cells as another word (e.g. PAT over TAP) is rejected.
  */
 export function checkPlacement(
-  size: number,
+  size: GridArg,
   placements: Placement[],
   candidate: Placement,
   grid?: LetterGrid
@@ -140,10 +170,12 @@ export function checkPlacement(
   const cells = placementCells(candidate);
   for (const cell of cells) {
     if (!inBounds(size, cell)) {
+      const n = gsize(size);
+      const offGrid = cell[0] < 0 || cell[1] < 0 || cell[0] >= n || cell[1] >= n;
       return {
         ok: false,
         reason: "out-of-bounds",
-        message: `"${candidate.word}" does not fit there: it runs off the grid.`,
+        message: offGrid || !gmask(size) ? `"${candidate.word}" does not fit there: it runs off the grid.` : `"${candidate.word}" does not fit there: it runs outside the shape.`,
       };
     }
   }
@@ -298,7 +330,7 @@ export interface AutoPlaceResult {
 }
 
 function candidatesFor(
-  size: number,
+  g: GridArg,
   word: string,
   dirs: DirectionKey[],
   placements: Placement[],
@@ -306,6 +338,7 @@ function candidatesFor(
   rng: Rng,
   overlapWeight = 0.15
 ): Placement[] {
+  const size = gsize(g);
   const letters = gridForm(word);
   const out: { p: Placement; score: number }[] = [];
   for (const dir of dirs) {
@@ -360,7 +393,7 @@ function hasPlacedDuplicates(grid: LetterGrid, placements: Placement[]): boolean
  * returned in `unplaced`.
  */
 export function autoPlace(
-  size: number,
+  g: GridArg,
   fixed: Placement[],
   words: string[],
   dirs: DirectionKey[],
@@ -371,12 +404,14 @@ export function autoPlace(
   const timeLimit = opts.timeLimitMs ?? 1500;
   const branchLimit = opts.branchLimit ?? 30;
   const deadline = Date.now() + timeLimit;
+  const size = g;
+  const maxLen = longestLine(g);
 
   const tooLong: string[] = [];
   const pending: string[] = [];
   for (const w of words) {
     const len = gridForm(w).length;
-    if (len === 0 || len > size || dirs.length === 0) tooLong.push(w);
+    if (len === 0 || len > maxLen || dirs.length === 0) tooLong.push(w);
     else pending.push(w);
   }
   // Longest words first: they are the hardest to fit.
@@ -452,8 +487,9 @@ export type DecoyLevel = "none" | "letters" | "fragments";
  * Decoys make puzzles harder: "letters" draws filler mostly from the words'
  * own letters; "fragments" also plants partial words (e.g. "ELEPH").
  */
-export function fillGrid(size: number, placements: Placement[], rng: Rng, maxRounds = 300, decoys: DecoyLevel = "none"): FillResult {
-  const base = buildLetterGrid(size, placements);
+export function fillGrid(g: GridArg, placements: Placement[], rng: Rng, maxRounds = 300, decoys: DecoyLevel = "none"): FillResult {
+  const size = gsize(g);
+  const base = buildLetterGrid(g, placements);
   const alphabet = fillAlphabet(placements);
   const grid: LetterGrid = base.map((row) => row.slice());
   const isFiller = base.map((row) => row.map((v) => v === null));
@@ -474,7 +510,7 @@ export function fillGrid(size: number, placements: Placement[], rng: Rng, maxRou
       const r0 = Math.floor(rng() * size);
       const c0 = Math.floor(rng() * size);
       const cells = cellsOf(r0, c0, dir, frag.length);
-      if (cells.every((cell) => inBounds(size, cell) && isFiller[cell[0]][cell[1]])) cells.forEach(([r, c], i) => (grid[r][c] = frag[i]));
+      if (cells.every((cell) => inBounds(g, cell) && isFiller[cell[0]][cell[1]])) cells.forEach(([r, c], i) => (grid[r][c] = frag[i]));
     }
   }
 
@@ -520,7 +556,7 @@ export interface GeneratedPuzzle {
 /** Fully automatic: place all words (keeping any fixed ones) and fill the rest. */
 export function generatePuzzle(
   words: string[],
-  size: number,
+  size: GridArg,
   dirs: DirectionKey[],
   rng: Rng,
   fixed: Placement[] = [],
@@ -539,7 +575,7 @@ export function generatePuzzle(
   const placements = [...fixed, ...result.placements];
   const fill = fillGrid(size, placements, rng, 300, opts?.decoys ?? "none");
   const warnings = [...containedWordWarnings(words), ...fill.warnings];
-  return { size, words, placements, grid: fill.grid, unplaced: result.unplaced, warnings };
+  return { size: gsize(size), words, placements, grid: fill.grid, unplaced: result.unplaced, warnings };
 }
 
 export function chunk<T>(arr: T[], n: number): T[][] {

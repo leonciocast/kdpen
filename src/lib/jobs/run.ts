@@ -1,5 +1,6 @@
 /** Heavy work (generation, PDF building). Runs in a Web Worker, or inline as a fallback. */
-import { generatePuzzle, mulberry32, randomSeed } from "../wordsearch/engine";
+import { Placement, checkPlacement, generatePuzzle, gridForm, mulberry32, randomSeed } from "../wordsearch/engine";
+import { ShapeKey, shapeStartSize, shapedGrid } from "../shapes/shapes";
 import { LIMITS } from "../limits";
 import { generateCrossword } from "../crossword/engine";
 import { generateSudoku } from "../sudoku";
@@ -28,15 +29,32 @@ class Cancelled extends Error {
   }
 }
 
-export function generateOneWordSearch(spec: GeneratedWs | { title: string; theme: string; words: string[]; size: number }, settings: { dirs: import("../wordsearch/engine").DirectionKey[]; overlapWeight: number; decoys: import("../wordsearch/engine").DecoyLevel }, seed = randomSeed()): GeneratedWs {
-  let size = spec.size;
+type WsSpecIn = { title: string; theme: string; words: string[]; size: number; shape?: ShapeKey; baseSize?: number; fixed?: Placement[] };
+
+/**
+ * One finished word search. Shaped grids start from a canvas holding as many
+ * cells as the square would and grow until every word fits inside the shape;
+ * words are never dropped silently (misfits stay in `unplaced`).
+ */
+export function generateOneWordSearch(spec: GeneratedWs | WsSpecIn, settings: { dirs: import("../wordsearch/engine").DirectionKey[]; overlapWeight: number; decoys: import("../wordsearch/engine").DecoyLevel }, seed = randomSeed()): GeneratedWs {
+  const shape = spec.shape && spec.shape !== "square" ? spec.shape : undefined;
+  const base = spec.baseSize ?? spec.size;
+  const longest = Math.max(1, ...spec.words.map((w) => gridForm(w).length));
+  const max = shape ? LIMITS.maxShapeGridSize : LIMITS.maxGridSize;
+  let size = shape ? shapeStartSize(shape, base, longest, max) : base;
+  const fixedIn = "fixed" in spec && spec.fixed ? spec.fixed : [];
   let best: GeneratedWs | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const g = generatePuzzle(spec.words, size, settings.dirs, mulberry32(seed + attempt), [], { timeLimitMs: 350, maxSteps: 6000, overlapWeight: settings.overlapWeight, decoys: settings.decoys });
-    const res: GeneratedWs = { title: spec.title, theme: spec.theme, size, words: spec.words, placements: g.placements, grid: g.grid, unplaced: g.unplaced, warnings: g.warnings };
+  const attempts = shape ? 7 : 3;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const g = shapedGrid(size, shape);
+    // Keep hand-placed words that still fit inside the shape.
+    const fixed: Placement[] = [];
+    for (const p of fixedIn) if (checkPlacement(g, fixed, p).ok) fixed.push(p);
+    const gen = generatePuzzle(spec.words, g, settings.dirs, mulberry32(seed + attempt), fixed, { timeLimitMs: 350, maxSteps: 6000, overlapWeight: settings.overlapWeight, decoys: settings.decoys });
+    const res: GeneratedWs = { title: spec.title, theme: spec.theme, size, words: spec.words, placements: gen.placements, grid: gen.grid, unplaced: gen.unplaced, warnings: gen.warnings, baseSize: base, ...(shape ? { shape } : {}) };
     if (!best || res.unplaced.length < best.unplaced.length) best = res;
-    if (!res.unplaced.length || size >= LIMITS.maxGridSize) break;
-    size++; // grow the grid a little rather than drop words
+    if (!res.unplaced.length || size >= max) break;
+    size = Math.min(max, size + (shape && attempt >= 2 ? 2 : 1)); // grow the grid rather than drop words
   }
   return best!;
 }
@@ -61,7 +79,7 @@ export async function runJob<J extends Job>(job: J, env: JobEnv): Promise<JobRes
       for (let i = 0; i < job.groups.length; i++) {
         await check(i);
         const g = job.groups[i];
-        out.push({ title: g.title, theme: g.theme, cw: generateCrossword(g.entries, mulberry32(randomSeed())) });
+        out.push({ title: g.title, theme: g.theme, cw: generateCrossword(g.entries, mulberry32(randomSeed()), 40, g.shape) });
         env.progress({ phase: "Building crosswords", done: i + 1, total: job.groups.length });
       }
       return out as JobResultMap[J["type"]];

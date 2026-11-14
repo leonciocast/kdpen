@@ -9,6 +9,8 @@ export const LIMITS = {
   maxWordsPerPuzzle: 60,
   minGridSize: 8,
   maxGridSize: 30,
+  /** Shaped word searches need a bigger canvas (only the cells inside the shape are used). */
+  maxShapeGridSize: 44,
   /** Crossword: word/clue pairs in one project, and per crossword. */
   maxClues: 10000,
   maxCluesPerCrossword: 30,

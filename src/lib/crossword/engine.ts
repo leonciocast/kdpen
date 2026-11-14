@@ -2,6 +2,7 @@
 import { Rng, mulberry32 } from "../wordsearch/engine";
 import { tidySpaces } from "../text";
 import { LIMITS } from "../limits";
+import { Mask, ShapeKey, isSquare, longestRun, maskBox, maskCells, shapeMask } from "../shapes/shapes";
 
 export interface ClueEntry {
   answer: string; // as typed (uppercase); spaces/hyphens allowed
@@ -26,6 +27,10 @@ export interface Crossword {
   grid: (string | null)[][];
   placements: CwPlacement[];
   leftOut: string[];
+  /** Shaped crosswords: the shape, its square canvas size and where the grid's (0,0) sits on that canvas. */
+  shape?: ShapeKey;
+  canvas?: number;
+  offset?: [number, number];
 }
 
 export const CROSSWORD_MAX_WORDS = LIMITS.maxClues;
@@ -123,6 +128,8 @@ class Board {
   minC = 0;
   maxC = 0;
   placed: Placed[] = [];
+  /** Shaped layout: every letter must land on a used cell of this mask. */
+  constructor(public mask: Mask | null = null) {}
 
   get(r: number, c: number) {
     return this.cells.get(`${r},${c}`);
@@ -135,9 +142,11 @@ class Board {
     if (this.get(row - dr, col - dc) !== undefined) return -1;
     if (this.get(row + dr * letters.length, col + dc * letters.length) !== undefined) return -1;
     let crossings = 0;
+    const m = this.mask;
     for (let i = 0; i < letters.length; i++) {
       const r = row + dr * i;
       const c = col + dc * i;
+      if (m && !m[r]?.[c]) return -1;
       const existing = this.get(r, c);
       if (existing !== undefined) {
         if (existing !== letters[i]) return -1;
@@ -194,7 +203,7 @@ function bestSpot(board: Board, letters: string, rng: Rng) {
         const h = Math.max(board.maxR, endR) - Math.min(board.minR, row) + 1;
         const w = Math.max(board.maxC, endC) - Math.min(board.minC, col) + 1;
         // Prefer crossings, compact and roughly square layouts.
-        const score = crossings * 12 - (h * w) / 8 - Math.abs(h - w) * 0.8 + rng() * 3;
+        const score = board.mask ? crossings * 12 - (h * w) / 18 + rng() * 3 : crossings * 12 - (h * w) / 8 - Math.abs(h - w) * 0.8 + rng() * 3;
         if (!best || score > best.score) best = { row, col, across, score };
       }
     }
@@ -202,14 +211,33 @@ function bestSpot(board: Board, letters: string, rng: Rng) {
   return best;
 }
 
-function layoutOnce(entries: ClueEntry[], rng: Rng): Board {
-  const board = new Board();
+function layoutOnce(entries: ClueEntry[], rng: Rng, mask: Mask | null = null): Board {
+  const board = new Board(mask);
   const order = entries
     .map((e) => ({ e, letters: cwLetters(e.answer), k: rng() }))
     .sort((a, b) => b.letters.length - a.letters.length + (a.k - b.k) * 1.5);
   const [first, ...rest] = order;
   if (!first) return board;
-  board.place(first.e, first.letters, 0, 0, rng() < 0.5);
+  if (mask) {
+    // Start in the middle of the shape, on the row/column closest to the centre where the word fits.
+    const n = mask.length;
+    const across = rng() < 0.5;
+    let spot: [number, number] | null = null;
+    let bestD = Infinity;
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++) {
+        if (board.check(first.letters, r, c, across) < 0) continue;
+        const mr = across ? r : r + (first.letters.length - 1) / 2;
+        const mc = across ? c + (first.letters.length - 1) / 2 : c;
+        const d = (mr - (n - 1) / 2) ** 2 + (mc - (n - 1) / 2) ** 2;
+        if (d < bestD) {
+          bestD = d;
+          spot = [r, c];
+        }
+      }
+    if (!spot) return board;
+    board.place(first.e, first.letters, spot[0], spot[1], across);
+  } else board.place(first.e, first.letters, 0, 0, rng() < 0.5);
   let pending = rest;
   for (let pass = 0; pass < 4 && pending.length; pass++) {
     const next: typeof pending = [];
@@ -225,14 +253,53 @@ function layoutOnce(entries: ClueEntry[], rng: Rng): Board {
 }
 
 /** Lay out a connected crossword; words that cannot connect are returned in leftOut. */
-export function generateCrossword(entries: ClueEntry[], rng: Rng = mulberry32(Date.now() & 0xffff), attempts = 40): Crossword {
+export function generateCrossword(entries: ClueEntry[], rng: Rng = mulberry32(Date.now() & 0xffff), attempts = 40, shape?: ShapeKey): Crossword {
+  if (!isSquare(shape)) return generateShapedCrossword(entries, rng, shape!, attempts);
+  return layoutCrossword(entries, rng, attempts, null);
+}
+
+/** Smallest canvas whose shape has room for these words, then grow until every word connects. */
+export function generateShapedCrossword(entries: ClueEntry[], rng: Rng, shape: ShapeKey, attempts = 30): Crossword {
+  const lens = entries.map((e) => cwLetters(e.answer).length);
+  const letters = lens.reduce((a, b) => a + b, 0);
+  const longest = Math.max(2, ...lens);
+  let n = Math.max(7, longest);
+  while (n < LIMITS.maxShapeGridSize) {
+    const m = shapeMask(shape, n);
+    if (maskCells(m, n) >= letters * 1.7 && longestRun(m, n) >= longest) break;
+    n++;
+  }
+  let best: Crossword | null = null;
+  let stale = 0;
+  for (let k = 0; k < 8 && n <= LIMITS.maxShapeGridSize; k++, n++) {
+    const cw = layoutCrossword(entries, rng, attempts, { shape, n });
+    if (!best || cw.leftOut.length < best.leftOut.length) {
+      best = cw;
+      stale = 0;
+    } else stale++;
+    // Stop when every word is in, or growing stopped helping (some words share no letters with the rest).
+    if (!cw.leftOut.length || stale >= 3) break;
+  }
+  return best!;
+}
+
+function layoutCrossword(entries: ClueEntry[], rng: Rng, attempts: number, shaped: { shape: ShapeKey; n: number } | null): Crossword {
+  const mask = shaped ? shapeMask(shaped.shape, shaped.n) : null;
   let best: Board | null = null;
   for (let i = 0; i < attempts; i++) {
-    const b = layoutOnce(entries, rng);
+    const b = layoutOnce(entries, rng, mask);
     if (!best || b.placed.length > best.placed.length || (b.placed.length === best.placed.length && b.area() < best.area())) best = b;
     if (best.placed.length === entries.length && i >= 10) break;
   }
   const board = best ?? new Board();
+  if (mask && shaped) {
+    // Shaped: keep the whole shape (not just the words' box) so the outline lines up.
+    const [r0, c0, r1, c1] = maskBox(mask, shaped.n);
+    board.minR = r0;
+    board.minC = c0;
+    board.maxR = r1;
+    board.maxC = c1;
+  }
   const height = board.placed.length ? board.maxR - board.minR + 1 : 0;
   const width = board.placed.length ? board.maxC - board.minC + 1 : 0;
   const grid: (string | null)[][] = Array.from({ length: height }, () => Array<string | null>(width).fill(null));
@@ -260,7 +327,9 @@ export function generateCrossword(entries: ClueEntry[], rng: Rng = mulberry32(Da
     number: numbers.get(`${row},${col}`)!,
   }));
   const placedSet = new Set(board.placed.map((p) => p.entry.answer));
-  return { width, height, grid, placements, leftOut: entries.filter((e) => !placedSet.has(e.answer)).map((e) => e.answer) };
+  const leftOut = entries.filter((e) => !placedSet.has(e.answer)).map((e) => e.answer);
+  if (mask && shaped) return { width, height, grid, placements, leftOut, shape: shaped.shape, canvas: shaped.n, offset: [board.minR, board.minC] };
+  return { width, height, grid, placements, leftOut };
 }
 
 export function cellNumbers(cw: Crossword): Map<string, number> {

@@ -2,7 +2,8 @@
 import { FONT_KEYS, FontKey } from "./fonts";
 import { isHexColor } from "./color";
 import { DEFAULT_DESIGN, TEMPLATES, templateDesign } from "./templates";
-import type { BadgeShape, Design, GridBorder, GridShade, HeaderStyle, IconKey, ListSort, PageNumberStyle, PatternKey, TemplateId } from "./types";
+import type { BadgeShape, CellStyle, Design, GridBorder, GridShade, HeaderStyle, IconKey, LineStyle, ListBox, ListSort, PageNumberStyle, PatternKey, TemplateId } from "./types";
+import { SHAPE_KEYS, ShapeMix } from "../shapes/shapes";
 
 const HEADERS: HeaderStyle[] = ["rule", "banner", "ribbon", "underline", "boxed", "tab", "minimal"];
 const BADGES: BadgeShape[] = ["circle", "rounded", "diamond", "hexagon"];
@@ -12,8 +13,12 @@ const BORDERS: GridBorder[] = ["square", "rounded", "double", "none"];
 const SHADES: GridShade[] = ["none", "rows", "checker"];
 const NUMBERS: PageNumberStyle[] = ["plain", "dashes", "circle", "pill", "none"];
 const SORTS: ListSort[] = ["entered", "alpha", "length"];
+const LINES: LineStyle[] = ["solid", "dashed", "dotted"];
+const CELLS: CellStyle[] = ["plain", "boxed", "rounded", "circles"];
+const LIST_BOXES: ListBox[] = ["none", "solid", "rounded", "dashed", "double"];
+const MIXES: ShapeMix[] = ["one", "each", "theme"];
 
-export const DESIGN_OPTIONS = { HEADERS, BADGES, ICONS, PATTERNS, BORDERS, SHADES, NUMBERS, SORTS };
+export const DESIGN_OPTIONS = { HEADERS, BADGES, ICONS, PATTERNS, BORDERS, SHADES, NUMBERS, SORTS, LINES, CELLS, LIST_BOXES, MIXES };
 
 const pick = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
 const num = (v: unknown, lo: number, hi: number, fallback: number) => (typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback);
@@ -32,6 +37,7 @@ export function sanitizeDesign(input: unknown): Design {
   const c = obj(i.color);
   const p = obj(i.pattern);
   const l = obj(i.list);
+  const s = obj(i.shape);
   return {
     version: 1,
     template,
@@ -56,11 +62,15 @@ export function sanitizeDesign(input: unknown): Design {
       border: pick(g.border, BORDERS, d.grid.border),
       shade: pick(g.shade, SHADES, d.grid.shade),
       frame: num(g.frame, 0, 4, d.grid.frame),
+      line: pick(g.line, LINES, d.grid.line),
+      shadow: bool(g.shadow, d.grid.shadow),
+      cells: pick(g.cells, CELLS, d.grid.cells),
     },
+    shape: { kind: pick(s.kind, SHAPE_KEYS, d.shape.kind), mix: pick(s.mix, MIXES, d.shape.mix) },
     color: { accent: isHexColor(c.accent) ? c.accent : d.color.accent, grayscale: bool(c.grayscale, d.color.grayscale) },
     pattern: { kind: pick(p.kind, PATTERNS, d.pattern.kind), strength: num(p.strength, 0, 1, d.pattern.strength) },
     pageNumber: pick(i.pageNumber, NUMBERS, d.pageNumber),
-    list: { columns: Math.round(num(l.columns, 0, 6, d.list.columns)), checkbox: bool(l.checkbox, d.list.checkbox), sort: pick(l.sort, SORTS, d.list.sort) },
+    list: { columns: Math.round(num(l.columns, 0, 6, d.list.columns)), checkbox: bool(l.checkbox, d.list.checkbox), sort: pick(l.sort, SORTS, d.list.sort), box: pick(l.box, LIST_BOXES, d.list.box) },
   };
 }
 

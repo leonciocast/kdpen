@@ -48,6 +48,14 @@ async function sharedDesignExport(prefix, n) {
   await waitPreview();
   await shot(`${prefix}_${n}a_design_template`);
   await next();
+  await expectQ("shape", `${prefix}: template → shape`);
+  await waitPreview();
+  await shot(`${prefix}_${n}a2_design_shape`);
+  await next();
+  await expectQ("frame", `${prefix}: shape → frame`);
+  await waitPreview();
+  await shot(`${prefix}_${n}a3_design_frame`);
+  await next();
   await shot(`${prefix}_${n}b_design_happy`);
   await page.click('[data-testid="design-customize"]');
   await waitPreview();

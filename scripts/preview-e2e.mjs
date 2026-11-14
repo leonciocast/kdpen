@@ -258,6 +258,8 @@ await pause(500);
 await next();
 await next();
 await waitDesign();
+await next(); // -> shape
+await next(); // -> frame
 await next();
 await page.click('[data-testid="design-keep"]');
 await pause();
@@ -345,6 +347,8 @@ await page.waitForSelector("#cw-grid", { timeout: 180000 });
 await pause(300);
 await next();
 await waitDesign();
+await next(); // -> shape
+await next(); // -> frame
 await next();
 await page.click('[data-testid="design-keep"]');
 await pause();
@@ -365,6 +369,8 @@ await page.click('[data-testid="generate-sudoku"]');
 await page.waitForSelector("#sudoku-grid", { timeout: 300000 });
 await next();
 await waitDesign();
+await next(); // -> shape
+await next(); // -> frame
 await next();
 await page.click('[data-testid="design-keep"]');
 await page.selectOption('[data-testid="per-page"]', "4");
@@ -409,6 +415,8 @@ if (!SKIP_10K) {
   await next();
   await next();
   await waitDesign();
+  await next(); // -> shape
+  await next(); // -> frame
   await next();
   await page.click('[data-testid="design-keep"]');
   await next();

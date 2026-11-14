@@ -1,3 +1,5 @@
+import type { ShapeKey } from "../shapes/shapes";
+import type { Placement } from "./engine";
 /** Turn a big word list into puzzle specs (grouped by theme, split by words-per-puzzle). */
 import { LIMITS } from "../limits";
 import { suggestGridSize } from "./difficulty";
@@ -13,6 +15,10 @@ export interface PuzzleSpec {
   theme: string;
   words: string[];
   size: number;
+  /** Grid shape; the generator grows the canvas so every word fits inside it. */
+  shape?: ShapeKey;
+  /** Words already placed by hand (kept when they fit inside the shape). */
+  fixed?: Placement[];
 }
 
 export interface SplitOptions {

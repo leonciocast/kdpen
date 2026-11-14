@@ -2,11 +2,14 @@
 import React from "react";
 import { Cell, LetterGrid, Placement, placementCells } from "@/lib/wordsearch/engine";
 import { placementCapsule, pointsToSvgPath } from "@/lib/wordsearch/geometry";
+import { OUTLINE_PAD, ShapeKey, maskBox, shapeMask, shapeOutline } from "@/lib/shapes/shapes";
 
 export type SolutionStyle = "hidden" | "color" | "bw";
 
 export interface PuzzleGridProps {
   size: number;
+  /** Grid shape; cells outside it are hidden and can't be clicked. */
+  shape?: ShapeKey;
   letters: LetterGrid;
   placements: Placement[];
   colors?: Record<string, string>;
@@ -30,6 +33,7 @@ const CELL = 32;
 
 const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   size,
+  shape,
   letters,
   placements,
   colors = {},
@@ -47,6 +51,22 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
 }) => {
   const pad = 6;
   const side = size * CELL;
+  const mask = shapeMask(shape, size);
+  const on = (r: number, c: number) => !mask || !!mask[r]?.[c];
+  let view = `${-pad - 2} ${-pad - 2} ${side + pad * 2 + 4} ${side + pad * 2 + 4}`;
+  let outlinePath: string | null = null;
+  if (mask) {
+    const pts = shapeOutline(shape, size).map(([x, y]) => [x * CELL, y * CELL] as [number, number]);
+    outlinePath = "M" + pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z";
+    const [r0, c0, r1, c1] = maskBox(mask, size);
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    const x0 = Math.min((c0 - OUTLINE_PAD) * CELL, ...xs) - 4;
+    const y0 = Math.min((r0 - OUTLINE_PAD) * CELL, ...ys) - 4;
+    const x1 = Math.max((c1 + 1 + OUTLINE_PAD) * CELL, ...xs) + 4;
+    const y1 = Math.max((r1 + 1 + OUTLINE_PAD) * CELL, ...ys) + 4;
+    view = `${x0.toFixed(1)} ${y0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(y1 - y0).toFixed(1)}`;
+  }
   const interactive = Boolean(onCellClick);
   const previewKeys = new Set((preview?.cells ?? []).map(([r, c]) => `${r},${c}`));
   const placedKeys = new Set<string>();
@@ -59,13 +79,18 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   return (
     <svg
       id={id}
-      viewBox={`${-pad - 2} ${-pad - 2} ${side + pad * 2 + 4} ${side + pad * 2 + 4}`}
+      viewBox={view}
+      data-shape={shape ?? "square"}
       style={{ width: "100%", maxWidth, userSelect: "none", touchAction: "manipulation" }}
       role="grid"
       aria-label="Word search grid"
       onMouseLeave={() => onCellHover?.(null)}
     >
-      <rect x={-pad} y={-pad} width={side + pad * 2} height={side + pad * 2} fill="#fff" stroke="#000" strokeWidth={2.5} />
+      {outlinePath ? (
+        <path d={outlinePath} fill="#fff" stroke="#000" strokeWidth={2.5} strokeLinejoin="round" data-testid="grid-outline" />
+      ) : (
+        <rect x={-pad} y={-pad} width={side + pad * 2} height={side + pad * 2} fill="#fff" stroke="#000" strokeWidth={2.5} />
+      )}
 
       {/* Solution capsules ("circled words") */}
       {solution !== "hidden" &&
@@ -122,6 +147,7 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
 
       {letters.map((row, r) =>
         row.map((ch, c) => {
+          if (!on(r, c)) return null;
           const key = `${r},${c}`;
           const onSolution = placedKeys.has(key);
           const dim = solution !== "hidden" && !onSolution;

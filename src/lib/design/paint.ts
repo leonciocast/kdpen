@@ -563,7 +563,7 @@ export function sortList(items: string[], sort: "entered" | "alpha" | "length"):
   return items.slice().sort((a, b) => key(a).length - key(b).length || a.localeCompare(b, "en", { sensitivity: "base" }));
 }
 
-/** Shading and inner lines for a rows×cols grid at (x, y). */
+/** Shading and inner lines for a rows×cols grid at (x, y). Lines are only drawn between two used cells. */
 export function drawGridBody(pdf: jsPDF, x: number, y: number, cell: number, rows: number, cols: number, look: Look, isCell: (r: number, c: number) => boolean = () => true) {
   const g = look.design.grid;
   if (g.shade !== "none") {
@@ -577,27 +577,215 @@ export function drawGridBody(pdf: jsPDF, x: number, y: number, cell: number, row
   if (g.lines) {
     stroke(pdf, [150, 150, 150]);
     pdf.setLineWidth(0.4);
-    for (let c = 1; c < cols; c++) pdf.line(x + c * cell, y, x + c * cell, y + rows * cell);
-    for (let r = 1; r < rows; r++) pdf.line(x, y + r * cell, x + cols * cell, y + r * cell);
+    // Merge runs so a plain square grid is still one line per row/column.
+    for (let c = 1; c < cols; c++) {
+      let start = -1;
+      for (let r = 0; r <= rows; r++) {
+        const on = r < rows && isCell(r, c - 1) && isCell(r, c);
+        if (on && start < 0) start = r;
+        if (!on && start >= 0) {
+          pdf.line(x + c * cell, y + start * cell, x + c * cell, y + r * cell);
+          start = -1;
+        }
+      }
+    }
+    for (let r = 1; r < rows; r++) {
+      let start = -1;
+      for (let c = 0; c <= cols; c++) {
+        const on = c < cols && isCell(r - 1, c) && isCell(r, c);
+        if (on && start < 0) start = c;
+        if (!on && start >= 0) {
+          pdf.line(x + start * cell, y + r * cell, x + c * cell, y + r * cell);
+          start = -1;
+        }
+      }
+    }
   }
+  drawCellMarks(pdf, x, y, cell, rows, cols, look, isCell);
+}
+
+/** Per-cell box / rounded box / circle behind each letter. */
+export function drawCellMarks(pdf: jsPDF, x: number, y: number, cell: number, rows: number, cols: number, look: Look, isCell: (r: number, c: number) => boolean = () => true) {
+  const style = look.design.grid.cells;
+  if (style === "plain") return;
+  stroke(pdf, [120, 120, 120]);
+  pdf.setLineWidth(Math.max(0.35, Math.min(0.6, cell * 0.025)));
+  const inset = cell * (style === "circles" ? 0.07 : 0.08);
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      if (!isCell(r, c)) continue;
+      const cx = x + c * cell;
+      const cy = y + r * cell;
+      if (style === "circles") pdf.circle(cx + cell / 2, cy + cell / 2, cell / 2 - inset, "S");
+      else if (style === "rounded") pdf.roundedRect(cx + inset, cy + inset, cell - inset * 2, cell - inset * 2, cell * 0.2, cell * 0.2, "S");
+      else pdf.rect(cx + inset, cy + inset, cell - inset * 2, cell - inset * 2, "S");
+    }
+}
+
+type P2 = [number, number];
+
+/** Polygon with every corner rounded by radius `r` (curves already finely sampled are left alone). */
+export function filletPolygon(pts: P2[], r: number): P2[] {
+  if (pts.length > 40 || r <= 0) return pts;
+  const out: P2[] = [];
+  const n = pts.length;
+  for (let i = 0; i < n; i++) {
+    const p = pts[i];
+    const a = pts[(i - 1 + n) % n];
+    const b = pts[(i + 1) % n];
+    const la = Math.hypot(a[0] - p[0], a[1] - p[1]);
+    const lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
+    const rr = Math.min(r, la * 0.45, lb * 0.45);
+    const p1: P2 = [p[0] + ((a[0] - p[0]) / la) * rr, p[1] + ((a[1] - p[1]) / la) * rr];
+    const p2: P2 = [p[0] + ((b[0] - p[0]) / lb) * rr, p[1] + ((b[1] - p[1]) / lb) * rr];
+    // Quadratic Bézier p1 → p (control) → p2, sampled.
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6;
+      const u = 1 - t;
+      out.push([u * u * p1[0] + 2 * u * t * p[0] + t * t * p2[0], u * u * p1[1] + 2 * u * t * p[1] + t * t * p2[1]]);
+    }
+  }
+  return out;
+}
+
+function signedArea(pts: P2[]): number {
+  let a = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j][0] - pts[i][0]) * (pts[j][1] + pts[i][1]);
+  return a / 2;
+}
+
+/** Push every edge outward by `d` (miter joins, clamped so sharp inner corners don't spike). */
+export function offsetPolygon(pts: P2[], d: number): P2[] {
+  const n = pts.length;
+  const sgn = signedArea(pts) > 0 ? 1 : -1;
+  const normal = (a: P2, b: P2): P2 => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy) || 1;
+    return [(dy / l) * sgn, (-dx / l) * sgn];
+  };
+  return pts.map((p, i) => {
+    const a = pts[(i - 1 + n) % n];
+    const b = pts[(i + 1) % n];
+    const n1 = normal(a, p);
+    const n2 = normal(p, b);
+    let mx = n1[0] + n2[0];
+    let my = n1[1] + n2[1];
+    const ml = Math.hypot(mx, my);
+    if (ml < 1e-6) return [p[0] + n1[0] * d, p[1] + n1[1] * d] as P2;
+    mx /= ml;
+    my /= ml;
+    const cos = mx * n1[0] + my * n1[1];
+    const len = Math.min(d / Math.max(cos, 0.2), d * 2);
+    return [p[0] + mx * len, p[1] + my * len] as P2;
+  });
+}
+
+function withLineStyle(pdf: jsPDF, look: Look, width: number, draw: () => void) {
+  const line = look.design.grid.line;
+  if (line === "dashed") pdf.setLineDashPattern([Math.max(3, width * 3), Math.max(2, width * 2)], 0);
+  if (line === "dotted") {
+    pdf.setLineCap("round");
+    pdf.setLineDashPattern([0.01, Math.max(2.4, width * 2.4)], 0);
+  }
+  draw();
+  if (line !== "solid") {
+    pdf.setLineDashPattern([], 0);
+    pdf.setLineCap("butt");
+  }
+}
+
+/** The outline a frame style gives a polygon (rounded corners applied). */
+export function framePolygon(pts: P2[], look: Look, unit: number): P2[] {
+  return look.design.grid.border === "rounded" ? filletPolygon(pts, Math.min(unit * 0.9, 16)) : pts;
+}
+
+/** Soft shadow and white backing under a shaped grid (drawn before the letters). */
+export function drawOutlineBacking(pdf: jsPDF, pts: P2[], look: Look, unit: number) {
+  const g = look.design.grid;
+  const shape = framePolygon(pts, look, unit);
+  if (g.shadow && g.border !== "none") {
+    const o = Math.max(2.5, unit * 0.22);
+    fill(pdf, [205, 205, 205]);
+    poly(pdf, shape.map(([x, y]) => [x + o, y + o] as P2), "F");
+  }
+  if (g.shadow || look.design.pattern.kind !== "none") {
+    fill(pdf, [255, 255, 255]);
+    poly(pdf, shape, "F");
+  }
+}
+
+/** Outline of any shape in the design's frame style (thickness, double, dashed, dotted, rounded). */
+export function drawOutline(pdf: jsPDF, pts: P2[], look: Look, unit: number) {
+  const g = look.design.grid;
+  if (g.border === "none" || g.frame <= 0) return;
+  const shape = framePolygon(pts, look, unit);
+  stroke(pdf, [0, 0, 0]);
+  pdf.setLineWidth(g.frame);
+  withLineStyle(pdf, look, g.frame, () => {
+    poly(pdf, shape, "S");
+    if (g.border === "double") {
+      pdf.setLineWidth(Math.max(0.4, g.frame * 0.6));
+      poly(pdf, offsetPolygon(shape, Math.max(2.5, g.frame * 2.5)), "S");
+    }
+  });
 }
 
 /** Outer frame in the design's border style around box `b`. */
 export function drawFrame(pdf: jsPDF, b: Box, look: Look, unit: number) {
   const g = look.design.grid;
   if (g.border === "none" || g.frame <= 0) return;
+  const r = Math.min(unit * 0.45, 12);
   stroke(pdf, [0, 0, 0]);
   pdf.setLineWidth(g.frame);
-  if (g.border === "rounded") {
-    const r = Math.min(unit * 0.45, 12);
-    pdf.roundedRect(b.x, b.y, b.w, b.h, r, r, "S");
-  } else if (g.border === "double") {
-    pdf.rect(b.x, b.y, b.w, b.h, "S");
-    pdf.setLineWidth(Math.max(0.4, g.frame * 0.6));
-    const o = Math.max(2.5, g.frame * 2.5);
-    pdf.rect(b.x - o, b.y - o, b.w + o * 2, b.h + o * 2, "S");
-  } else pdf.rect(b.x, b.y, b.w, b.h, "S");
+  withLineStyle(pdf, look, g.frame, () => {
+    if (g.border === "rounded") {
+      pdf.roundedRect(b.x, b.y, b.w, b.h, r, r, "S");
+    } else if (g.border === "double") {
+      pdf.rect(b.x, b.y, b.w, b.h, "S");
+      pdf.setLineWidth(Math.max(0.4, g.frame * 0.6));
+      const o = Math.max(2.5, g.frame * 2.5);
+      pdf.rect(b.x - o, b.y - o, b.w + o * 2, b.h + o * 2, "S");
+    } else pdf.rect(b.x, b.y, b.w, b.h, "S");
+  });
 }
+
+/** Shadow under a rectangular frame must sit below the grid: call before drawing cells. */
+export function drawFrameShadow(pdf: jsPDF, b: Box, look: Look, unit: number) {
+  const g = look.design.grid;
+  if (!g.shadow || g.border === "none" || g.frame <= 0) return;
+  const r = Math.min(unit * 0.45, 12);
+  const o = Math.max(2.5, unit * 0.18);
+  fill(pdf, [205, 205, 205]);
+  if (g.border === "rounded") pdf.roundedRect(b.x + o, b.y + o, b.w, b.h, r, r, "F");
+  else pdf.rect(b.x + o, b.y + o, b.w, b.h, "F");
+  fill(pdf, [255, 255, 255]);
+  if (g.border === "rounded") pdf.roundedRect(b.x, b.y, b.w, b.h, r, r, "F");
+  else pdf.rect(b.x, b.y, b.w, b.h, "F");
+}
+
+/** Box around the word list / clues in the design's list-box style. */
+export function drawListBox(pdf: jsPDF, b: Box, look: Look) {
+  const style = look.design.list.box;
+  if (style === "none") return;
+  stroke(pdf, look.design.color.grayscale ? [60, 60, 60] : look.ink);
+  pdf.setLineWidth(1);
+  if (style === "solid") pdf.rect(b.x, b.y, b.w, b.h, "S");
+  else if (style === "rounded") pdf.roundedRect(b.x, b.y, b.w, b.h, 9, 9, "S");
+  else if (style === "dashed") {
+    pdf.setLineWidth(1.1);
+    pdf.setLineDashPattern([4, 3], 0);
+    pdf.roundedRect(b.x, b.y, b.w, b.h, 11, 11, "S");
+    pdf.setLineDashPattern([], 0);
+  } else {
+    pdf.rect(b.x, b.y, b.w, b.h, "S");
+    pdf.setLineWidth(0.6);
+    pdf.rect(b.x + 2.6, b.y + 2.6, b.w - 5.2, b.h - 5.2, "S");
+  }
+}
+
+/** Room a list box needs around its content, per side. */
+export const listBoxPad = (look: Look) => (look.design.list.box === "none" ? 0 : look.design.list.box === "double" ? 9 : 7);
 
 export function drawArrow(pdf: jsPDF, x1: number, y1: number, x2: number, y2: number, c: RGB, width = 1.4) {
   stroke(pdf, c);

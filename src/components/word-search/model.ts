@@ -1,3 +1,4 @@
+import type { ShapeKey } from "@/lib/shapes/shapes";
 import { DirectionKey, Placement } from "@/lib/wordsearch/engine";
 
 export interface PuzzleModel {
@@ -12,6 +13,12 @@ export interface PuzzleModel {
   grid: string[][] | null;
   unplaced: string[];
   warnings: string[];
+  /** Grid shape (square when missing); cells outside it are not used. */
+  shape?: ShapeKey;
+  /** Size as a plain square, kept so a shape change can start from it. */
+  baseSize?: number;
+  /** Some words were placed by hand (kept, if they fit, when the shape changes). */
+  manual?: boolean;
 }
 
 /** "free" = click start cell, then any cell toward the end. */

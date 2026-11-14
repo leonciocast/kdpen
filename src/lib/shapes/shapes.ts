@@ -1,0 +1,426 @@
+/**
+ * Puzzle grid shapes. Every shape is a polygon in a unit box; a puzzle of
+ * size N gets a boolean mask of the N×N cells that lie well inside it (with
+ * room for the letter and the outline), cleaned so thin tips and stray cells
+ * disappear. The same polygon is drawn as the outline, so it hugs the cells.
+ * Pure (no DOM): shared by the engine, the PDF renderer, the UI and tests.
+ */
+
+export type ShapeKey =
+  | "square"
+  | "rounded"
+  | "landscape"
+  | "portrait"
+  | "circle"
+  | "oval"
+  | "egg"
+  | "triangle"
+  | "diamond"
+  | "pentagon"
+  | "hexagon"
+  | "octagon"
+  | "heart"
+  | "star"
+  | "cross"
+  | "house"
+  | "tree"
+  | "apple"
+  | "pumpkin"
+  | "cloud";
+
+export type Pt = [number, number];
+
+export interface ShapeInfo {
+  key: ShapeKey;
+  label: string;
+  /** Width / height of the shape. */
+  aspect: number;
+  /** Seasonal / theme hint shown on the card. */
+  tag?: string;
+  group: "basic" | "geometric" | "fun";
+  /** Polygon in a unit box [0,1]×[0,1] (x right, y down), before aspect. */
+  poly: () => Pt[];
+}
+
+const TAU = Math.PI * 2;
+
+function regular(n: number, rot: number): Pt[] {
+  const pts: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = rot + (i * TAU) / n;
+    pts.push([Math.cos(a), Math.sin(a)]);
+  }
+  return pts;
+}
+
+/** Scale points so their bounding box is exactly [0,1]². */
+function normalize(pts: Pt[]): Pt[] {
+  const xs = pts.map((p) => p[0]);
+  const ys = pts.map((p) => p[1]);
+  const x0 = Math.min(...xs);
+  const y0 = Math.min(...ys);
+  const w = Math.max(...xs) - x0 || 1;
+  const h = Math.max(...ys) - y0 || 1;
+  return pts.map(([x, y]) => [(x - x0) / w, (y - y0) / h]);
+}
+
+function curve(n: number, f: (t: number) => Pt): Pt[] {
+  return Array.from({ length: n }, (_, i) => f((i / n) * TAU));
+}
+
+function roundedRect(r: number, n = 10): Pt[] {
+  const pts: Pt[] = [];
+  const corners: [number, number, number][] = [
+    [1 - r, r, -Math.PI / 2],
+    [1 - r, 1 - r, 0],
+    [r, 1 - r, Math.PI / 2],
+    [r, r, Math.PI],
+  ];
+  for (const [cx, cy, a0] of corners) for (let i = 0; i <= n; i++) {
+    const a = a0 + (i / n) * (Math.PI / 2);
+    pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+  }
+  return pts;
+}
+
+/** Outline of a union of circles seen from `c` (the union must be star-shaped from c). */
+function radialUnion(circles: [number, number, number][], c: Pt, n = 120): Pt[] {
+  return curve(n, (t) => {
+    const dx = Math.cos(t);
+    const dy = Math.sin(t);
+    let best = 0;
+    for (const [x, y, r] of circles) {
+      // Farthest intersection of the ray with this circle.
+      const ox = c[0] - x;
+      const oy = c[1] - y;
+      const b = ox * dx + oy * dy;
+      const disc = b * b - (ox * ox + oy * oy - r * r);
+      if (disc >= 0) best = Math.max(best, -b + Math.sqrt(disc));
+    }
+    return [c[0] + dx * best, c[1] + dy * best];
+  });
+}
+
+export const SHAPES: ShapeInfo[] = [
+  { key: "square", label: "Square", aspect: 1, group: "basic", poly: () => [[0, 0], [1, 0], [1, 1], [0, 1]] },
+  { key: "rounded", label: "Rounded square", aspect: 1, group: "basic", poly: () => roundedRect(0.16) },
+  { key: "landscape", label: "Wide rectangle", aspect: 1.38, group: "basic", poly: () => [[0, 0], [1, 0], [1, 1], [0, 1]] },
+  { key: "portrait", label: "Tall rectangle", aspect: 0.76, group: "basic", poly: () => [[0, 0], [1, 0], [1, 1], [0, 1]] },
+  { key: "circle", label: "Circle", aspect: 1, group: "basic", poly: () => normalize(curve(120, (t) => [Math.cos(t), Math.sin(t)])) },
+  { key: "oval", label: "Oval", aspect: 1.32, group: "basic", poly: () => normalize(curve(120, (t) => [Math.cos(t), Math.sin(t)])) },
+  { key: "triangle", label: "Triangle", aspect: 1.12, group: "geometric", poly: () => [[0.5, 0], [1, 1], [0, 1]] },
+  { key: "diamond", label: "Diamond", aspect: 0.9, group: "geometric", poly: () => [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]] },
+  { key: "pentagon", label: "Pentagon", aspect: 1, group: "geometric", poly: () => normalize(regular(5, -Math.PI / 2)) },
+  { key: "hexagon", label: "Hexagon", aspect: 1.12, group: "geometric", poly: () => normalize(regular(6, 0)) },
+  { key: "octagon", label: "Octagon", aspect: 1, group: "geometric", poly: () => normalize(regular(8, Math.PI / 8)) },
+  {
+    key: "star",
+    label: "Star",
+    aspect: 1.05,
+    group: "geometric",
+    // A chubby star (inner radius 0.55) so the points keep room for words.
+    poly: () => normalize(Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 5; const r = i % 2 ? 0.55 : 1; return [Math.cos(a) * r, Math.sin(a) * r] as Pt; })),
+  },
+  { key: "cross", label: "Plus", aspect: 1, group: "geometric", poly: () => [[0.3, 0], [0.7, 0], [0.7, 0.3], [1, 0.3], [1, 0.7], [0.7, 0.7], [0.7, 1], [0.3, 1], [0.3, 0.7], [0, 0.7], [0, 0.3], [0.3, 0.3]] },
+  {
+    key: "heart",
+    label: "Heart",
+    aspect: 1.08,
+    tag: "Valentine's",
+    group: "fun",
+    poly: () => normalize(curve(140, (t) => [16 * Math.sin(t) ** 3, -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t))])),
+  },
+  {
+    key: "egg",
+    label: "Egg",
+    aspect: 0.8,
+    tag: "Easter",
+    group: "fun",
+    poly: () => normalize(curve(120, (t) => [Math.sin(t) * (0.78 - 0.22 * Math.cos(t)), -Math.cos(t)])),
+  },
+  {
+    key: "pumpkin",
+    label: "Pumpkin",
+    aspect: 1.25,
+    tag: "Halloween",
+    group: "fun",
+    poly: () => normalize(radialUnion([[0.5, 0.55, 0.36], [0.3, 0.57, 0.3], [0.7, 0.57, 0.3], [0.5, 0.2, 0.1]], [0.5, 0.55])),
+  },
+  {
+    key: "tree",
+    label: "Christmas tree",
+    aspect: 0.9,
+    tag: "Christmas",
+    group: "fun",
+    poly: () => [[0.5, 0], [0.8, 0.28], [0.66, 0.28], [0.92, 0.56], [0.76, 0.56], [1, 0.84], [0.65, 0.84], [0.65, 1], [0.35, 1], [0.35, 0.84], [0, 0.84], [0.24, 0.56], [0.08, 0.56], [0.34, 0.28], [0.2, 0.28]],
+  },
+  { key: "house", label: "House", aspect: 1, group: "fun", poly: () => [[0.5, 0], [1, 0.42], [0.9, 0.42], [0.9, 1], [0.1, 1], [0.1, 0.42], [0, 0.42]] },
+  {
+    key: "apple",
+    label: "Apple",
+    aspect: 1,
+    tag: "Back to school",
+    group: "fun",
+    poly: () => normalize(curve(140, (t) => { const r = 1 - 0.16 * Math.exp(-((Math.atan2(Math.sin(t + Math.PI / 2), Math.cos(t + Math.PI / 2))) ** 2) / 0.12) - 0.06 * Math.exp(-((Math.atan2(Math.sin(t - Math.PI / 2), Math.cos(t - Math.PI / 2))) ** 2) / 0.1); return [Math.cos(t) * r * 1.04, Math.sin(t) * r]; })),
+  },
+  { key: "cloud", label: "Cloud", aspect: 1.45, group: "fun", poly: () => normalize(radialUnion([[0.5, 0.58, 0.3], [0.27, 0.62, 0.22], [0.73, 0.62, 0.22], [0.38, 0.38, 0.22], [0.63, 0.36, 0.25], [0.5, 0.72, 0.24]], [0.5, 0.56])) },
+];
+
+export const SHAPE_KEYS = SHAPES.map((s) => s.key);
+const BY_KEY = new Map(SHAPES.map((s) => [s.key, s]));
+export const shapeInfo = (k: ShapeKey | undefined) => BY_KEY.get(k ?? "square") ?? SHAPES[0];
+export const isSquare = (k: ShapeKey | undefined) => !k || k === "square";
+
+/** Outline padding around the outer cells, in cells (the old square frame used 0.22). */
+export const OUTLINE_PAD = 0.22;
+/** A cell is used when its centre is at least this far (in cells) inside the outline. */
+const INSET = 0.5 + OUTLINE_PAD;
+
+// ---------------------------------------------------------------- geometry
+
+function inside(pts: Pt[], x: number, y: number): boolean {
+  let hit = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i];
+    const [xj, yj] = pts[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+
+function edgeDistance(pts: Pt[], x: number, y: number): number {
+  let best = Infinity;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [ax, ay] = pts[j];
+    const [bx, by] = pts[i];
+    const dx = bx - ax;
+    const dy = by - ay;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+    best = Math.min(best, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
+  }
+  return best;
+}
+
+/** The shape's outline in cell units for an N×N puzzle (the box around all N×N cells + padding). */
+export function shapeOutline(key: ShapeKey | undefined, size: number): Pt[] {
+  const info = shapeInfo(key);
+  const box = size + 2 * OUTLINE_PAD;
+  const w = info.aspect >= 1 ? box : box * info.aspect;
+  const h = info.aspect >= 1 ? box / info.aspect : box;
+  const x0 = -OUTLINE_PAD + (box - w) / 2;
+  const y0 = -OUTLINE_PAD + (box - h) / 2;
+  return info.poly().map(([x, y]) => [x0 + x * w, y0 + y * h]);
+}
+
+export type Mask = boolean[][];
+
+/** Remove cells that can't hold words (slivers under 3 cells wide) and keep the biggest connected piece. */
+function clean(m: Mask): Mask {
+  const n = m.length;
+  const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++) {
+        if (!m[r][c]) continue;
+        const k = +on(r - 1, c) + +on(r + 1, c) + +on(r, c - 1) + +on(r, c + 1);
+        if (k < 2) {
+          m[r][c] = false;
+          changed = true;
+        }
+      }
+  }
+  // Opening with a 3×3 block: keep only cells that belong to a fully used 3×3 square,
+  // so thin tails (heart tip, star points) never become 1–2 cell slivers.
+  if (n >= 6) {
+    const keep = m.map((row) => row.map(() => false));
+    for (let r = 0; r + 2 < n; r++)
+      for (let c = 0; c + 2 < n; c++) {
+        let full = true;
+        for (let a = 0; a < 3 && full; a++) for (let b = 0; b < 3 && full; b++) if (!m[r + a][c + b]) full = false;
+        if (full) for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) keep[r + a][c + b] = true;
+      }
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) m[r][c] = keep[r][c];
+  }
+  const seen = m.map((row) => row.map(() => false));
+  let best: [number, number][] = [];
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) {
+      if (!m[r][c] || seen[r][c]) continue;
+      const comp: [number, number][] = [];
+      const stack: [number, number][] = [[r, c]];
+      seen[r][c] = true;
+      while (stack.length) {
+        const [a, b] = stack.pop()!;
+        comp.push([a, b]);
+        for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const y = a + dr;
+          const x = b + dc;
+          if (on(y, x) && !seen[y][x]) {
+            seen[y][x] = true;
+            stack.push([y, x]);
+          }
+        }
+      }
+      if (comp.length > best.length) best = comp;
+    }
+  const out: Mask = m.map((row) => row.map(() => false));
+  for (const [r, c] of best) out[r][c] = true;
+  return out;
+}
+
+const cache = new Map<string, Mask>();
+
+/** Which cells of an N×N grid a shape uses (null = all, i.e. a plain square). */
+export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null {
+  if (isSquare(key)) return null;
+  const id = `${key}:${size}`;
+  const hit = cache.get(id);
+  if (hit) return hit;
+  const pts = shapeOutline(key, size);
+  const m: Mask = Array.from({ length: size }, (_, r) => Array.from({ length: size }, (_, c) => inside(pts, c + 0.5, r + 0.5) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6));
+  const out = clean(m);
+  cache.set(id, out);
+  return out;
+}
+
+export function maskCells(mask: Mask | null, size: number): number {
+  if (!mask) return size * size;
+  return mask.reduce((a, row) => a + row.filter(Boolean).length, 0);
+}
+
+/** Share of the N×N cells a shape uses. */
+export function fillRatio(key: ShapeKey | undefined, size: number): number {
+  return maskCells(shapeMask(key, size), size) / (size * size);
+}
+
+/** Rows/cols actually used: [r0, c0, r1, c1] inclusive. */
+export function maskBox(mask: Mask | null, size: number): [number, number, number, number] {
+  if (!mask) return [0, 0, size - 1, size - 1];
+  let r0 = size, c0 = size, r1 = -1, c1 = -1;
+  for (let r = 0; r < size; r++)
+    for (let c = 0; c < size; c++)
+      if (mask[r][c]) {
+        r0 = Math.min(r0, r);
+        r1 = Math.max(r1, r);
+        c0 = Math.min(c0, c);
+        c1 = Math.max(c1, c);
+      }
+  return r1 < 0 ? [0, 0, size - 1, size - 1] : [r0, c0, r1, c1];
+}
+
+/** Longest straight run of used cells in any of the 8 directions (a word longer than this can't fit). */
+export function longestRun(mask: Mask | null, size: number): number {
+  if (!mask) return size;
+  let best = 0;
+  for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    for (let r = 0; r < size; r++)
+      for (let c = 0; c < size; c++) {
+        if (!mask[r][c]) continue;
+        const pr = r - dr;
+        const pc = c - dc;
+        if (pr >= 0 && pc >= 0 && pc < size && mask[pr][pc]) continue;
+        let k = 0;
+        while (r + dr * k < size && c + dc * k >= 0 && c + dc * k < size && mask[r + dr * k][c + dc * k]) k++;
+        best = Math.max(best, k);
+      }
+  }
+  return best;
+}
+
+/** Chaikin corner rounding for polygon outlines ("rounded corners" frame). */
+export function roundCorners(pts: Pt[], iterations = 2): Pt[] {
+  if (pts.length > 40) return pts; // already a smooth curve
+  let p = pts;
+  for (let k = 0; k < iterations; k++) {
+    const out: Pt[] = [];
+    for (let i = 0; i < p.length; i++) {
+      const a = p[i];
+      const b = p[(i + 1) % p.length];
+      out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+    }
+    p = out;
+  }
+  return p;
+}
+
+// ---------------------------------------------------------------- per-tool availability & mixing
+
+/**
+ * Shapes that make good crosswords. Measured over 12 word sets (12–20 words):
+ * these place as many words as a plain square (99%); triangle, diamond, star,
+ * tree, pentagon and tall rectangle lost words, so they are not offered.
+ */
+export const CROSSWORD_SHAPES: ShapeKey[] = ["square", "rounded", "landscape", "circle", "oval", "octagon", "hexagon", "heart", "egg", "apple", "pumpkin", "house", "cloud"];
+
+/** Shapes used when "mix shapes" is on, in this order. */
+export const MIX_SET: ShapeKey[] = ["circle", "heart", "star", "hexagon", "diamond", "cloud", "octagon", "egg", "apple", "rounded"];
+
+export type ShapeMix = "one" | "each" | "theme";
+
+/** The shape of puzzle `index` (theme order index `themeIndex`) for a design's shape choice. */
+export function shapeFor(choice: { kind: ShapeKey; mix: ShapeMix }, index: number, themeIndex = 0, allowed?: ShapeKey[]): ShapeKey {
+  const set = allowed ? MIX_SET.filter((s) => allowed.includes(s)) : MIX_SET;
+  if (choice.mix === "each") return set[index % set.length];
+  if (choice.mix === "theme") return set[themeIndex % set.length];
+  return allowed && !allowed.includes(choice.kind) ? "square" : choice.kind;
+}
+
+// ---------------------------------------------------------------- sizing
+
+/** The grid argument for the engine: a plain size for squares, size + mask for shapes. */
+export function shapedGrid(size: number, shape: ShapeKey | undefined): number | { size: number; mask: Mask | null } {
+  return isSquare(shape) ? size : { size, mask: shapeMask(shape, size) };
+}
+
+/**
+ * Starting canvas for a shape that should hold about as many cells as a
+ * `base`×`base` square, and a straight line long enough for `longest`.
+ */
+export function shapeStartSize(shape: ShapeKey | undefined, base: number, longest: number, max: number): number {
+  if (isSquare(shape)) return base;
+  let n = Math.max(base, longest);
+  while (n < max) {
+    const m = shapeMask(shape, n);
+    if (maskCells(m, n) >= base * base * 0.97 && longestRun(m, n) >= longest + 1) break;
+    n++;
+  }
+  return n;
+}
+
+// ---------------------------------------------------------------- sudoku frames
+
+/** A sudoku is always a 9×9 square; these shapes are drawn as a frame around it. */
+export const SUDOKU_SHAPES: ShapeKey[] = ["square", "rounded", "circle", "octagon", "hexagon"];
+
+/**
+ * Frame outline (cell units, grid at 0..n) for a sudoku: the shape scaled
+ * just enough that all four grid corners sit inside it with a small margin.
+ */
+export function sudokuFrame(key: ShapeKey | undefined, n = 9): Pt[] {
+  const margin = 0.35;
+  const info = shapeInfo(key);
+  if (isSquare(key) || key === "rounded") return [[-margin, -margin], [n + margin, -margin], [n + margin, n + margin], [-margin, n + margin]];
+  const unit = info.poly();
+  const corners: Pt[] = [[-margin, -margin], [n + margin, -margin], [n + margin, n + margin], [-margin, n + margin]];
+  const at = (s: number): Pt[] => {
+    const w = s * Math.max(1, info.aspect);
+    const h = s / Math.min(1, info.aspect);
+    return unit.map(([x, y]) => [n / 2 + (x - 0.5) * w, n / 2 + (y - 0.5) * h]);
+  };
+  let lo = n, hi = n * 3;
+  for (let k = 0; k < 30; k++) {
+    const mid = (lo + hi) / 2;
+    const pts = at(mid);
+    if (corners.every(([x, y]) => inside(pts, x, y))) hi = mid;
+    else lo = mid;
+  }
+  return at(hi);
+}
+
+/** Shape of every puzzle in a book for a design's shape choice (one shape, or mixed per puzzle / per theme). */
+export function shapeTargetsFor(choice: { kind: ShapeKey; mix: ShapeMix }, list: { theme?: string }[], allowed?: ShapeKey[]): ShapeKey[] {
+  const themes = Array.from(new Set(list.map((p) => p.theme ?? "")));
+  return list.map((p, i) => shapeFor(choice, i, themes.indexOf(p.theme ?? ""), allowed));
+}

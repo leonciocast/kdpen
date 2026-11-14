@@ -36,7 +36,7 @@ export default function StepReview({ puzzles, active, setActive, updateActive, s
           </div>
           {puzzle.grid ? (
             <div className="pg-grid-wrap">
-              <PuzzleGrid id="review-grid" size={puzzle.size} letters={puzzle.grid} placements={puzzle.placements} colors={colorsFor(puzzle)} solution={solution} />
+              <PuzzleGrid id="review-grid" size={puzzle.size} shape={puzzle.shape} letters={puzzle.grid} placements={puzzle.placements} colors={colorsFor(puzzle)} solution={solution} />
             </div>
           ) : (
             <Callout tone="warn">

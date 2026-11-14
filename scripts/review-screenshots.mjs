@@ -77,6 +77,8 @@ for (const id of ["kids", "elegant", "largeprint"]) {
   await shot(page, `07_ws_design_${id}`);
 }
 await page.click('[data-testid="template-banner"]');
+await next(); // -> shape
+await next(); // -> frame
 await next(); // -> happy with it?
 await page.click('[data-testid="design-customize"]');
 await page.click('[data-testid="customize"] summary:has-text("Word list")');
@@ -140,6 +142,8 @@ await shot(page, "14_ws10k_placed", false);
 await next(); // -> review
 await next(); // -> design
 await waitPreview();
+await next(); // -> shape
+await next(); // -> frame
 await next(); // -> happy?
 await page.click('[data-testid="design-keep"]'); // -> export
 await next();
@@ -180,6 +184,8 @@ await shot(page, "17_cw_review", false);
 await next();
 await waitPreview();
 await shot(page, "18_cw_design");
+await next(); // -> shape
+await next(); // -> frame
 await next();
 await page.click('[data-testid="design-keep"]');
 await next();
@@ -203,6 +209,8 @@ await next();
 await page.click('[data-testid="template-modern"]');
 await waitPreview();
 await shot(page, "20_sd_design");
+await next(); // -> shape
+await next(); // -> frame
 await next();
 await page.click('[data-testid="design-keep"]');
 await page.selectOption('[data-testid="per-page"]', "4");

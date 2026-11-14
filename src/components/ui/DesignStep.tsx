@@ -14,6 +14,7 @@ import InfoTip from "./InfoTip";
 import PdfPreview from "./PdfPreview";
 import { downloadText } from "./CsvDrop";
 import type { DesignApi } from "./useDesign";
+import { FramePicker, ShapePicker, frameIdOf, shapeLabel, shapesFor } from "./ShapePicker";
 
 const LABELS: Record<string, string> = {
   rule: "Thin rule", banner: "Bold banner", ribbon: "Ribbon", underline: "Underlined", boxed: "Boxed", tab: "Tab", minimal: "Minimal",
@@ -24,6 +25,8 @@ const LABELS: Record<string, string> = {
   rows: "Alternate rows", checker: "Checkerboard",
   plain: "7", dashes: "– 7 –", pill: "Pill",
   entered: "As entered", alpha: "A → Z", length: "Short → long",
+  solid: "Solid", dashed: "Dashed", dotted: "Dotted",
+  circles: "Circles",
 };
 
 type PreviewTab = { id: string; label: string; find: (kinds: PageKind[]) => number };
@@ -37,12 +40,12 @@ const TABS: PreviewTab[] = [
   { id: "thanks", label: "Thank you", find: (k) => k.indexOf("thanks") },
 ];
 
-function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: readonly T[]; onChange: (v: T) => void; label: string }) {
+function Seg<T extends string>({ value, options, onChange, label, labels }: { value: T; options: readonly T[]; onChange: (v: T) => void; label: string; labels?: Record<string, string> }) {
   return (
     <div className="pg-seg" role="radiogroup" aria-label={label}>
       {options.map((o) => (
         <button key={o} type="button" role="radio" aria-checked={value === o} className={value === o ? "active" : ""} onClick={() => onChange(o)}>
-          {LABELS[o] ?? o}
+          {labels?.[o] ?? LABELS[o] ?? o}
         </button>
       ))}
     </div>
@@ -68,10 +71,20 @@ interface Props {
   buildSample: (design: Design, fonts: FontData) => RenderedBook;
   /** "word list" / "clue list"; omit when the puzzle has no list (sudoku). */
   listName?: string;
+  /** Status of re-fitting the user's puzzles into the chosen shape (word search / crossword). */
+  shapeStatus?: React.ReactNode;
+  /** Puzzles are being re-shaped: hold the user on this step until it is done. */
+  busy?: boolean;
   flow: FlowCtl;
 }
 
-export default function DesignStep({ tool, api, buildSample, listName, flow }: Props) {
+const SHAPE_LEAD: Record<ToolKind, string> = {
+  "word-search": "The letters fill the shape you pick, and every word stays inside it. Grids grow a little when a shape needs more room, so no word is ever dropped.",
+  crossword: "The crossword is built inside the shape: every word stays within its outline. Only shapes that still give well-connected crosswords are offered.",
+  sudoku: "A sudoku must stay a 9×9 square to be solvable, so the shape is a decorative frame around the grid. You can also round or circle the cells in the next step.",
+};
+
+export default function DesignStep({ tool, api, buildSample, listName, shapeStatus, busy, flow }: Props) {
   const [customizing, setCustomizingState] = useState(() => flow.sub === "customize" || !!customizingByTool.get(tool));
   const setCustomizing = (v: boolean) => {
     customizingByTool.set(tool, v);
@@ -179,7 +192,7 @@ export default function DesignStep({ tool, api, buildSample, listName, flow }: P
                 role="radio"
                 aria-checked={design.template === t.id}
                 className={`pg-template-card ${design.template === t.id ? "active" : ""}`}
-                onClick={() => setDesign({ ...templateDesign(t.id), header: { ...templateDesign(t.id).header, text: design.header.text } })}
+                onClick={() => setDesign({ ...templateDesign(t.id), header: { ...templateDesign(t.id).header, text: design.header.text }, shape: design.shape })}
                 data-testid={`template-${t.id}`}
               >
                 <strong>
@@ -191,6 +204,76 @@ export default function DesignStep({ tool, api, buildSample, listName, flow }: P
             ))}
           </div>
 
+        </div>
+        <div className="col-lg-5">{preview}</div>
+      </div>
+    ),
+  };
+
+  const allowed = shapesFor(tool);
+  const shapeName = design.shape.mix !== "one" && tool !== "sudoku" ? "Mixed shapes" : shapeLabel(allowed.includes(design.shape.kind) ? design.shape.kind : "square");
+  const pickShape: Question = {
+    key: "shape",
+    wide: true,
+    title: tool === "sudoku" ? "Pick a frame shape" : "Pick a shape",
+    lead: SHAPE_LEAD[tool],
+    hint: busy ? "Fitting your puzzles into the shape…" : `Shape: ${shapeName}`,
+    canNext: !busy,
+    blockedHint: "Fitting your puzzles into the shape…",
+    body: (
+      <div className="row g-4">
+        <div className="col-lg-7">
+          <ShapePicker tool={tool} design={design} onChange={(kind, mix) => set((d) => (d.shape = { kind, mix }))} />
+          {shapeStatus && <div className="pg-shape-status small" aria-live="polite">{shapeStatus}</div>}
+        </div>
+        <div className="col-lg-5">{preview}</div>
+      </div>
+    ),
+  };
+
+  const cellChoices = tool === "sudoku" ? (["plain", "rounded", "circles"] as const) : (["plain", "boxed", "rounded", "circles"] as const);
+  const frameExtras = (
+    <div className="d-grid gap-3 mt-3" data-testid="frame-extras">
+      {tool !== "crossword" && (
+        <div>
+          <div className="form-label small mb-1">{tool === "sudoku" ? "Number cells" : "Letter cells"}</div>
+          <div className="pg-seg" role="radiogroup" aria-label="Cell style">
+            {cellChoices.map((o) => (
+              <button key={o} type="button" role="radio" aria-checked={design.grid.cells === o} className={design.grid.cells === o ? "active" : ""} onClick={() => set((d) => (d.grid.cells = o))} data-testid={`cells-${o}`}>
+                {o === "plain" ? (tool === "sudoku" ? "Square" : "Plain") : o === "boxed" ? "Boxed" : o === "rounded" ? "Rounded boxes" : "Circles"}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {tool === "word-search" && (
+        <div className="form-check form-switch">
+          <input className="form-check-input" type="checkbox" id="ds-lines2" checked={design.grid.lines} onChange={(e) => set((d) => (d.grid.lines = e.target.checked))} data-testid="inner-lines" />
+          <label className="form-check-label" htmlFor="ds-lines2">
+            Thin lines between the letters
+          </label>
+        </div>
+      )}
+      {listName && (
+        <div>
+          <div className="form-label small mb-1">Box around the {listName}</div>
+          <Seg label={`Box around the ${listName}`} value={design.list.box} options={DESIGN_OPTIONS.LIST_BOXES} onChange={(v) => set((d) => (d.list.box = v))} />
+        </div>
+      )}
+    </div>
+  );
+
+  const pickFrame: Question = {
+    key: "frame",
+    wide: true,
+    title: "Pick a frame",
+    lead: "How the outline around the grid is drawn. All frames are crisp vector lines that print well in black & white.",
+    hint: `Frame: ${frameIdOf(design.grid) ?? "custom"}`,
+    body: (
+      <div className="row g-4">
+        <div className="col-lg-7">
+          <FramePicker tool={tool} design={design} onChange={(g) => set((d) => (d.grid = g))} />
+          {frameExtras}
         </div>
         <div className="col-lg-5">{preview}</div>
       </div>
@@ -308,6 +391,11 @@ export default function DesignStep({ tool, api, buildSample, listName, flow }: P
             </div>
           </Section>
 
+          <Section title={tool === "sudoku" ? "Frame shape" : "Shape"}>
+            <ShapePicker tool={tool} design={design} compact onChange={(kind, mix) => set((d) => (d.shape = { kind, mix }))} />
+            {shapeStatus && <div className="pg-shape-status small">{shapeStatus}</div>}
+          </Section>
+
           <Section title="Grid style">
             <div className="d-grid gap-2">
               <div className="form-check form-switch">
@@ -324,6 +412,22 @@ export default function DesignStep({ tool, api, buildSample, listName, flow }: P
                 <div className="form-label small mb-1">Shading</div>
                 <Seg label="Shading" value={design.grid.shade} options={DESIGN_OPTIONS.SHADES} onChange={(v) => set((d) => (d.grid.shade = v))} />
               </div>
+              <div>
+                <div className="form-label small mb-1">Outline line</div>
+                <Seg label="Outline line" value={design.grid.line} options={DESIGN_OPTIONS.LINES} onChange={(v) => set((d) => (d.grid.line = v))} />
+              </div>
+              <div className="form-check form-switch">
+                <input className="form-check-input" type="checkbox" id="ds-shadow" checked={design.grid.shadow} onChange={(e) => set((d) => (d.grid.shadow = e.target.checked))} />
+                <label className="form-check-label" htmlFor="ds-shadow">
+                  Shadow behind the outline
+                </label>
+              </div>
+              {tool !== "crossword" && (
+                <div>
+                  <div className="form-label small mb-1">Cells</div>
+                  <Seg label="Cells" value={design.grid.cells} options={tool === "sudoku" ? (["plain", "rounded", "circles"] as const) : DESIGN_OPTIONS.CELLS} labels={{ plain: tool === "sudoku" ? "Square" : "Plain", boxed: "Boxed", rounded: "Rounded boxes", circles: "Circles" }} onChange={(v) => set((d) => (d.grid.cells = v))} />
+                </div>
+              )}
               <div>
                 <label className="form-label small" htmlFor="ds-frame">
                   Frame thickness: {design.grid.frame.toFixed(1)} pt
@@ -378,6 +482,10 @@ export default function DesignStep({ tool, api, buildSample, listName, flow }: P
                   <label className="form-check-label" htmlFor="ds-check">
                     Checkbox ☐ before each {tool === "crossword" ? "clue" : "word"}
                   </label>
+                </div>
+                <div>
+                  <div className="form-label small mb-1">Box around the list</div>
+                  <Seg label="Box around the list" value={design.list.box} options={DESIGN_OPTIONS.LIST_BOXES} onChange={(v) => set((d) => (d.list.box = v))} />
                 </div>
                 {tool !== "crossword" && (
                   <div>
@@ -456,5 +564,5 @@ export default function DesignStep({ tool, api, buildSample, listName, flow }: P
     ),
   };
 
-  return <QuestionFlow flow={flow} questions={customizing ? [pickTemplate, tune, customize] : [pickTemplate, tune]} />;
+  return <QuestionFlow flow={flow} questions={customizing ? [pickTemplate, pickShape, pickFrame, tune, customize] : [pickTemplate, pickShape, pickFrame, tune]} />;
 }

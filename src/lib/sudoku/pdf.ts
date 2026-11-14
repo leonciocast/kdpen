@@ -6,7 +6,8 @@ import { FrontMatter } from "../print/frontMatter";
 import { TrimKey } from "../print/kdp";
 import { FontData } from "../print/fonts";
 import { BookContent, BookExtras, PageContext, PageRenderer, RenderedBook, SANS, Section, heading, paragraph, renderBook } from "../print/book";
-import { Box, Look, drawFrame, panel, paint } from "../design/paint";
+import { Box, Look, drawFrame, drawFrameShadow, drawOutline, drawOutlineBacking, panel, paint } from "../design/paint";
+import { SUDOKU_SHAPES, sudokuFrame } from "../shapes/shapes";
 import { tint } from "../design/color";
 import { DEFAULT_DESIGN } from "../design/templates";
 import { Design, TOOL_HEADER } from "../design/types";
@@ -37,9 +38,34 @@ export interface SudokuHighlight {
   box?: number;
 }
 
-export function drawSudokuGrid(pdf: jsPDF, look: Look, p: SudokuPuzzle, x: number, y: number, size: number, answers: boolean, hl?: SudokuHighlight) {
+/**
+ * Sudoku in the area (x, y, size×size). A 9×9 sudoku can't change shape, so a
+ * circle / octagon / hexagon is drawn as a frame around it (the grid shrinks
+ * to fit inside); "rounded" rounds the grid's corners.
+ */
+export function drawSudokuGrid(pdf: jsPDF, look: Look, p: SudokuPuzzle, x0: number, y0: number, area: number, answers: boolean, hl?: SudokuHighlight) {
+  const kind = SUDOKU_SHAPES.includes(look.design.shape.kind) ? look.design.shape.kind : "square";
+  const framed = kind !== "square" && kind !== "rounded";
+  let x = x0;
+  let y = y0;
+  let size = area;
+  let outline: [number, number][] | null = null;
+  if (framed) {
+    const pts = sudokuFrame(kind, 9);
+    const xs = pts.map((q) => q[0]);
+    const ys = pts.map((q) => q[1]);
+    const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) + 0.2;
+    const cellF = area / ext;
+    size = cellF * 9;
+    x = x0 + (area - size) / 2;
+    y = y0 + (area - size) / 2;
+    outline = pts.map(([px, py]) => [x + px * cellF, y + py * cellF]);
+  }
   const cell = size / 9;
-  const g = look.design.grid;
+  const g0 = look.design.grid;
+  const g = kind === "rounded" ? { ...g0, border: "rounded" as const } : g0;
+  if (outline) drawOutlineBacking(pdf, outline, look, cell);
+  else drawFrameShadow(pdf, { x, y, w: size, h: size }, { ...look, design: { ...look.design, grid: g } }, cell);
   const shade = look.design.color.grayscale ? ([236, 236, 236] as [number, number, number]) : tint(look.accent, 0.88);
   paint.fill(pdf, [255, 255, 255]);
   pdf.rect(x, y, size, size, "F");
@@ -52,15 +78,36 @@ export function drawSudokuGrid(pdf: jsPDF, look: Look, p: SudokuPuzzle, x: numbe
     }
   paint.stroke(pdf, [0, 0, 0]);
   const thick = Math.max(1, Math.min(3, g.frame || 1.2) * Math.min(1, size / 300) + 0.4);
+  const cellStyle = g.cells === "rounded" || g.cells === "circles" ? g.cells : "plain";
   for (let i = 1; i < 9; i++) {
+    if (cellStyle !== "plain" && i % 3 !== 0) continue;
     pdf.setLineWidth(i % 3 === 0 ? thick : Math.max(0.35, size * 0.0016));
     if (i % 3 !== 0) paint.stroke(pdf, [110, 110, 110]);
     else paint.stroke(pdf, [0, 0, 0]);
     pdf.line(x + i * cell, y, x + i * cell, y + size);
     pdf.line(x, y + i * cell, x + size, y + i * cell);
   }
-  const frameLook: Look = { ...look, design: { ...look.design, grid: { ...g, border: g.border === "none" ? "square" : g.border, frame: Math.max(thick, g.frame) } } };
-  drawFrame(pdf, { x, y, w: size, h: size }, frameLook, cell);
+  if (cellStyle !== "plain") {
+    // Each cell drawn as its own rounded box or circle; the 3×3 boxes keep their bold lines.
+    paint.stroke(pdf, [120, 120, 120]);
+    pdf.setLineWidth(Math.max(0.35, size * 0.0016));
+    const ins = cell * 0.1;
+    for (let r = 0; r < 9; r++)
+      for (let c = 0; c < 9; c++) {
+        if (cellStyle === "circles") pdf.circle(x + (c + 0.5) * cell, y + (r + 0.5) * cell, cell / 2 - ins, "S");
+        else pdf.roundedRect(x + c * cell + ins, y + r * cell + ins, cell - ins * 2, cell - ins * 2, cell * 0.2, cell * 0.2, "S");
+      }
+  }
+  if (outline) {
+    // The 9×9 square keeps a solid edge so the puzzle stays easy to read; the shape is the decorative frame.
+    paint.stroke(pdf, [0, 0, 0]);
+    pdf.setLineWidth(thick);
+    pdf.rect(x, y, size, size, "S");
+    drawOutline(pdf, outline, { ...look, design: { ...look.design, grid: { ...g, border: g.border === "none" ? "square" : g.border, frame: Math.max(1, g.frame) } } }, cell);
+  } else {
+    const frameLook: Look = { ...look, design: { ...look.design, grid: { ...g, border: g.border === "none" ? "square" : g.border, frame: Math.max(thick, g.frame) } } };
+    drawFrame(pdf, { x, y, w: size, h: size }, frameLook, cell);
+  }
   const gf = look.font(look.design.fonts.grid);
   const fs = Math.min(cell * 0.6 * look.design.fonts.gridScale, cell * 0.8);
   pdf.setFontSize(fs);

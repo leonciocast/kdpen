@@ -22,6 +22,7 @@ import {
   placementEnd,
   randomSeed,
 } from "@/lib/wordsearch/engine";
+import { shapedGrid } from "@/lib/shapes/shapes";
 import { Resolution, resolveFixed, resolveFreeEnd, validDirectionsFrom, validStartCells } from "@/lib/wordsearch/snap";
 import { DIR_ARROWS, DIR_NAMES, DirMode, PuzzleModel, colorsFor } from "./model";
 
@@ -43,6 +44,8 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
   const placed = useMemo(() => new Set(puzzle.placements.map((p) => p.word)), [puzzle.placements]);
   const remaining = puzzle.words.filter((w) => !placed.has(w));
   const filled = puzzle.grid !== null;
+  /** The grid as the engine sees it: size plus the shape's mask. Every check below respects the shape. */
+  const ga = useMemo(() => shapedGrid(puzzle.size, puzzle.shape), [puzzle.size, puzzle.shape]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,8 +65,8 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
   /** What a click/hover on `cell` would do. Every placement returned lies fully inside the grid. */
   const resolveAt = (cell: Cell): Resolution | null => {
     if (!word || filled) return null;
-    if (dirMode !== "free") return resolveFixed(puzzle.size, puzzle.placements, word, dirMode, cell);
-    if (pendingStart) return resolveFreeEnd(puzzle.size, puzzle.placements, word, pendingStart, cell);
+    if (dirMode !== "free") return resolveFixed(ga, puzzle.placements, word, dirMode, cell);
+    if (pendingStart) return resolveFreeEnd(ga, puzzle.placements, word, pendingStart, cell);
     return null;
   };
 
@@ -73,26 +76,28 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
     const starts = new Set<string>();
     const blocked = new Set<string>();
     const size = puzzle.size;
+    const mask = typeof ga === "number" ? null : ga.mask;
+    const out = (r: number, c: number) => !!mask && !mask[r][c];
     if (dirMode !== "free") {
-      validStartCells(size, puzzle.placements, word, dirMode).forEach((k) => starts.add(k));
+      validStartCells(ga, puzzle.placements, word, dirMode).forEach((k) => starts.add(k));
       for (let r = 0; r < size; r++)
-        for (let c = 0; c < size; c++) if (resolveFixed(size, puzzle.placements, word, dirMode, [r, c]).kind !== "place") blocked.add(`${r},${c}`);
+        for (let c = 0; c < size; c++) if (!out(r, c) && resolveFixed(ga, puzzle.placements, word, dirMode, [r, c]).kind !== "place") blocked.add(`${r},${c}`);
     } else if (!pendingStart) {
       for (let r = 0; r < size; r++)
-        for (let c = 0; c < size; c++) (validDirectionsFrom(size, puzzle.placements, word, [r, c]).length ? starts : blocked).add(`${r},${c}`);
+        for (let c = 0; c < size; c++) if (!out(r, c)) (validDirectionsFrom(ga, puzzle.placements, word, [r, c]).length ? starts : blocked).add(`${r},${c}`);
     } else {
-      validDirectionsFrom(size, puzzle.placements, word, pendingStart).forEach((d) => {
+      validDirectionsFrom(ga, puzzle.placements, word, pendingStart).forEach((d) => {
         const end = placementEnd(makePlacement(word, pendingStart[0], pendingStart[1], d));
         starts.add(`${end[0]},${end[1]}`);
       });
       for (let r = 0; r < size; r++)
         for (let c = 0; c < size; c++) {
-          if (r === pendingStart[0] && c === pendingStart[1]) continue;
-          if (resolveFreeEnd(size, puzzle.placements, word, pendingStart, [r, c]).kind !== "place") blocked.add(`${r},${c}`);
+          if ((r === pendingStart[0] && c === pendingStart[1]) || out(r, c)) continue;
+          if (resolveFreeEnd(ga, puzzle.placements, word, pendingStart, [r, c]).kind !== "place") blocked.add(`${r},${c}`);
         }
     }
     return { starts, blocked };
-  }, [word, filled, dirMode, pendingStart, puzzle.size, puzzle.placements]);
+  }, [word, filled, dirMode, pendingStart, puzzle.size, puzzle.placements, ga]);
 
   const preview = useMemo(() => {
     if (!hover || !word || filled) return null;
@@ -107,18 +112,18 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
       cells: placementCells(res.placement),
       valid: res.kind === "place",
       cand: res.placement,
-      message: res.kind === "conflict" ? res.message : res.snapped ? `Moved so all of “${word}” stays inside the grid. Click to place it here.` : undefined,
+      message: res.kind === "conflict" ? res.message : res.snapped ? `Moved so all of “${word}” stays inside the ${puzzle.shape && puzzle.shape !== "square" ? "shape" : "grid"}. Click to place it here.` : undefined,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hover, word, filled, dirMode, pendingStart, puzzle, cellStates]);
 
   const place = (cand: Placement) => {
-    const check = checkPlacement(puzzle.size, puzzle.placements, cand);
+    const check = checkPlacement(ga, puzzle.placements, cand);
     if (!check.ok) {
       toast.error(check.message ?? "That spot doesn't work.");
       return;
     }
-    update((p) => ({ ...p, placements: [...p.placements, cand], grid: null, unplaced: p.unplaced.filter((w) => w !== cand.word) }));
+    update((p) => ({ ...p, manual: true, placements: [...p.placements, cand], grid: null, unplaced: p.unplaced.filter((w) => w !== cand.word) }));
     setSelected(puzzle.words.find((w) => w !== cand.word && !placed.has(w)) ?? null);
     setPendingStart(null);
     setHover(null);
@@ -158,7 +163,7 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
 
   const autoRest = () => {
     if (!autoDirs.length) return toast.error("Choose at least one direction in step 2 first.");
-    const res = autoPlace(puzzle.size, puzzle.placements, remaining, autoDirs, mulberry32(randomSeed()));
+    const res = autoPlace(ga, puzzle.placements, remaining, autoDirs, mulberry32(randomSeed()));
     update((p) => ({ ...p, placements: [...p.placements, ...res.placements], unplaced: res.unplaced, grid: null }));
     setSelected(null);
     if (res.unplaced.length) toast.warning(`Couldn't fit: ${res.unplaced.join(", ")}. Try moving a word, a bigger grid, or more directions.`, { autoClose: 7000 });
@@ -167,7 +172,7 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
 
   const fill = () => {
     if (!puzzle.placements.length) return toast.error("Place at least one word first.");
-    const res = fillGrid(puzzle.size, puzzle.placements, mulberry32(randomSeed()));
+    const res = fillGrid(ga, puzzle.placements, mulberry32(randomSeed()));
     update((p) => ({ ...p, grid: res.grid, unplaced: remaining, warnings: [...containedWordWarnings(p.placements.map((x) => x.word)), ...res.warnings] }));
     setSelected(null);
     if (remaining.length) toast.warning(`Left out of this puzzle: ${remaining.join(", ")}.`, { autoClose: 6000 });
@@ -175,7 +180,7 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
   };
 
   // Letters to draw: placed words + ghost preview of the word being placed.
-  let letters: LetterGrid = puzzle.grid ? puzzle.grid.map((r) => r.slice()) : buildLetterGrid(puzzle.size, puzzle.placements);
+  let letters: LetterGrid = puzzle.grid ? puzzle.grid.map((r) => r.slice()) : buildLetterGrid(ga, puzzle.placements);
   if (!filled && preview?.cand) {
     letters = letters.map((r) => r.slice());
     placementCells(preview.cand).forEach(([r, c], i) => {
@@ -207,6 +212,7 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
           <PuzzleGrid
             id="active-grid"
             size={puzzle.size}
+            shape={puzzle.shape}
             letters={letters}
             placements={puzzle.placements}
             colors={colorsFor(puzzle)}
@@ -286,7 +292,7 @@ export default function Editor({ puzzle, update, autoDirs }: Props) {
                   </div>
                 </div>
                 <div className="form-label mb-1">3. Click the grid</div>
-                <div className="small text-muted mb-3">Shaded squares are where the word can start. Near an edge the word slides back so it always stays inside the grid. Red means a letter clashes; words may share matching letters.</div>
+                <div className="small text-muted mb-3">Shaded squares are where the word can start. Near an edge the word slides back so it always stays inside the grid (and inside the shape). Red means a letter clashes; words may share matching letters.</div>
               </>
             ) : selected ? (
               <div className="d-flex gap-2 mb-3">

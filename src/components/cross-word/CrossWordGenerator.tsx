@@ -24,6 +24,7 @@ import { mulberry32, randomSeed } from "@/lib/wordsearch/engine";
 import { JobCancelled, startJob } from "@/lib/jobs/client";
 import type { Progress } from "@/lib/jobs/types";
 import { LIMITS } from "@/lib/limits";
+import { CROSSWORD_SHAPES, ShapeKey, shapeInfo, shapeTargetsFor } from "@/lib/shapes/shapes";
 import { DEFAULT_EXTRAS } from "@/lib/print/book";
 import { DEFAULT_FRONT_MATTER } from "@/lib/print/frontMatter";
 import type { Design } from "@/lib/design/types";
@@ -56,13 +57,29 @@ interface CwPuzzle {
 const esc = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
 const SHOW = 200;
 
-let sampleCache: CrosswordItem[] | null = null;
-function sampleItems(): CrosswordItem[] {
-  if (!sampleCache) {
+const sampleCache = new Map<string, CrosswordItem>();
+function sampleItem(i: number, shape: ShapeKey): CrosswordItem {
+  const key = `${i}:${shape}`;
+  let hit = sampleCache.get(key);
+  if (!hit) {
     const entries = SAMPLE.map((l) => parseClueLine(l) as ClueEntry);
-    sampleCache = [0, 1].map((i) => ({ cw: generateCrossword(entries, mulberry32(7 + i)), title: i ? "More Everyday Things" : "Everyday Things" }));
+    hit = { cw: generateCrossword(entries, mulberry32(7 + i), 40, shape), title: i ? "More Everyday Things" : "Everyday Things" };
+    sampleCache.set(key, hit);
   }
-  return sampleCache;
+  return hit;
+}
+
+/** Design preview: a quick re-layout of one of the user's crosswords in another shape. */
+const previewCache = new Map<string, CrosswordItem>();
+function previewFit(p: CwPuzzle, shape: ShapeKey): CrosswordItem {
+  if ((p.cw.shape ?? "square") === shape) return { cw: p.cw, title: p.title, theme: p.theme };
+  const key = `${p.id}:${shape}`;
+  let hit = previewCache.get(key);
+  if (!hit) {
+    hit = { cw: generateCrossword(p.entries, mulberry32(3), 20, shape), title: p.title, theme: p.theme };
+    previewCache.set(key, hit);
+  }
+  return hit;
 }
 
 /** Group entries by theme (keeping order), then split each group into balanced crosswords. */
@@ -94,7 +111,8 @@ export default function CrossWordGenerator() {
   const [showAnswers, setShowAnswers] = useState(false);
   const [query, setQuery] = useState("");
   const [running, setRunning] = useState<{ progress: Progress | null; cancel: () => void } | null>(null);
-  const designApi = useDesign("crossword");
+  const rawDesignApi = useDesign("crossword");
+  const [refit, setRefit] = useState<{ progress: Progress | null; cancel: () => void } | null>(null);
   const idRef = useRef(1);
 
   const add = (cands: { answer: string; clue: string; theme?: string }[], source: string) => {
@@ -163,7 +181,8 @@ export default function CrossWordGenerator() {
 
   const build = async () => {
     if (entries.length < 2) return toast.error("Add at least 2 words to build a crossword.");
-    const job = startJob({ type: "cw-generate", groups }, (p) => setRunning((r) => (r ? { ...r, progress: p } : r)));
+    const targets = shapeTargetsFor(rawDesignApi.design.shape, groups, CROSSWORD_SHAPES);
+    const job = startJob({ type: "cw-generate", groups: groups.map((g, i) => ({ ...g, shape: targets[i] })) }, (p) => setRunning((r) => (r ? { ...r, progress: p } : r)));
     setRunning({ progress: null, cancel: job.cancel });
     try {
       const out = await job.promise;
@@ -184,7 +203,7 @@ export default function CrossWordGenerator() {
   const regenerate = () => {
     const p = puzzles[active];
     if (!p) return;
-    setPuzzles((prev) => prev.map((x, i) => (i === active ? { ...x, cw: generateCrossword(p.entries, mulberry32(randomSeed())) } : x)));
+    setPuzzles((prev) => prev.map((x, i) => (i === active ? { ...x, cw: generateCrossword(p.entries, mulberry32(randomSeed()), 40, p.cw.shape) } : x)));
   };
 
   const puzzle = puzzles[active];
@@ -193,9 +212,45 @@ export default function CrossWordGenerator() {
   const themes = useMemo(() => new Set(usable.map((p) => p.theme).filter(Boolean)).size, [usable]);
   const toItem = (p: CwPuzzle): CrosswordItem => ({ cw: p.cw, title: p.title, theme: p.theme });
 
+  /** Re-lay out every crossword inside the design's new shape (background worker). */
+  const reshape = async (d: Design) => {
+    const targets = shapeTargetsFor(d.shape, puzzles, CROSSWORD_SHAPES);
+    const todo = puzzles.map((p, i) => ({ p, shape: targets[i] })).filter(({ p, shape }) => (p.cw.shape ?? "square") !== shape);
+    if (!todo.length) return;
+    refit?.cancel();
+    const job = startJob({ type: "cw-generate", groups: todo.map(({ p, shape }) => ({ title: p.title, theme: p.theme, entries: p.entries, shape })) }, (pr) => setRefit((r) => (r ? { ...r, progress: pr } : r)));
+    setRefit({ progress: null, cancel: job.cancel });
+    try {
+      const out = await job.promise;
+      const byId = new Map(todo.map(({ p }, k) => [p.id, out[k].cw]));
+      setPuzzles((prev) => prev.map((p) => (byId.has(p.id) ? { ...p, cw: byId.get(p.id)! } : p)));
+      const left = out.reduce((a, r) => a + r.cw.leftOut.length, 0);
+      if (left) toast.warning(`${plural(left, "word")} couldn't connect inside the shape and ${left === 1 ? "was" : "were"} left out. Try a roomier shape or fewer words per crossword.`, { autoClose: 9000 });
+    } catch (e) {
+      if (!(e instanceof JobCancelled)) toast.error(`Sorry, the crosswords couldn't be re-shaped: ${(e as Error).message}`);
+    } finally {
+      setRefit((r) => (r && r.cancel === job.cancel ? null : r));
+    }
+  };
+  const designApi = {
+    ...rawDesignApi,
+    setDesign: (d: Design) => {
+      rawDesignApi.setDesign(d);
+      if (d.shape.kind !== rawDesignApi.design.shape.kind || d.shape.mix !== rawDesignApi.design.shape.mix) void reshape(d);
+    },
+  };
+  const shapeStatus = refit ? (
+    <span data-testid="reshape-progress">Building your crosswords inside the new shape{refit.progress ? `: ${refit.progress.done} of ${refit.progress.total}` : "…"}</span>
+  ) : usable.length ? (
+    <span data-testid="reshape-done">
+      {usable.length === 1 ? "Your crossword uses" : `All ${usable.length} crosswords use`} {rawDesignApi.design.shape.mix === "one" ? `the ${shapeInfo(CROSSWORD_SHAPES.includes(rawDesignApi.design.shape.kind) ? rawDesignApi.design.shape.kind : "square").label.toLowerCase()} shape` : "mixed shapes"}.
+    </span>
+  ) : null;
+
   const sampleBuilder = (design: Design, fonts: FontData) => {
-    const own = usable.slice(0, 2).map(toItem);
-    const items = own.length ? (own.length === 1 ? [own[0], own[0]] : own) : sampleItems();
+    const targets = shapeTargetsFor(design.shape, usable.length ? usable : [{}, {}], CROSSWORD_SHAPES);
+    const own = usable.slice(0, 2).map((p, i) => previewFit(p, targets[i]));
+    const items = own.length ? (own.length === 1 ? [own[0], own[0]] : own) : [sampleItem(0, targets[0]), sampleItem(1, targets[1])];
     return buildCrosswordBook(items, { trim: "8.5x11", bleed: false, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Crossword Puzzle Book", subtitle: "Easy Crosswords for Every Day" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, answersPerPage: 2, padForKdp: false }, fonts);
   };
 
@@ -503,7 +558,7 @@ export default function CrossWordGenerator() {
       <div className="pg-card pg-wizard-card">
         {step === 0 && <QuestionFlow flow={stage(0)} questions={wordsQs} />}
         {step === 1 && <QuestionFlow flow={stage(1)} questions={buildQs} />}
-        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" flow={stage(2)} />}
+        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" shapeStatus={shapeStatus} busy={!!refit} flow={stage(2)} />}
         {step === 3 && (
           <BookExport
             tool="crossword"
@@ -514,7 +569,7 @@ export default function CrossWordGenerator() {
             design={designApi.design}
             items={() => ({ tool: "crossword", items: usable.map(toItem) })}
             fileBase="crossword-book"
-            disabledReason={usable.length ? undefined : "Build at least one crossword first."}
+            disabledReason={refit ? "Building crosswords inside the new shape. One moment…" : usable.length ? undefined : "Build at least one crossword first."}
             defaultAnswersPerPage={2}
             flow={stage(3)}
           />

@@ -1,4 +1,5 @@
 import type { FontKey } from "./fonts";
+import type { ShapeKey, ShapeMix } from "../shapes/shapes";
 
 export type HeaderStyle = "rule" | "banner" | "ribbon" | "underline" | "boxed" | "tab" | "minimal";
 export type BadgeShape = "circle" | "rounded" | "diamond" | "hexagon";
@@ -6,6 +7,12 @@ export type IconKey = "none" | "magnifier" | "star" | "heart" | "leaf" | "sun" |
 export type PatternKey = "none" | "dots" | "diagonal" | "waves" | "confetti" | "grid" | "corners" | "snow";
 export type GridBorder = "square" | "rounded" | "double" | "none";
 export type GridShade = "none" | "rows" | "checker";
+/** Line style of the outline around the grid. */
+export type LineStyle = "solid" | "dashed" | "dotted";
+/** How each letter / number cell is drawn. */
+export type CellStyle = "plain" | "boxed" | "rounded" | "circles";
+/** Box around the word list. */
+export type ListBox = "none" | "solid" | "rounded" | "dashed" | "double";
 export type PageNumberStyle = "plain" | "dashes" | "circle" | "pill" | "none";
 export type ListSort = "entered" | "alpha" | "length";
 export type TemplateId = "classic" | "banner" | "elegant" | "kids" | "largeprint" | "seasonal" | "modern";
@@ -39,6 +46,18 @@ export interface Design {
     shade: GridShade;
     /** Frame thickness in points. */
     frame: number;
+    /** Outline line style. */
+    line: LineStyle;
+    /** Soft offset shadow behind the outline. */
+    shadow: boolean;
+    /** Letter cells: plain, a small box, a rounded box or a circle behind each one. */
+    cells: CellStyle;
+  };
+  /** Grid shape (word search: the letters fill the shape; crossword: words stay inside it; sudoku: a frame around the 9×9). */
+  shape: {
+    kind: ShapeKey;
+    /** "one" = every puzzle uses `kind`; "each" = a new shape per puzzle; "theme" = one shape per theme. */
+    mix: ShapeMix;
   };
   color: {
     accent: string;
@@ -56,6 +75,8 @@ export interface Design {
     columns: number;
     checkbox: boolean;
     sort: ListSort;
+    /** Box around the word list / clues. */
+    box: ListBox;
   };
 }
 

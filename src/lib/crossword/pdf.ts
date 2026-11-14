@@ -7,7 +7,8 @@ import { FrontMatter } from "../print/frontMatter";
 import { TrimKey } from "../print/kdp";
 import { FontData } from "../print/fonts";
 import { BookContent, BookExtras, PageContext, PageRenderer, RenderedBook, SANS, Section, heading, paragraph, renderBook } from "../print/book";
-import { Look, drawCheckbox, panel, paint } from "../design/paint";
+import { Look, drawCheckbox, drawFrame, drawFrameShadow, drawListBox, drawOutline, drawOutlineBacking, listBoxPad, panel, paint } from "../design/paint";
+import { shapeOutline } from "../shapes/shapes";
 import { tint } from "../design/color";
 import { DEFAULT_DESIGN } from "../design/templates";
 import { Design, TOOL_HEADER } from "../design/types";
@@ -30,6 +31,31 @@ export interface CrosswordBookOptions {
   onPage?: (done: number, total: number) => void;
   /** Custom page order from the preview (items must already be in arranged order). */
   slots?: Slot[];
+}
+
+/** Outline around a crossword (cell units, grid origin at 0,0) and its drawing extent. */
+export function cwGeometry(cw: Crossword): { outline: [number, number][] | null; pad: number; ext: { x0: number; y0: number; x1: number; y1: number } } {
+  if (cw.shape && cw.canvas && cw.offset) {
+    const [r0, c0] = cw.offset;
+    const outline = shapeOutline(cw.shape, cw.canvas).map(([x, y]) => [x - c0, y - r0] as [number, number]);
+    const xs = outline.map((p) => p[0]);
+    const ys = outline.map((p) => p[1]);
+    return { outline, pad: 0, ext: { x0: Math.min(0, ...xs), y0: Math.min(0, ...ys), x1: Math.max(cw.width, ...xs), y1: Math.max(cw.height, ...ys) } };
+  }
+  const pad = 0.4;
+  return { outline: null, pad, ext: { x0: -pad, y0: -pad, x1: cw.width + pad, y1: cw.height + pad } };
+}
+
+/** Grid plus its frame (shape outline, or a box around a free-form crossword). (x, y) = cell (0,0). */
+export function drawFramedCrossword(pdf: jsPDF, look: Look, cw: Crossword, x: number, y: number, cell: number, answers: boolean, filled?: Set<string>) {
+  const geo = cwGeometry(cw);
+  const pts = geo.outline?.map(([px, py]) => [x + px * cell, y + py * cell] as [number, number]) ?? null;
+  const box = { x: x - geo.pad * cell, y: y - geo.pad * cell, w: (cw.width + 2 * geo.pad) * cell, h: (cw.height + 2 * geo.pad) * cell };
+  if (pts) drawOutlineBacking(pdf, pts, look, cell);
+  else drawFrameShadow(pdf, box, look, cell);
+  drawCrosswordGrid(pdf, look, cw, x, y, cell, answers, filled);
+  if (pts) drawOutline(pdf, pts, look, cell);
+  else drawFrame(pdf, box, look, cell);
 }
 
 export function drawCrosswordGrid(pdf: jsPDF, look: Look, cw: Crossword, x: number, y: number, cell: number, answers: boolean, filled?: Set<string>) {
@@ -121,16 +147,22 @@ function puzzlePage(it: CrosswordItem, number: number, headerText: string): Page
       size -= 0.5;
       cluesH = clueColumns(pdf, look, it.cw, box.x, 0, box.w - 16, size, false);
     }
-    const availH = box.y + box.h - top - cluesH - 30 * s;
-    const cell = Math.max(10, Math.min((box.w - 10) / it.cw.width, availH / it.cw.height, 34 * s));
-    const gw = cell * it.cw.width;
-    const gh = cell * it.cw.height;
-    const gx = box.x + (box.w - gw) / 2;
-    panel(pdf, { x: gx - 10, y: top - 6, w: gw + 20, h: gh + 12 }, look, 10);
-    drawCrosswordGrid(pdf, look, it.cw, gx, top, cell, false);
-    const cy = top + gh + 26 * s;
-    panel(pdf, { x: box.x, y: cy - 16 * s, w: box.w, h: cluesH + 16 * s }, look, 10);
-    clueColumns(pdf, look, it.cw, box.x + 8, cy, box.w - 16, size, true);
+    const lpad = listBoxPad(look);
+    const availH = box.y + box.h - top - cluesH - 30 * s - lpad * 2;
+    const geo = cwGeometry(it.cw);
+    const extW = geo.ext.x1 - geo.ext.x0;
+    const extH = geo.ext.y1 - geo.ext.y0;
+    const cell = Math.max(10, Math.min((box.w - 10) / extW, availH / extH, 34 * s));
+    const gw = cell * extW;
+    const gh = cell * extH;
+    const gx = box.x + (box.w - gw) / 2 - geo.ext.x0 * cell;
+    const gy = top - geo.ext.y0 * cell;
+    panel(pdf, { x: gx + geo.ext.x0 * cell - 10, y: top - 6, w: gw + 20, h: gh + 12 }, look, 10);
+    drawFramedCrossword(pdf, look, it.cw, gx, gy, cell, false);
+    const cy = top + gh + 26 * s + lpad;
+    panel(pdf, { x: box.x, y: cy - 16 * s - lpad, w: box.w, h: cluesH + 16 * s + lpad * 2 }, look, 10);
+    drawListBox(pdf, { x: box.x + 2, y: cy - 16 * s - lpad + 2, w: box.w - 4, h: cluesH + 16 * s + lpad * 2 - 4 }, look);
+    clueColumns(pdf, look, it.cw, box.x + 8 + lpad, cy, box.w - 16 - lpad * 2, size, true);
   };
 }
 
@@ -146,15 +178,18 @@ function answerPage(items: { it: CrosswordItem; number: number }[], first: boole
     items.forEach(({ it, number }, k) => {
       const sx = box.x + (k % cols) * (slotW + gap);
       const sy = top + Math.floor(k / cols) * (slotH + gap);
-      const cell = Math.min(slotW / it.cw.width, (slotH - 22 * s) / it.cw.height, 26);
-      const gw = cell * it.cw.width;
+      const geo = cwGeometry(it.cw);
+      const extW = geo.ext.x1 - geo.ext.x0;
+      const extH = geo.ext.y1 - geo.ext.y0;
+      const cell = Math.min(slotW / (extW + 0.3), (slotH - 22 * s) / (extH + 0.3), 26);
+      const gw = cell * extW;
       panel(pdf, { x: sx, y: sy - 2, w: slotW, h: slotH }, look, 8);
       pdf.setFont(look.font(look.design.fonts.heading), "bold");
       pdf.setFontSize(10.5 * s);
       paint.textColor(pdf, look.ink);
       pdf.text((pdf.splitTextToSize(`#${number}  ${it.title}`, slotW) as string[])[0], sx + slotW / 2, sy + 8 * s, { align: "center", baseline: "middle" });
       pdf.setTextColor(0, 0, 0);
-      drawCrosswordGrid(pdf, look, it.cw, sx + (slotW - gw) / 2, sy + 22 * s, cell, true);
+      drawFramedCrossword(pdf, look, it.cw, sx + (slotW - gw) / 2 - geo.ext.x0 * cell, sy + 22 * s - geo.ext.y0 * cell, cell, true);
     });
   };
 }

@@ -1,13 +1,27 @@
 "use client";
 import React from "react";
 import { Crossword, cellNumbers } from "@/lib/crossword/engine";
+import { shapeOutline } from "@/lib/shapes/shapes";
 
 export default function CrosswordGrid({ cw, showAnswers, maxWidth = 620, id }: { cw: Crossword; showAnswers: boolean; maxWidth?: number; id?: string }) {
   const C = 36;
   const nums = cellNumbers(cw);
   const pad = 2;
+  let view = `${-pad} ${-pad} ${cw.width * C + pad * 2} ${cw.height * C + pad * 2}`;
+  let outline: string | null = null;
+  if (cw.shape && cw.canvas && cw.offset) {
+    const [r0, c0] = cw.offset;
+    const pts = shapeOutline(cw.shape, cw.canvas).map(([x, y]) => [(x - c0) * C, (y - r0) * C]);
+    outline = "M" + pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z";
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    const x0 = Math.min(0, ...xs) - 4;
+    const y0 = Math.min(0, ...ys) - 4;
+    view = `${x0} ${y0} ${Math.max(cw.width * C, ...xs) + 4 - x0} ${Math.max(cw.height * C, ...ys) + 4 - y0}`;
+  }
   return (
-    <svg id={id} viewBox={`${-pad} ${-pad} ${cw.width * C + pad * 2} ${cw.height * C + pad * 2}`} style={{ width: "100%", maxWidth, display: "block", margin: "0 auto" }} role="img" aria-label="Crossword grid">
+    <svg id={id} viewBox={view} data-shape={cw.shape ?? "square"} style={{ width: "100%", maxWidth, display: "block", margin: "0 auto" }} role="img" aria-label="Crossword grid">
+      {outline && <path d={outline} fill="#fff" stroke="#111" strokeWidth={2.5} strokeLinejoin="round" data-testid="cw-outline" />}
       {cw.grid.map((row, r) =>
         row.map((ch, c) =>
           ch ? (
