@@ -56,8 +56,10 @@ export interface Design {
   /** Grid shape (word search: the letters fill the shape; crossword: words stay inside it; sudoku: a frame around the 9×9). */
   shape: {
     kind: ShapeKey;
-    /** "one" = every puzzle uses `kind`; "each" = a new shape per puzzle; "theme" = one shape per theme. */
+    /** "one" = every puzzle uses `kind`; "each" = a new shape per puzzle; "theme" = one shape per theme; "animals" = a new animal each puzzle. */
     mix: ShapeMix;
+    /** Light shaded silhouette behind the letters (the grey fill of a shaped word search). */
+    shade: boolean;
   };
   color: {
     accent: string;

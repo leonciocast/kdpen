@@ -10,7 +10,7 @@ import { useDesign } from "@/components/ui/useDesign";
 import { Stepper } from "@/components/ui/Wizard";
 import { useStages } from "@/components/ui/useStages";
 import { Placement, allowedDirections, autoPlace, checkPlacement, containedWordWarnings, fillGrid, gridForm, mulberry32, randomSeed } from "@/lib/wordsearch/engine";
-import { ShapeKey, shapeFor, shapeInfo, shapeStartSize, shapedGrid } from "@/lib/shapes/shapes";
+import { ShapeKey, shapeInfo, shapeStartSize, shapeTargetsFor, shapedGrid } from "@/lib/shapes/shapes";
 import { LIMITS } from "@/lib/limits";
 import { buildWordSearchBook, BookPuzzle } from "@/lib/wordsearch/pdf";
 import { presetFor } from "@/lib/wordsearch/difficulty";
@@ -44,10 +44,9 @@ function samplePuzzle(i: number, shape: ShapeKey): BookPuzzle {
   return hit;
 }
 
-/** Shape of every puzzle for a design (one shape, or mixed per puzzle / per theme). */
+/** Shape of every puzzle for a design (one shape, mixed, or random animals). */
 export function shapeTargets(d: Design, list: { theme?: string }[]): ShapeKey[] {
-  const themes = Array.from(new Set(list.map((p) => p.theme ?? "")));
-  return list.map((p, i) => shapeFor(d.shape, i, themes.indexOf(p.theme ?? "")));
+  return shapeTargetsFor(d.shape, list);
 }
 
 const shapeOf = (p: { shape?: ShapeKey }): ShapeKey => p.shape ?? "square";
@@ -252,7 +251,7 @@ export default function WordSearch() {
     </span>
   ) : finished.length ? (
     <span data-testid="reshape-done">
-      {finished.length === 1 ? "Your puzzle uses" : `All ${finished.length} puzzles use`} {rawDesignApi.design.shape.mix === "one" ? `the ${shapeInfo(rawDesignApi.design.shape.kind).label.toLowerCase()} shape` : "mixed shapes"}. Every word sits inside it.
+      {finished.length === 1 ? "Your puzzle uses" : `All ${finished.length} puzzles use`} {rawDesignApi.design.shape.mix === "one" ? `the ${shapeInfo(rawDesignApi.design.shape.kind).label.toLowerCase()} shape` : rawDesignApi.design.shape.mix === "animals" ? "a different animal each time" : "mixed shapes"}. Every word sits inside it.
     </span>
   ) : null;
 
@@ -280,7 +279,7 @@ export default function WordSearch() {
           {step === 3 && (
             <StepReview puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} solution={solution} setSolution={setSolution} reshuffle={reshuffle} regenerate={regenerate} edit={() => goTo(2, "puzzles")} flow={flow(3)} />
           )}
-          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" shapeStatus={shapeStatus} busy={!!refit} flow={flow(4)} />}
+          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" shapeStatus={shapeStatus} busy={!!refit} flow={flow(4)} themes={[...new Set(finished.map((p) => p.theme).filter((t): t is string => !!t))]} />}
           {step === 5 && (
             <BookExport
               tool="word-search"

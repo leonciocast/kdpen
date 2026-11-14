@@ -76,15 +76,17 @@ interface Props {
   /** Puzzles are being re-shaped: hold the user on this step until it is done. */
   busy?: boolean;
   flow: FlowCtl;
+  /** Puzzle themes, used to suggest a matching animal shape. */
+  themes?: string[];
 }
 
 const SHAPE_LEAD: Record<ToolKind, string> = {
-  "word-search": "The letters fill the shape you pick, and every word stays inside it. Grids grow a little when a shape needs more room, so no word is ever dropped.",
-  crossword: "The crossword is built inside the shape: every word stays within its outline. Only shapes that still give well-connected crosswords are offered.",
-  sudoku: "A sudoku must stay a 9×9 square to be solvable, so the shape is a decorative frame around the grid. You can also round or circle the cells in the next step.",
+  "word-search": "The letters fill the shape you pick — a heart, a star, or an animal silhouette — and every word stays inside it. Grids grow a little when a shape needs more room, so no word is ever dropped.",
+  crossword: "The crossword is built inside the shape: every word stays within its outline. Only shapes that still give well-connected crosswords are offered, including the animals that work well.",
+  sudoku: "A sudoku must stay a 9×9 square to be solvable, so the shape is a decorative frame around the grid (animals sit the grid in the body). You can also round or circle the cells in the next step.",
 };
 
-export default function DesignStep({ tool, api, buildSample, listName, shapeStatus, busy, flow }: Props) {
+export default function DesignStep({ tool, api, buildSample, listName, shapeStatus, busy, flow, themes = [] }: Props) {
   const [customizing, setCustomizingState] = useState(() => flow.sub === "customize" || !!customizingByTool.get(tool));
   const setCustomizing = (v: boolean) => {
     customizingByTool.set(tool, v);
@@ -211,7 +213,12 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
   };
 
   const allowed = shapesFor(tool);
-  const shapeName = design.shape.mix !== "one" && tool !== "sudoku" ? "Mixed shapes" : shapeLabel(allowed.includes(design.shape.kind) ? design.shape.kind : "square");
+  const shapeName =
+    design.shape.mix === "animals" && tool !== "sudoku"
+      ? "Random animals"
+      : design.shape.mix !== "one" && tool !== "sudoku"
+        ? "Mixed shapes"
+        : shapeLabel(allowed.includes(design.shape.kind) ? design.shape.kind : "square");
   const pickShape: Question = {
     key: "shape",
     wide: true,
@@ -223,7 +230,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
     body: (
       <div className="row g-4">
         <div className="col-lg-7">
-          <ShapePicker tool={tool} design={design} onChange={(kind, mix) => set((d) => (d.shape = { kind, mix }))} />
+          <ShapePicker tool={tool} design={design} themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { kind, mix, shade: shade ?? d.shape.shade }))} />
           {shapeStatus && <div className="pg-shape-status small" aria-live="polite">{shapeStatus}</div>}
         </div>
         <div className="col-lg-5">{preview}</div>
@@ -392,7 +399,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
           </Section>
 
           <Section title={tool === "sudoku" ? "Frame shape" : "Shape"}>
-            <ShapePicker tool={tool} design={design} compact onChange={(kind, mix) => set((d) => (d.shape = { kind, mix }))} />
+            <ShapePicker tool={tool} design={design} compact themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { kind, mix, shade: shade ?? d.shape.shade }))} />
             {shapeStatus && <div className="pg-shape-status small">{shapeStatus}</div>}
           </Section>
 

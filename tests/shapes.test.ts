@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, sudokuFrame } from "../src/lib/shapes/shapes";
+import { ANIMAL_KEYS, CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
 import { ALL_DIRECTIONS, checkPlacement, findOccurrences, gridForm, makePlacement, mulberry32, placementCells, Placement } from "../src/lib/wordsearch/engine";
 import { resolveFixed, resolveFreeEnd, snapStart, validDirectionsFrom, validStartCells } from "../src/lib/wordsearch/snap";
 import { WS_DIFFICULTIES, suggestGridSize } from "../src/lib/wordsearch/difficulty";
@@ -47,12 +47,18 @@ describe("shape masks", () => {
     expect(fillRatio("square", 15)).toBe(1);
   });
   it("every shape gives a solid, connected mask with no thin slivers", () => {
-    for (const k of SHAPED)
-      for (const n of [10, 15, 20, 28, 40]) {
+    for (const k of SHAPED) {
+      const min = shapeInfo(k).minSize ?? 10;
+      const sizes = [10, 15, 20, 28, 40].filter((n) => n >= min);
+      if (!sizes.includes(min) && min <= 44) sizes.unshift(min);
+      for (const n of sizes) {
         const m = shapeMask(k, n)!;
         const cells = maskCells(m, n);
         const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
-        if (n >= 14) expect(cells, `${k} ${n}`).toBeGreaterThan(n * n * 0.18);
+        const [br0, bc0, br1, bc1] = maskBox(m, n);
+        const box = (br1 - br0 + 1) * (bc1 - bc0 + 1);
+        if (n >= 14) expect(cells, `${k} ${n}`).toBeGreaterThan(Math.min(n * n * 0.12, box * 0.35));
+        if (n >= 14) expect(cells, `${k} ${n} cells`).toBeGreaterThan(20);
         // No slivers: every used cell belongs to a fully used 3×3 block.
         for (let r = 0; r < n; r++)
           for (let c = 0; c < n; c++) {
@@ -85,6 +91,7 @@ describe("shape masks", () => {
         expect(Math.min(...xs)).toBeLessThanOrEqual(cc0);
         expect(Math.max(...xs)).toBeGreaterThanOrEqual(cc1 + 1);
       }
+    }
   });
   it("mixes shapes per puzzle or per theme", () => {
     expect(shapeFor({ kind: "heart", mix: "one" }, 5)).toBe("heart");
@@ -94,6 +101,18 @@ describe("shape masks", () => {
     expect(theme[0]).toBe(theme[1]);
     expect(theme[2]).not.toBe(theme[0]);
     expect(shapeFor({ kind: "star", mix: "one" }, 0, 0, CROSSWORD_SHAPES)).toBe("square");
+    const animals = shapeTargetsFor({ kind: "heart", mix: "animals" }, [{}, {}, {}, {}]);
+    expect(animals.every((k) => ANIMAL_KEYS.includes(k))).toBe(true);
+    expect(new Set(animals).size).toBeGreaterThan(1);
+    expect(shapeTargetsFor({ kind: "heart", mix: "theme" }, [{ theme: "Elephants" }, { theme: "Elephants" }, { theme: "Dolphins" }])).toEqual(["elephant", "elephant", "dolphin"]);
+  });
+
+  it("matches a theme name to an animal shape", () => {
+    expect(suggestShapeForTheme("Elephants")).toBe("elephant");
+    expect(suggestShapeForTheme("baby dinosaur party")).toBe("trex");
+    expect(suggestShapeForTheme("SEA HORSES")).toBe("seahorse");
+    expect(suggestShapeForTheme("")).toBeNull();
+    expect(suggestShapeForTheme("Elephants", ["circle", "heart"])).toBeNull();
   });
 });
 
@@ -247,11 +266,12 @@ describe("shaped crosswords and sudoku frames", () => {
   });
   it("old saved designs gain safe defaults for the new fields", () => {
     const d = sanitizeDesign({ template: "kids", grid: { lines: true } });
-    expect(d.shape).toEqual({ kind: "square", mix: "one" });
+    expect(d.shape).toEqual({ kind: "square", mix: "one", shade: false });
     expect(d.grid.line).toBe("solid");
     expect(d.grid.cells).toBe("plain");
     expect(d.list.box).toBe("none");
-    expect(sanitizeDesign({ shape: { kind: "nope", mix: "x" } }).shape).toEqual({ kind: "square", mix: "one" });
-    expect(sanitizeDesign({ shape: { kind: "heart", mix: "each" } }).shape).toEqual({ kind: "heart", mix: "each" });
+    expect(sanitizeDesign({ shape: { kind: "nope", mix: "x" } }).shape).toEqual({ kind: "square", mix: "one", shade: false });
+    expect(sanitizeDesign({ shape: { kind: "heart", mix: "each" } }).shape).toEqual({ kind: "heart", mix: "each", shade: false });
+    expect(sanitizeDesign({ shape: { kind: "elephant", mix: "animals", shade: true } }).shape).toEqual({ kind: "elephant", mix: "animals", shade: true });
   });
 });

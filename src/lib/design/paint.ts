@@ -700,7 +700,7 @@ export function framePolygon(pts: P2[], look: Look, unit: number): P2[] {
   return look.design.grid.border === "rounded" ? filletPolygon(pts, Math.min(unit * 0.9, 16)) : pts;
 }
 
-/** Soft shadow and white backing under a shaped grid (drawn before the letters). */
+/** Soft shadow and optional shaded (or white) backing under a shaped grid (drawn before the letters). */
 export function drawOutlineBacking(pdf: jsPDF, pts: P2[], look: Look, unit: number) {
   const g = look.design.grid;
   const shape = framePolygon(pts, look, unit);
@@ -709,7 +709,11 @@ export function drawOutlineBacking(pdf: jsPDF, pts: P2[], look: Look, unit: numb
     fill(pdf, [205, 205, 205]);
     poly(pdf, shape.map(([x, y]) => [x + o, y + o] as P2), "F");
   }
-  if (g.shadow || look.design.pattern.kind !== "none") {
+  if (look.design.shape.shade) {
+    // Light grey cut-out, like a classic shaped word-search page. Stays readable in black & white.
+    fill(pdf, look.design.color.grayscale ? [226, 226, 226] : tint(look.accent, 0.9));
+    poly(pdf, shape, "F");
+  } else if (g.shadow || look.design.pattern.kind !== "none") {
     fill(pdf, [255, 255, 255]);
     poly(pdf, shape, "F");
   }

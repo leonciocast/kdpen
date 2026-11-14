@@ -14,7 +14,7 @@ const base: Design = {
   header: { style: "rule", text: "", showPuzzleTitle: true, badge: false, badgeShape: "circle", icon: "none" },
   fonts: { heading: "sans", grid: "sans", list: "sans", gridScale: 1, listScale: 1 },
   grid: { lines: false, border: "square", shade: "none", frame: 1.2, line: "solid", shadow: false, cells: "plain" },
-  shape: { kind: "square", mix: "one" },
+  shape: { kind: "square", mix: "one", shade: false },
   color: { accent: "#4f46e5", grayscale: true },
   pattern: { kind: "none", strength: 0.5 },
   pageNumber: "plain",

@@ -6,6 +6,10 @@
  * Pure (no DOM): shared by the engine, the PDF renderer, the UI and tests.
  */
 
+import { ANIMALS } from "./animals";
+import { blobsToPoly, naturalAspect, unitRect } from "./silhouettes";
+
+
 export type ShapeKey =
   | "square"
   | "rounded"
@@ -26,7 +30,75 @@ export type ShapeKey =
   | "tree"
   | "apple"
   | "pumpkin"
-  | "cloud";
+  | "cloud"
+  | "elephant"
+  | "deer"
+  | "moose"
+  | "horse"
+  | "unicorn"
+  | "zebra"
+  | "donkey"
+  | "cow"
+  | "bull"
+  | "pig"
+  | "sheep"
+  | "goat"
+  | "llama"
+  | "camel"
+  | "giraffe"
+  | "hippo"
+  | "rhino"
+  | "bear"
+  | "panda"
+  | "koala"
+  | "cat"
+  | "tiger"
+  | "lion"
+  | "dog"
+  | "wolf"
+  | "fox"
+  | "rabbit"
+  | "squirrel"
+  | "mouse"
+  | "hamster"
+  | "hedgehog"
+  | "raccoon"
+  | "otter"
+  | "monkey"
+  | "kangaroo"
+  | "owl"
+  | "eagle"
+  | "duck"
+  | "swan"
+  | "goose"
+  | "chicken"
+  | "rooster"
+  | "turkey"
+  | "chick"
+  | "penguin"
+  | "flamingo"
+  | "parrot"
+  | "peacock"
+  | "bat"
+  | "fish"
+  | "whale"
+  | "dolphin"
+  | "shark"
+  | "seahorse"
+  | "octopus"
+  | "crab"
+  | "lobster"
+  | "turtle"
+  | "frog"
+  | "crocodile"
+  | "snail"
+  | "butterfly"
+  | "bee"
+  | "ladybug"
+  | "trex"
+  | "longneck"
+  | "dragon"
+  | "seal";
 
 export type Pt = [number, number];
 
@@ -37,7 +109,13 @@ export interface ShapeInfo {
   aspect: number;
   /** Seasonal / theme hint shown on the card. */
   tag?: string;
-  group: "basic" | "geometric" | "fun";
+  group: "basic" | "geometric" | "fun" | "animals";
+  /** Smallest recommended N×N canvas (animals need more cells to stay recognisable). */
+  minSize?: number;
+  /** Extra names used to match a puzzle theme to this shape. */
+  aliases?: string[];
+  /** Torso box in the unit square; a sudoku 9×9 is placed inside it. */
+  focus?: [number, number, number, number];
   /** Polygon in a unit box [0,1]×[0,1] (x right, y down), before aspect. */
   poly: () => Pt[];
 }
@@ -100,6 +178,22 @@ function radialUnion(circles: [number, number, number][], c: Pt, n = 120): Pt[] 
     return [c[0] + dx * best, c[1] + dy * best];
   });
 }
+
+function animalShape(a: (typeof ANIMALS)[number]): ShapeInfo {
+  let cached: Pt[] | null = null;
+  return {
+    key: a.key as ShapeKey,
+    label: a.label,
+    aspect: a.aspect ?? naturalAspect(a.blobs),
+    group: "animals",
+    minSize: a.minSize,
+    aliases: a.aliases,
+    focus: a.focus ? unitRect(a.blobs, a.focus) : undefined,
+    poly: () => (cached ??= blobsToPoly(a.blobs)),
+  };
+}
+
+const ANIMAL_SHAPES: ShapeInfo[] = ANIMALS.map(animalShape);
 
 export const SHAPES: ShapeInfo[] = [
   { key: "square", label: "Square", aspect: 1, group: "basic", poly: () => [[0, 0], [1, 0], [1, 1], [0, 1]] },
@@ -164,6 +258,7 @@ export const SHAPES: ShapeInfo[] = [
     poly: () => normalize(curve(140, (t) => { const r = 1 - 0.16 * Math.exp(-((Math.atan2(Math.sin(t + Math.PI / 2), Math.cos(t + Math.PI / 2))) ** 2) / 0.12) - 0.06 * Math.exp(-((Math.atan2(Math.sin(t - Math.PI / 2), Math.cos(t - Math.PI / 2))) ** 2) / 0.1); return [Math.cos(t) * r * 1.04, Math.sin(t) * r]; })),
   },
   { key: "cloud", label: "Cloud", aspect: 1.45, group: "fun", poly: () => normalize(radialUnion([[0.5, 0.58, 0.3], [0.27, 0.62, 0.22], [0.73, 0.62, 0.22], [0.38, 0.38, 0.22], [0.63, 0.36, 0.25], [0.5, 0.72, 0.24]], [0.5, 0.56])) },
+  ...ANIMAL_SHAPES,
 ];
 
 export const SHAPE_KEYS = SHAPES.map((s) => s.key);
@@ -347,21 +442,62 @@ export function roundCorners(pts: Pt[], iterations = 2): Pt[] {
 
 // ---------------------------------------------------------------- per-tool availability & mixing
 
+export const ANIMAL_KEYS: ShapeKey[] = ANIMAL_SHAPES.map((s) => s.key);
+export const isAnimal = (k: ShapeKey | undefined) => !!k && (shapeInfo(k).group === "animals");
+
+export type ShapeCategory = "basic" | "animals" | "objects";
+export function shapeCategory(s: ShapeInfo): ShapeCategory {
+  if (s.group === "animals") return "animals";
+  if (s.group === "fun") return "objects";
+  return "basic";
+}
+
+function normName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** Pick the animal (or other shape) whose name matches a puzzle theme, e.g. "Elephants" → elephant. */
+export function suggestShapeForTheme(theme: string | undefined, allowed?: ShapeKey[]): ShapeKey | null {
+  const t = normName(theme ?? "");
+  if (!t) return null;
+  const list = SHAPES.filter((s) => !allowed || allowed.includes(s.key));
+  const names = (s: ShapeInfo) => [s.key, s.label, ...(s.aliases ?? [])].map(normName).filter(Boolean);
+  const eq = (a: string, b: string) => a === b || a === b + "s" || a + "s" === b || a === b + "es" || a + "es" === b;
+  for (const s of list) {
+    for (const n of names(s)) if (eq(t, n)) return s.key;
+  }
+  for (const s of list) {
+    for (const n of names(s)) {
+      if (!n || n.length < 3) continue;
+      if (t === n || t.includes(" " + n) || t.includes(n + " ") || n.includes(t)) return s.key;
+    }
+  }
+  return null;
+}
+
 /**
- * Shapes that make good crosswords. Measured over 12 word sets (12–20 words):
- * these place as many words as a plain square (99%); triangle, diamond, star,
- * tree, pentagon and tall rectangle lost words, so they are not offered.
+ * Shapes that make good crosswords. Measured over the standard 12-word fruit
+ * set (4 seeds): triangle, diamond, star, tree, pentagon, tall rectangle,
+ * rabbit, mouse, dolphin and seal lost too many words, so they are not offered.
  */
-export const CROSSWORD_SHAPES: ShapeKey[] = ["square", "rounded", "landscape", "circle", "oval", "octagon", "hexagon", "heart", "egg", "apple", "pumpkin", "house", "cloud"];
+export const CROSSWORD_SHAPES: ShapeKey[] = [
+  "square", "rounded", "landscape", "circle", "oval", "octagon", "hexagon", "heart", "egg", "apple", "pumpkin", "house", "cloud",
+  ...ANIMAL_KEYS.filter((k) => !(["rabbit", "mouse", "dolphin", "seal"] as ShapeKey[]).includes(k)),
+];
 
-/** Shapes used when "mix shapes" is on, in this order. */
-export const MIX_SET: ShapeKey[] = ["circle", "heart", "star", "hexagon", "diamond", "cloud", "octagon", "egg", "apple", "rounded"];
+/** Shapes used when "mix shapes" is on (basics plus a rotation of favourite animals). */
+export const MIX_SET: ShapeKey[] = ["circle", "heart", "star", "hexagon", "diamond", "cloud", "octagon", "egg", "apple", "rounded", "elephant", "dolphin", "cat", "owl", "fish", "butterfly", "dog", "penguin", "rabbit", "whale"];
 
-export type ShapeMix = "one" | "each" | "theme";
+export type ShapeMix = "one" | "each" | "theme" | "animals";
 
 /** The shape of puzzle `index` (theme order index `themeIndex`) for a design's shape choice. */
 export function shapeFor(choice: { kind: ShapeKey; mix: ShapeMix }, index: number, themeIndex = 0, allowed?: ShapeKey[]): ShapeKey {
+  if (choice.mix === "animals") {
+    const set = ANIMAL_KEYS.filter((s) => !allowed || allowed.includes(s));
+    return set.length ? set[index % set.length] : (allowed?.[0] ?? "square");
+  }
   const set = allowed ? MIX_SET.filter((s) => allowed.includes(s)) : MIX_SET;
+  if (!set.length) return allowed?.[0] ?? "square";
   if (choice.mix === "each") return set[index % set.length];
   if (choice.mix === "theme") return set[themeIndex % set.length];
   return allowed && !allowed.includes(choice.kind) ? "square" : choice.kind;
@@ -380,7 +516,7 @@ export function shapedGrid(size: number, shape: ShapeKey | undefined): number | 
  */
 export function shapeStartSize(shape: ShapeKey | undefined, base: number, longest: number, max: number): number {
   if (isSquare(shape)) return base;
-  let n = Math.max(base, longest);
+  let n = Math.max(base, longest, shapeInfo(shape).minSize ?? 0);
   while (n < max) {
     const m = shapeMask(shape, n);
     if (maskCells(m, n) >= base * base * 0.97 && longestRun(m, n) >= longest + 1) break;
@@ -391,12 +527,19 @@ export function shapeStartSize(shape: ShapeKey | undefined, base: number, longes
 
 // ---------------------------------------------------------------- sudoku frames
 
-/** A sudoku is always a 9×9 square; these shapes are drawn as a frame around it. */
-export const SUDOKU_SHAPES: ShapeKey[] = ["square", "rounded", "circle", "octagon", "hexagon"];
+/**
+ * A sudoku is always a 9×9 square; these shapes are drawn as a frame around it.
+ * Animals whose silhouette would dwarf the grid (giraffe, flamingo, antlers, etc.)
+ * are left out so the page stays print-friendly; the rest place the 9×9 in the body.
+ */
+const SUDOKU_SKIP: ShapeKey[] = ["giraffe", "bat", "flamingo", "llama", "unicorn", "moose", "deer", "donkey", "longneck", "goat"];
+export const SUDOKU_SHAPES: ShapeKey[] = ["square", "rounded", "circle", "octagon", "hexagon", ...ANIMAL_KEYS.filter((k) => !SUDOKU_SKIP.includes(k))];
 
 /**
  * Frame outline (cell units, grid at 0..n) for a sudoku: the shape scaled
  * just enough that all four grid corners sit inside it with a small margin.
+ * Animals with a `focus` (torso) box place the 9×9 inside that body, with
+ * heads, legs and tails drawn around the grid.
  */
 export function sudokuFrame(key: ShapeKey | undefined, n = 9): Pt[] {
   const margin = 0.35;
@@ -409,18 +552,46 @@ export function sudokuFrame(key: ShapeKey | undefined, n = 9): Pt[] {
     const h = s / Math.min(1, info.aspect);
     return unit.map(([x, y]) => [n / 2 + (x - 0.5) * w, n / 2 + (y - 0.5) * h]);
   };
-  let lo = n, hi = n * 3;
-  for (let k = 0; k < 30; k++) {
-    const mid = (lo + hi) / 2;
-    const pts = at(mid);
-    if (corners.every(([x, y]) => inside(pts, x, y))) hi = mid;
-    else lo = mid;
+  const contain = (): Pt[] => {
+    let lo = n, hi = n * 6;
+    for (let k = 0; k < 30; k++) {
+      const mid = (lo + hi) / 2;
+      const pts = at(mid);
+      if (corners.every(([x, y]) => inside(pts, x, y))) hi = mid;
+      else lo = mid;
+    }
+    return at(hi);
+  };
+  const spanOf = (pts: Pt[]) => {
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+  };
+  const fitted = contain();
+  if (info.focus) {
+    const [fx0, fy0, fx1, fy1] = info.focus;
+    const fw = Math.max(0.15, fx1 - fx0);
+    const fh = Math.max(0.15, fy1 - fy0);
+    const side = n + margin * 2;
+    const scale = Math.max(side / fw, side / fh);
+    const cx = (fx0 + fx1) / 2;
+    const cy = (fy0 + fy1) / 2;
+    const focused = unit.map(([x, y]) => [n / 2 + (x - cx) * scale, n / 2 + (y - cy) * scale] as Pt);
+    // Prefer the tighter frame so skinny animals (giraffe, butterfly) don't dwarf the 9×9.
+    if (spanOf(focused) <= spanOf(fitted)) return focused;
   }
-  return at(hi);
+  return fitted;
 }
 
-/** Shape of every puzzle in a book for a design's shape choice (one shape, or mixed per puzzle / per theme). */
+/** Shape of every puzzle in a book for a design's shape choice (one shape, or mixed per puzzle / per theme / random animals). */
 export function shapeTargetsFor(choice: { kind: ShapeKey; mix: ShapeMix }, list: { theme?: string }[], allowed?: ShapeKey[]): ShapeKey[] {
   const themes = Array.from(new Set(list.map((p) => p.theme ?? "")));
-  return list.map((p, i) => shapeFor(choice, i, themes.indexOf(p.theme ?? ""), allowed));
+  const suggestIn = choice.mix === "animals" ? ANIMAL_KEYS.filter((s) => !allowed || allowed.includes(s)) : allowed;
+  return list.map((p, i) => {
+    if (choice.mix === "theme" || choice.mix === "animals") {
+      const hit = suggestShapeForTheme(p.theme, suggestIn);
+      if (hit) return hit;
+    }
+    return shapeFor(choice, i, themes.indexOf(p.theme ?? ""), allowed);
+  });
 }

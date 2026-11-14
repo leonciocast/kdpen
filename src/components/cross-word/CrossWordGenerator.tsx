@@ -243,7 +243,7 @@ export default function CrossWordGenerator() {
     <span data-testid="reshape-progress">Building your crosswords inside the new shape{refit.progress ? `: ${refit.progress.done} of ${refit.progress.total}` : "…"}</span>
   ) : usable.length ? (
     <span data-testid="reshape-done">
-      {usable.length === 1 ? "Your crossword uses" : `All ${usable.length} crosswords use`} {rawDesignApi.design.shape.mix === "one" ? `the ${shapeInfo(CROSSWORD_SHAPES.includes(rawDesignApi.design.shape.kind) ? rawDesignApi.design.shape.kind : "square").label.toLowerCase()} shape` : "mixed shapes"}.
+      {usable.length === 1 ? "Your crossword uses" : `All ${usable.length} crosswords use`} {rawDesignApi.design.shape.mix === "one" ? `the ${shapeInfo(CROSSWORD_SHAPES.includes(rawDesignApi.design.shape.kind) ? rawDesignApi.design.shape.kind : "square").label.toLowerCase()} shape` : rawDesignApi.design.shape.mix === "animals" ? "a different animal each time" : "mixed shapes"}.
     </span>
   ) : null;
 
@@ -558,7 +558,7 @@ export default function CrossWordGenerator() {
       <div className="pg-card pg-wizard-card">
         {step === 0 && <QuestionFlow flow={stage(0)} questions={wordsQs} />}
         {step === 1 && <QuestionFlow flow={stage(1)} questions={buildQs} />}
-        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" shapeStatus={shapeStatus} busy={!!refit} flow={stage(2)} />}
+        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" shapeStatus={shapeStatus} busy={!!refit} flow={stage(2)} themes={[...new Set(usable.map((p) => p.theme).filter((x): x is string => !!x))]} />}
         {step === 3 && (
           <BookExport
             tool="crossword"

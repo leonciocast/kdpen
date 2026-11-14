@@ -533,3 +533,8 @@ a { text-underline-offset: 2px; }
 .pg-shape-name { font-size: .82rem; font-weight: 600; display: flex; align-items: center; gap: .3rem; text-align: center; line-height: 1.15; }
 .pg-shape-tag { font-size: .7rem; color: var(--pg-muted); text-align: center; line-height: 1.2; }
 .pg-shape-status { margin-top: .4rem; padding: .5rem .7rem; border-radius: var(--pg-radius-sm); background: var(--pg-primary-50); color: var(--pg-primary); font-weight: 600; }
+.pg-shape-toolbar { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: center; margin: 0 0 .85rem; }
+.pg-shape-toolbar .pg-seg { flex: 1 1 auto; }
+.pg-shape-search { display: flex; align-items: center; gap: .4rem; flex: 1 1 16rem; border: 1px solid var(--pg-border); border-radius: var(--pg-radius-sm); background: #fff; padding: .25rem .7rem; color: var(--pg-muted); }
+.pg-shape-search input { border: 0; outline: none; flex: 1; background: transparent; padding: .3rem 0; min-width: 0; }
+.pg-shape-suggest { margin: 0 0 .85rem; padding: .6rem .8rem; border-radius: var(--pg-radius-sm); background: var(--pg-primary-50); color: var(--pg-ink); font-size: .92rem; display: flex; flex-wrap: wrap; align-items: center; gap: .25rem; }

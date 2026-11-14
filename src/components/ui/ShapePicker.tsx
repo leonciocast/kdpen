@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
-import { BsCheckCircleFill } from "react-icons/bs";
-import { CROSSWORD_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeKey, ShapeMix, maskBox, shapeInfo, shapeMask, shapeOutline, sudokuFrame } from "@/lib/shapes/shapes";
+import { BsCheckCircleFill, BsSearch } from "react-icons/bs";
+import { CROSSWORD_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeCategory, ShapeKey, ShapeMix, maskBox, shapeCategory, shapeInfo, shapeMask, shapeOutline, suggestShapeForTheme, sudokuFrame } from "@/lib/shapes/shapes";
 import type { Design, ToolKind } from "@/lib/design/types";
 
 /** Shapes each tool can use (crossword: only shapes that still give well-connected crosswords; sudoku: frames around the 9×9). */
@@ -40,7 +40,7 @@ function fillet(pts: P[], r: number): P[] {
 }
 
 /** A real mini preview: the shape's mask with letters / cells, and the outline in the frame style. */
-export function ShapeThumb({ shape, tool, grid, size = 12 }: { shape: ShapeKey; tool: ToolKind; grid: Design["grid"]; size?: number }) {
+export function ShapeThumb({ shape, tool, grid, size = 12, shade = false }: { shape: ShapeKey; tool: ToolKind; grid: Design["grid"]; size?: number; shade?: boolean }) {
   const C = 10;
   const sw = Math.max(0.8, grid.frame * 0.75);
   const dash = grid.line === "dashed" ? `${sw * 3} ${sw * 2}` : grid.line === "dotted" ? `0.1 ${sw * 2.6}` : undefined;
@@ -63,7 +63,7 @@ export function ShapeThumb({ shape, tool, grid, size = 12 }: { shape: ShapeKey; 
     return (
       <svg viewBox={`${x0} ${y0} ${x1 - x0} ${y1 - y0}`} className="pg-shape-svg" aria-hidden>
         {grid.shadow && grid.border !== "none" && shape !== "square" && <path d={path(pts.map(([x, y]) => [x + 3, y + 3]))} fill="#d1d5db" />}
-        {shape !== "square" && <path d={path(pts)} fill="#fff" stroke={grid.border === "none" ? "none" : "#111"} strokeWidth={sw} strokeDasharray={dash} strokeLinecap={cap} />}
+        {shape !== "square" && <path d={path(pts)} fill={shade ? "#e2e2e2" : "#fff"} stroke={grid.border === "none" ? "none" : "#111"} strokeWidth={sw} strokeDasharray={dash} strokeLinecap={cap} />}
         {grid.cells === "plain" &&
           Array.from({ length: n + 1 }, (_, i) => (
             <g key={i}>
@@ -145,7 +145,7 @@ export function ShapeThumb({ shape, tool, grid, size = 12 }: { shape: ShapeKey; 
   return (
     <svg viewBox={`${x0.toFixed(1)} ${y0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(y1 - y0).toFixed(1)}`} className="pg-shape-svg" aria-hidden>
       {grid.shadow && !noBorder && <path d={path(shapePts.map(([x, y]) => [x + 3, y + 3]))} fill="#d1d5db" />}
-      <path d={path(shapePts)} fill="#fff" />
+      <path d={path(shapePts)} fill={shade ? "#e2e2e2" : "#fff"} />
       {lines}
       {items}
       {!noBorder && <path d={path(shapePts)} fill="none" stroke="#111" strokeWidth={sw} strokeDasharray={dash} strokeLinecap={cap} strokeLinejoin="round" />}
@@ -154,36 +154,108 @@ export function ShapeThumb({ shape, tool, grid, size = 12 }: { shape: ShapeKey; 
   );
 }
 
-const GROUPS: { id: "basic" | "geometric" | "fun"; label: string }[] = [
-  { id: "basic", label: "Classic" },
-  { id: "geometric", label: "Geometric" },
-  { id: "fun", label: "Fun & seasonal" },
+const CATS: { id: ShapeCategory; label: string }[] = [
+  { id: "basic", label: "Basic shapes" },
+  { id: "animals", label: "Animals" },
+  { id: "objects", label: "Holiday & objects" },
 ];
 
-const MIX_LABELS: Record<ShapeMix, string> = { one: "Same shape", each: "Mix: new shape each puzzle", theme: "Mix: one per theme" };
+const MIX_LABELS: Record<ShapeMix, string> = {
+  one: "Same shape",
+  each: "Mix: new shape each puzzle",
+  theme: "Mix: one per theme",
+  animals: "Mix: random animals",
+};
 
-export function ShapePicker({ tool, design, onChange, compact }: { tool: ToolKind; design: Design; onChange: (kind: ShapeKey, mix: ShapeMix) => void; compact?: boolean }) {
+export function ShapePicker({
+  tool,
+  design,
+  onChange,
+  compact,
+  themes = [],
+}: {
+  tool: ToolKind;
+  design: Design;
+  onChange: (kind: ShapeKey, mix: ShapeMix, shade?: boolean) => void;
+  compact?: boolean;
+  themes?: string[];
+}) {
   const allowed = shapesFor(tool);
   const mix = design.shape.mix;
   const current = allowed.includes(design.shape.kind) ? design.shape.kind : "square";
+  let suggested: { theme: string; key: ShapeKey } | null = null;
+  for (const t of themes) {
+    const hit = suggestShapeForTheme(t, allowed);
+    if (hit && hit !== current) {
+      suggested = { theme: t, key: hit };
+      break;
+    }
+  }
+  const [tab, setTab] = React.useState<ShapeCategory>(() => shapeCategory(shapeInfo(current)));
+  const [query, setQuery] = React.useState("");
+  const q = query.trim().toLowerCase();
+  const matches = (s: (typeof SHAPES)[number]) => {
+    if (!allowed.includes(s.key)) return false;
+    if (!q) return true;
+    const blob = [s.key, s.label, s.tag, ...(s.aliases ?? [])].join(" ").toLowerCase();
+    return blob.includes(q);
+  };
+  const visibleCats = CATS.filter((c) => SHAPES.some((s) => shapeCategory(s) === c.id && matches(s)));
+  const activeCat = q ? null : visibleCats.some((c) => c.id === tab) ? tab : visibleCats[0]?.id ?? "basic";
+
   return (
     <div data-testid="shape-picker">
       {tool !== "sudoku" && (
         <div className="pg-seg mb-3" role="radiogroup" aria-label="Shape for each puzzle">
-          {(["one", "each", "theme"] as ShapeMix[]).map((m) => (
-            <button key={m} type="button" role="radio" aria-checked={mix === m} className={mix === m ? "active" : ""} onClick={() => onChange(current, m)} data-testid={`shape-mix-${m}`}>
+          {(["one", "each", "theme", "animals"] as ShapeMix[]).map((m) => (
+            <button key={m} type="button" role="radio" aria-checked={mix === m} className={mix === m ? "active" : ""} onClick={() => onChange(current, m, design.shape.shade)} data-testid={`shape-mix-${m}`}>
               {MIX_LABELS[m]}
             </button>
           ))}
         </div>
       )}
-      {GROUPS.map((g) => {
-        const list = SHAPES.filter((s) => s.group === g.id && allowed.includes(s.key));
+      <div className="form-check form-switch mb-3">
+        <input className="form-check-input" type="checkbox" id="shape-shade" checked={design.shape.shade} onChange={(e) => onChange(current, mix, e.target.checked)} data-testid="shape-shade" />
+        <label className="form-check-label" htmlFor="shape-shade">
+          Light shaded silhouette
+        </label>
+      </div>
+      {suggested && mix === "one" && (
+        <div className="pg-shape-suggest" data-testid="shape-suggest">
+          Your theme is “{suggested.theme}”.
+          <button type="button" className="btn btn-sm btn-outline-primary ms-2" onClick={() => { onChange(suggested.key, "one", true); setTab(shapeCategory(shapeInfo(suggested.key))); }} data-testid="shape-suggest-apply">
+            Use the {shapeInfo(suggested.key).label.toLowerCase()} shape
+          </button>
+        </div>
+      )}
+      <div className="pg-shape-toolbar">
+          <div className="pg-seg" role="tablist" aria-label="Shape category">
+            {CATS.filter((c) => SHAPES.some((s) => shapeCategory(s) === c.id && allowed.includes(s.key))).map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                role="tab"
+                aria-selected={!q && activeCat === c.id}
+                className={!q && activeCat === c.id ? "active" : ""}
+                onClick={() => { setTab(c.id); setQuery(""); }}
+                data-testid={`shape-cat-${c.id}`}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        <label className="pg-shape-search">
+          <BsSearch aria-hidden />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search animals and shapes" aria-label="Search animals and shapes" data-testid="shape-search" />
+        </label>
+      </div>
+      {(q ? CATS.filter((c) => visibleCats.some((v) => v.id === c.id)) : CATS.filter((c) => c.id === activeCat)).map((c) => {
+        const list = SHAPES.filter((s) => shapeCategory(s) === c.id && matches(s));
         if (!list.length) return null;
         return (
-          <div key={g.id} className="mb-3">
-            {tool !== "sudoku" && <div className="pg-shape-group">{g.label}</div>}
-            <div className={`pg-shape-grid ${compact ? "compact" : ""}`} role="radiogroup" aria-label={`${g.label} shapes`}>
+          <div key={c.id} className="mb-3">
+            {q && <div className="pg-shape-group">{c.label}</div>}
+            <div className={`pg-shape-grid ${compact ? "compact" : ""}`} role="radiogroup" aria-label={`${c.label} shapes`}>
               {list.map((s) => {
                 const active = mix === "one" && current === s.key;
                 return (
@@ -194,11 +266,11 @@ export function ShapePicker({ tool, design, onChange, compact }: { tool: ToolKin
                     aria-checked={active}
                     disabled={mix !== "one"}
                     className={`pg-shape-card ${active ? "active" : ""}`}
-                    onClick={() => onChange(s.key, "one")}
+                    onClick={() => onChange(s.key, "one", s.group === "animals" ? true : design.shape.shade)}
                     data-testid={`shape-${s.key}`}
                     title={s.label}
                   >
-                    <ShapeThumb shape={s.key} tool={tool} grid={{ ...design.grid, frame: Math.max(design.grid.frame, 1.2), border: design.grid.border === "none" ? "square" : design.grid.border }} />
+                    <ShapeThumb shape={s.key} tool={tool} grid={{ ...design.grid, frame: Math.max(design.grid.frame, 1.2), border: design.grid.border === "none" ? "square" : design.grid.border }} shade={s.group === "animals" || design.shape.shade} />
                     <span className="pg-shape-name">
                       {s.label}
                       {active && <BsCheckCircleFill className="pg-template-check" aria-label="Selected" />}
@@ -211,6 +283,7 @@ export function ShapePicker({ tool, design, onChange, compact }: { tool: ToolKin
           </div>
         );
       })}
+      {q && !visibleCats.length && <p className="small text-muted mb-0">No shapes match “{query}”.</p>}
     </div>
   );
 }

@@ -2,7 +2,7 @@
 import { Rng, mulberry32 } from "../wordsearch/engine";
 import { tidySpaces } from "../text";
 import { LIMITS } from "../limits";
-import { Mask, ShapeKey, isSquare, longestRun, maskBox, maskCells, shapeMask } from "../shapes/shapes";
+import { Mask, ShapeKey, isSquare, longestRun, maskBox, maskCells, shapeInfo, shapeMask } from "../shapes/shapes";
 
 export interface ClueEntry {
   answer: string; // as typed (uppercase); spaces/hyphens allowed
@@ -263,7 +263,7 @@ export function generateShapedCrossword(entries: ClueEntry[], rng: Rng, shape: S
   const lens = entries.map((e) => cwLetters(e.answer).length);
   const letters = lens.reduce((a, b) => a + b, 0);
   const longest = Math.max(2, ...lens);
-  let n = Math.max(7, longest);
+  let n = Math.max(7, longest, shapeInfo(shape).minSize ?? 0);
   while (n < LIMITS.maxShapeGridSize) {
     const m = shapeMask(shape, n);
     if (maskCells(m, n) >= letters * 1.7 && longestRun(m, n) >= longest) break;

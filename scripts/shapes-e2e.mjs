@@ -73,6 +73,23 @@ async function exportPdf(name) {
   await dl.saveAs(file);
   return file;
 }
+
+const shapeCardSel = '[data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid^="shape-cat"]):not([data-testid="shape-picker"]):not([data-testid="shape-search"]):not([data-testid="shape-shade"]):not([data-testid^="shape-suggest"])';
+const openCat = async (id) => {
+  await page.click(`[data-testid="shape-cat-${id}"]`);
+  await pause(200);
+};
+const allShapeCards = async () => {
+  const keys = new Set();
+  for (const cat of ["basic", "animals", "objects"]) {
+    if (await page.$(`[data-testid="shape-cat-${cat}"]`)) {
+      await openCat(cat);
+      (await page.$$eval(shapeCardSel, (els) => els.map((e) => e.dataset.testid))).forEach((k) => keys.add(k));
+    }
+  }
+  return [...keys];
+};
+
 const stepTo = (label) => page.click(`nav[aria-label="Progress"] button[title="${label}"]`);
 
 // ================= Word search =================
@@ -97,11 +114,14 @@ await waitPreview();
 check((await q()) === "template", "ws: design starts with the template");
 await next();
 check((await q()) === "shape", "ws: template → Pick a shape");
-const shapeCards = await page.$$eval('[data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid="shape-picker"]):not([data-testid="shape-next"])', (els) => els.map((e) => e.dataset.testid));
-check(shapeCards.length === 20, `ws: 20 shapes offered (${shapeCards.length})`);
-check((await page.$$('[data-testid="shape-picker"] svg.pg-shape-svg')).length >= 20, "ws: every shape card has a mini preview");
+const shapeCards = await allShapeCards();
+check(shapeCards.length >= 80, `ws: a large shape library is offered (${shapeCards.length})`);
+check(shapeCards.includes("shape-elephant") && shapeCards.includes("shape-heart"), "ws: animals and classic shapes are both offered");
+await openCat("basic");
+check((await page.$$('[data-testid="shape-picker"] svg.pg-shape-svg')).length >= 10, "ws: every visible shape card has a mini preview");
 await shot("ws_01_shape_question");
 let sig = await previewSig();
+await openCat("objects");
 await page.click('[data-testid="shape-heart"]');
 await page.waitForSelector('[data-testid="reshape-done"]:has-text("heart")', { timeout: 60000 });
 await waitPreview(sig);
@@ -115,6 +135,7 @@ await page.waitForSelector('[data-testid="reshape-done"]:has-text("mixed")', { t
 await waitPreview(sig);
 await shot("ws_03_mixed");
 await page.click('[data-testid="shape-mix-one"]');
+await openCat("objects");
 await page.click('[data-testid="shape-heart"]');
 await page.waitForSelector('[data-testid="reshape-done"]:has-text("heart")', { timeout: 60000 });
 await next();
@@ -137,6 +158,7 @@ await page.click('[data-testid="design-customize"]');
 await pause();
 check((await q()) === "customize", "ws: customize reachable");
 await page.click('[data-testid="customize"] summary:has-text("Shape")');
+await page.click('[data-testid="customize"] [data-testid="shape-cat-basic"]');
 check((await page.$$('[data-testid="customize"] [data-testid="shape-star"]')).length === 1, "ws: shapes also in Customize");
 await shot("ws_06_customize_shape");
 // Review shows the heart grid
@@ -242,7 +264,9 @@ await waitPreview();
 await next();
 check((await q()) === "shape", "sd: template → Pick a frame shape");
 check((await page.innerText("[data-question]")).includes("must stay a 9×9 square"), "sd: honest note that sudoku stays square");
+if (await page.$('[data-testid="shape-cat-objects"]')) await openCat("objects");
 check((await page.$$('[data-testid="shape-heart"]')).length === 0, "sd: only frame shapes offered");
+await openCat("basic");
 sig = await previewSig();
 await page.click('[data-testid="shape-circle"]');
 await waitPreview(sig);
