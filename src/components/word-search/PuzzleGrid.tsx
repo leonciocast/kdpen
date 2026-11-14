@@ -2,7 +2,7 @@
 import React from "react";
 import { Cell, LetterGrid, Placement, placementCells } from "@/lib/wordsearch/engine";
 import { placementCapsule, pointsToSvgPath } from "@/lib/wordsearch/geometry";
-import { OUTLINE_PAD, ShapeKey, maskBox, shapeMask, shapeOutline } from "@/lib/shapes/shapes";
+import { OUTLINE_PAD, ShapeKey, maskBox, maskOutlines, shapeMask } from "@/lib/shapes/shapes";
 
 export type SolutionStyle = "hidden" | "color" | "bw";
 
@@ -56,11 +56,12 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   let view = `${-pad - 2} ${-pad - 2} ${side + pad * 2 + 4} ${side + pad * 2 + 4}`;
   let outlinePath: string | null = null;
   if (mask) {
-    const pts = shapeOutline(shape, size).map(([x, y]) => [x * CELL, y * CELL] as [number, number]);
-    outlinePath = "M" + pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z";
+    const rings = maskOutlines(mask).map((ring) => ring.map(([x, y]) => [x * CELL, y * CELL] as [number, number]));
+    const pts = rings[0] ?? [];
+    outlinePath = rings.map((ring) => "M" + ring.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z").join("");
     const [r0, c0, r1, c1] = maskBox(mask, size);
-    const xs = pts.map((p) => p[0]);
-    const ys = pts.map((p) => p[1]);
+    const xs = rings.flatMap((ring) => ring.map((p) => p[0]));
+    const ys = rings.flatMap((ring) => ring.map((p) => p[1]));
     const x0 = Math.min((c0 - OUTLINE_PAD) * CELL, ...xs) - 4;
     const y0 = Math.min((r0 - OUTLINE_PAD) * CELL, ...ys) - 4;
     const x1 = Math.max((c1 + 1 + OUTLINE_PAD) * CELL, ...xs) + 4;
@@ -87,7 +88,7 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
       onMouseLeave={() => onCellHover?.(null)}
     >
       {outlinePath ? (
-        <path d={outlinePath} fill="#fff" stroke="#000" strokeWidth={2.5} strokeLinejoin="round" data-testid="grid-outline" />
+        <path d={outlinePath} fill="#fff" fillRule="evenodd" stroke="#000" strokeWidth={2.5} strokeLinejoin="round" data-testid="grid-outline" />
       ) : (
         <rect x={-pad} y={-pad} width={side + pad * 2} height={side + pad * 2} fill="#fff" stroke="#000" strokeWidth={2.5} />
       )}

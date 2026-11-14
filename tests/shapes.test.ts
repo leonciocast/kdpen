@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ANIMAL_KEYS, CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
+import { ANIMAL_KEYS, CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
 import { ALL_DIRECTIONS, checkPlacement, findOccurrences, gridForm, makePlacement, mulberry32, placementCells, Placement } from "../src/lib/wordsearch/engine";
 import { resolveFixed, resolveFreeEnd, snapStart, validDirectionsFrom, validStartCells } from "../src/lib/wordsearch/snap";
 import { WS_DIFFICULTIES, suggestGridSize } from "../src/lib/wordsearch/difficulty";
 import { splitIntoPuzzles } from "../src/lib/wordsearch/bulk";
 import { generateOneWordSearch } from "../src/lib/jobs/run";
 import { generateCrossword } from "../src/lib/crossword/engine";
-import { buildWordSearchBook, wsGeometry } from "../src/lib/wordsearch/pdf";
+import { buildWordSearchBook, wsGeometry, wsLetterSize } from "../src/lib/wordsearch/pdf";
 import { buildCrosswordBook } from "../src/lib/crossword/pdf";
 import { buildSudokuBook } from "../src/lib/sudoku/pdf";
 import { generateSudoku } from "../src/lib/sudoku";
@@ -88,15 +88,71 @@ describe("shape masks", () => {
           for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (on(a + dr, b + dc) && !seen.has(`${a + dr},${b + dc}`)) { seen.add(`${a + dr},${b + dc}`); st.push([a + dr, b + dc]); }
         }
         expect(seen.size, `${k} ${n} connected`).toBe(cells);
-        // The outline stays around the used cells.
-        const pts = shapeOutline(k, n);
+        // The lettered-cell outline stays around the used cells.
+        const pts = maskOutline(m);
         const xs = pts.map((p) => p[0]);
         const [, cc0, , cc1] = maskBox(m, n);
-        expect(Math.min(...xs)).toBeLessThanOrEqual(cc0);
-        expect(Math.max(...xs)).toBeGreaterThanOrEqual(cc1 + 1);
+        expect(Math.min(...xs)).toBeLessThanOrEqual(cc0 + 1e-6);
+        expect(Math.max(...xs)).toBeGreaterThanOrEqual(cc1 + 1 - 1e-6);
       }
     }
   });
+  it("the shaded outline covers every lettered cell and stays close to them", () => {
+    const ringIn = (pts: [number, number][], x: number, y: number) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i];
+        const [xj, yj] = pts[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+      }
+      return hit;
+    };
+    const pointIn = (rings: [number, number][][], x: number, y: number) => rings.reduce((hit, ring) => hit !== ringIn(ring, x, y), false);
+    const nearCell = (m: boolean[][], x: number, y: number, max: number) => {
+      const n = m.length;
+      const r0 = Math.max(0, Math.floor(y) - 2);
+      const r1 = Math.min(n - 1, Math.ceil(y) + 2);
+      const c0 = Math.max(0, Math.floor(x) - 2);
+      const c1 = Math.min(n - 1, Math.ceil(x) + 2);
+      for (let r = r0; r <= r1; r++)
+        for (let c = c0; c <= c1; c++) {
+          if (!m[r][c]) continue;
+          // Distance to the cell square [c,c+1]×[r,r+1] (0 if inside the square).
+          const dx = x < c ? c - x : x > c + 1 ? x - (c + 1) : 0;
+          const dy = y < r ? r - y : y > r + 1 ? y - (r + 1) : 0;
+          if (Math.hypot(dx, dy) <= max) return true;
+        }
+      return false;
+    };
+    for (const k of SHAPED) {
+      const n = Math.max(shapeInfo(k).minSize ?? 16, 16);
+      const m = shapeMask(k, n)!;
+      const rings = maskOutlines(m);
+      expect(rings[0]?.length, k).toBeGreaterThan(8);
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          if (!m[r][c]) continue;
+          expect(pointIn(rings, c + 0.5, r + 0.5), `${k} letter at ${r},${c} outside the shade`).toBe(true);
+        }
+      // No grey farther than about half a cell from a lettered square (pad is 0.22;
+      // a little slack allows Chaikin rounding at notches).
+      const limit = 0.6;
+      for (const [x, y] of rings.flat()) expect(nearCell(m, x, y, limit), `${k} outline at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
+      // Sample the interior of the shade on a half-cell grid.
+      const xs = rings.flatMap((ring) => ring.map((p) => p[0]));
+      const ys = rings.flatMap((ring) => ring.map((p) => p[1]));
+      const x0 = Math.min(...xs);
+      const y0 = Math.min(...ys);
+      const x1 = Math.max(...xs);
+      const y1 = Math.max(...ys);
+      for (let y = y0 + 0.25; y < y1; y += 0.5)
+        for (let x = x0 + 0.25; x < x1; x += 0.5) {
+          if (!pointIn(rings, x, y)) continue;
+          expect(nearCell(m, x, y, limit), `${k} empty shade at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
+        }
+    }
+  });
+
   it("mixes shapes per puzzle or per theme", () => {
     expect(shapeFor({ kind: "heart", mix: "one" }, 5)).toBe("heart");
     const each = shapeTargetsFor({ kind: "heart", mix: "each" }, [{}, {}, {}]);
@@ -302,5 +358,46 @@ describe("SVG path silhouettes", () => {
       expect(m, k).not.toBeNull();
       expect(maskCells(m!, n), k).toBeGreaterThan(20);
     }
+  });
+});
+
+describe("word-search letter size", () => {
+  /** Font size of single-letter grid glyphs on the first page of a rendered book. */
+  async function letterSizes(trim: "8.5x11" | "6x9", shapes: ShapeKey[]) {
+    const pz = shapes.map((k, i) => generateOneWordSearch({ title: k, theme: "", words: WORDS, size: 15, shape: k }, WS_DIFFICULTIES[1], 200 + i));
+    const design = templateDesign("classic");
+    design.shape.shade = true;
+    const book = buildWordSearchBook(pz, { trim, bleed: false, answersPerPage: 1, frontMatter: null, extras: NO_EXTRAS, design }, nodeFonts());
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(book.pdf.output("arraybuffer")) }).promise;
+    const out: { shape: ShapeKey; size: number; font: number; cell: number }[] = [];
+    for (let i = 0; i < pz.length; i++) {
+      const tc = await (await doc.getPage(i + 1)).getTextContent();
+      const fonts: number[] = [];
+      for (const item of tc.items) {
+        if (!("str" in item) || !/^[A-Z]$/.test(item.str)) continue;
+        const tr = (item as { transform: number[] }).transform;
+        fonts.push(Math.abs(tr[0]) || Math.abs(tr[3]) || (item as { height?: number }).height || 0);
+      }
+      const geo = wsGeometry(pz[i]);
+      // Reconstruct cell from the known letter-size formula once we have the font.
+      const font = fonts.sort((a, b) => a - b)[Math.floor(fonts.length / 2)] ?? 0;
+      const cell = font / 0.6; // classic template, plain cells, gridScale 1
+      out.push({ shape: shapes[i], size: pz[i].size, font, cell });
+    }
+    return out;
+  }
+
+  it("stays at least about 7pt on 8.5x11, and records the 6x9 minimum", async () => {
+    const keys: ShapeKey[] = ["elephant", "deer", "giraffe", "flamingo", "horse", "octopus"];
+    const large = await letterSizes("8.5x11", keys);
+    for (const row of large) {
+      expect(row.font, `${row.shape} ${row.size} on 8.5x11 is ${row.font.toFixed(2)}pt`).toBeGreaterThanOrEqual(7 - 0.05);
+    }
+    const small = await letterSizes("6x9", keys);
+    const min6 = Math.min(...small.map((r) => r.font));
+    expect(min6).toBeGreaterThan(4);
+    // Also the helper agrees with the formula.
+    expect(wsLetterSize(12, templateDesign("classic"))).toBeCloseTo(12 * 0.6, 5);
   });
 });

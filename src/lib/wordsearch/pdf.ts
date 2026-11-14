@@ -1,6 +1,6 @@
 /** Word search book pages in the chosen design, on the shared KDP renderer. */
 import type { Slot } from "../print/arrange";
-import { OUTLINE_PAD, ShapeKey, maskBox, shapeMask, shapeOutline } from "../shapes/shapes";
+import { OUTLINE_PAD, ShapeKey, maskBox, maskOutlines, shapeMask } from "../shapes/shapes";
 import type { jsPDF } from "jspdf";
 import { Placement, fillGrid, makePlacement, mulberry32, placementCells } from "./engine";
 import { placementCapsule } from "./geometry";
@@ -50,6 +50,17 @@ export interface GridDrawOptions {
   backing?: boolean;
 }
 
+/** Letter font size in points for a grid whose cells are `cell` points wide. */
+export function wsLetterSize(cell: number, design: Design): number {
+  const cellsScale = design.grid.cells === "plain" ? 1 : 0.9;
+  const sized = Math.min(cell * 0.6 * design.fonts.gridScale, cell * 0.82) * cellsScale;
+  // On large, tight-fitting animal grids the 0.6× cell size can dip under 7pt;
+  // keep letters readable whenever the cell itself can hold a 7pt glyph.
+  const floor = 7 * cellsScale * Math.min(1, design.fonts.gridScale);
+  if (sized < floor && cell * 0.82 * cellsScale >= floor) return floor;
+  return sized;
+}
+
 /**
  * Where a puzzle sits, in cell units: the used rows/cols (shapes are cropped
  * to their cells) and the outline around them. (0,0) is the first used cell.
@@ -60,8 +71,8 @@ export interface WsGeometry {
   r0: number;
   c0: number;
   isCell: (r: number, c: number) => boolean;
-  /** Outline in cell units relative to the crop, or null for the plain square frame. */
-  outline: [number, number][] | null;
+  /** Outline rings in cell units relative to the crop (holes after the first), or null for the plain square frame. */
+  outline: [number, number][][] | null;
   /** Drawing extent (cells + outline) in cell units. */
   ext: { x0: number; y0: number; x1: number; y1: number };
 }
@@ -71,11 +82,11 @@ export function wsGeometry(pz: Pick<BookPuzzle, "size" | "shape">): WsGeometry {
   const mask = shapeMask(pz.shape, n);
   if (!mask) return { rows: n, cols: n, r0: 0, c0: 0, isCell: () => true, outline: null, ext: { x0: -OUTLINE_PAD, y0: -OUTLINE_PAD, x1: n + OUTLINE_PAD, y1: n + OUTLINE_PAD } };
   const [r0, c0, r1, c1] = maskBox(mask, n);
-  const outline = shapeOutline(pz.shape, n).map(([x, y]) => [x - c0, y - r0] as [number, number]);
+  const outline = maskOutlines(mask).map((ring) => ring.map(([x, y]) => [x - c0, y - r0] as [number, number]));
   const rows = r1 - r0 + 1;
   const cols = c1 - c0 + 1;
-  const xs = outline.map((p) => p[0]);
-  const ys = outline.map((p) => p[1]);
+  const xs = outline.flatMap((ring) => ring.map((p) => p[0]));
+  const ys = outline.flatMap((ring) => ring.map((p) => p[1]));
   return {
     rows,
     cols,
@@ -93,7 +104,7 @@ export function drawWordSearchGrid(pdf: jsPDF, look: Look, puzzle: BookPuzzle, x
   const { rows, cols, r0, c0 } = geo;
   const pad = cell * OUTLINE_PAD;
   const frameBox = { x: x - pad, y: y - pad, w: cols * cell + 2 * pad, h: rows * cell + 2 * pad };
-  const outline = geo.outline?.map(([px, py]) => [x + px * cell, y + py * cell] as [number, number]) ?? null;
+  const outline = geo.outline?.map((ring) => ring.map(([px, py]) => [x + px * cell, y + py * cell] as [number, number])) ?? null;
   if (outline) drawOutlineBacking(pdf, outline, look, cell);
   else {
     if (o.backing) panel(pdf, { x: frameBox.x - 4, y: frameBox.y - 4, w: frameBox.w + 8, h: frameBox.h + 8 }, look, 10);
@@ -115,8 +126,7 @@ export function drawWordSearchGrid(pdf: jsPDF, look: Look, puzzle: BookPuzzle, x
     }
   }
   const gf = look.font(look.design.fonts.grid);
-  const cellsScale = look.design.grid.cells === "plain" ? 1 : 0.9;
-  const size = Math.min(cell * 0.6 * look.design.fonts.gridScale, cell * 0.82) * cellsScale;
+  const size = wsLetterSize(cell, look.design);
   pdf.setFontSize(size);
   let current = "";
   for (let r = r0; r < r0 + rows; r++) {

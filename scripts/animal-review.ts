@@ -59,6 +59,8 @@ render("ws-animals", wsBook.pdf.output("arraybuffer"), [1, pz.length]);
 // A close-up of the elephant page (the look from the reference product).
 render("ws-elephant-page", buildWordSearchBook([pz[ANIMAL_KEYS.indexOf("elephant")]], { trim: "8.5x11", bleed: false, answersPerPage: 1, frontMatter: null, extras: NO_EXTRAS, design }, fonts).pdf.output("arraybuffer"), [1, 1], 110);
 render("ws-deer-page", buildWordSearchBook([pz[ANIMAL_KEYS.indexOf("deer")]], { trim: "8.5x11", bleed: false, answersPerPage: 1, frontMatter: null, extras: NO_EXTRAS, design }, fonts).pdf.output("arraybuffer"), [1, 1], 110);
+render("ws-giraffe-page", buildWordSearchBook([pz[ANIMAL_KEYS.indexOf("giraffe")]], { trim: "8.5x11", bleed: false, answersPerPage: 1, frontMatter: null, extras: NO_EXTRAS, design }, fonts).pdf.output("arraybuffer"), [1, 1], 110);
+render("ws-flamingo-page", buildWordSearchBook([pz[ANIMAL_KEYS.indexOf("flamingo")]], { trim: "8.5x11", bleed: false, answersPerPage: 1, frontMatter: null, extras: NO_EXTRAS, design }, fonts).pdf.output("arraybuffer"), [1, 1], 110);
 console.log("word search sizes:", pz.map((p) => `${p.shape} ${p.size}`).join(", "));
 
 const cwAnimals = CROSSWORD_SHAPES.filter(isAnimal);

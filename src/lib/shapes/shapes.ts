@@ -1,9 +1,11 @@
 /**
  * Puzzle grid shapes. Every shape is a polygon in a unit box; a puzzle of
- * size N gets a boolean mask of the N×N cells that lie well inside it (with
- * room for the letter and the outline), cleaned so thin tips and stray cells
- * disappear. The same polygon is drawn as the outline, so it hugs the cells.
- * Pure (no DOM): shared by the engine, the PDF renderer, the UI and tests.
+ * size N gets a boolean mask of the N×N cells that the shape covers
+ * (including partially covered cells, cleaned so thin tips and stray cells
+ * disappear). Word-search pages draw the shaded outline from those lettered
+ * cells so grey fill and letters always match. Geometric shapes still keep a
+ * small inset so letters sit inside a decorative frame. Pure (no DOM): shared
+ * by the engine, the PDF renderer, the UI and tests.
  */
 
 import { ANIMALS } from "./animals";
@@ -267,8 +269,11 @@ export const isSquare = (k: ShapeKey | undefined) => !k || k === "square";
 
 /** Outline padding around the outer cells, in cells (the old square frame used 0.22). */
 export const OUTLINE_PAD = 0.22;
-/** A cell is used when its centre is at least this far (in cells) inside the outline. */
+/** Geometric shapes: a cell is used when its centre is at least this far (in cells) inside the outline. */
 const INSET = 0.5 + OUTLINE_PAD;
+/** Animals: include a cell when this fraction of it sits inside the silhouette. */
+const COVERAGE = 0.2;
+const COVERAGE_SAMPLES = 5;
 
 // ---------------------------------------------------------------- geometry
 
@@ -291,6 +296,253 @@ function edgeDistance(pts: Pt[], x: number, y: number): number {
     const dy = by - ay;
     const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
     best = Math.min(best, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
+  }
+  return best;
+}
+
+function coverageGrid(pts: Pt[], size: number): number[][] {
+  const s = COVERAGE_SAMPLES;
+  const g: number[][] = Array.from({ length: size }, () => Array(size).fill(0));
+  for (let r = 0; r < size; r++)
+    for (let c = 0; c < size; c++) {
+      let hit = 0;
+      for (let i = 0; i < s; i++)
+        for (let j = 0; j < s; j++) if (inside(pts, c + (j + 0.5) / s, r + (i + 0.5) / s)) hit++;
+      g[r][c] = hit / (s * s);
+    }
+  return g;
+}
+
+function dilate(m: Mask): Mask {
+  const n = m.length;
+  const out: Mask = m.map((row) => row.slice());
+  const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) {
+      if (!out[r][c] && (on(r - 1, c) || on(r + 1, c) || on(r, c - 1) || on(r, c + 1))) out[r][c] = true;
+    }
+  return out;
+}
+
+function erode(m: Mask): Mask {
+  const n = m.length;
+  const out: Mask = m.map((row) => row.slice());
+  const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) {
+      if (out[r][c] && !(on(r - 1, c) && on(r + 1, c) && on(r, c - 1) && on(r, c + 1))) out[r][c] = false;
+    }
+  return out;
+}
+
+/**
+ * Grow 1-cell-wide tips (antlers, legs, trunks) just enough to form a 2×2,
+ * preferring to expand into cells the silhouette already covers.
+ */
+function thickenThin(m: Mask, score: (r: number, c: number) => number) {
+  const n = m.length;
+  const used = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
+  const inBlock = (r: number, c: number) => {
+    for (let a = r - 1; a <= r; a++)
+      for (let b = c - 1; b <= c; b++) {
+        if (a < 0 || b < 0 || a + 1 >= n || b + 1 >= n) continue;
+        if (used(a, b) && used(a, b + 1) && used(a + 1, b) && used(a + 1, b + 1)) return true;
+      }
+    return false;
+  };
+  const add: [number, number][] = [];
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) {
+      if (!m[r][c] || inBlock(r, c)) continue;
+      let best = -1;
+      let at: [number, number] | null = null;
+      for (const [a, b] of [[r - 1, c - 1], [r - 1, c], [r, c - 1], [r, c]] as [number, number][]) {
+        if (a < 0 || b < 0 || a + 1 >= n || b + 1 >= n) continue;
+        let s = 0;
+        for (let i = 0; i < 2; i++)
+          for (let j = 0; j < 2; j++) s += used(a + i, b + j) ? 10 : score(a + i, b + j);
+        if (s > best) {
+          best = s;
+          at = [a, b];
+        }
+      }
+      if (at) for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) add.push([at[0] + i, at[1] + j]);
+    }
+  for (const [r, c] of add) m[r][c] = true;
+}
+
+function signedArea(pts: Pt[]): number {
+  let a = 0;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j][0] - pts[i][0]) * (pts[j][1] + pts[i][1]);
+  return a / 2;
+}
+
+function dropClose(pts: Pt[]): Pt[] {
+  const out: Pt[] = [];
+  for (const p of pts) {
+    const q = out[out.length - 1];
+    if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-6) out.push(p);
+  }
+  if (out.length > 1 && Math.hypot(out[0][0] - out[out.length - 1][0], out[0][1] - out[out.length - 1][1]) <= 1e-6) out.pop();
+  return out;
+}
+
+function dropColinear(pts: Pt[]): Pt[] {
+  const n = pts.length;
+  if (n < 3) return pts;
+  const out: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = pts[(i - 1 + n) % n];
+    const p = pts[i];
+    const b = pts[(i + 1) % n];
+    if (Math.abs((p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0])) > 1e-9) out.push(p);
+  }
+  return out.length >= 3 ? out : pts;
+}
+
+/**
+ * Push every edge away from the used cells by `d`. Loops are walked with used
+ * cells on the right, so this is a visual-left offset — it grows the outer
+ * ring and shrinks holes. Miter joins are clamped so sharp corners don't spike.
+ */
+function offsetPoly(pts: Pt[], d: number): Pt[] {
+  const p = dropColinear(dropClose(pts));
+  const n = p.length;
+  if (n < 3 || d === 0) return p;
+  const normal = (a: Pt, b: Pt): Pt => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy) || 1;
+    return [dy / l, -dx / l];
+  };
+  return p.map((q, i) => {
+    const a = p[(i - 1 + n) % n];
+    const b = p[(i + 1) % n];
+    const n1 = normal(a, q);
+    const n2 = normal(q, b);
+    let mx = n1[0] + n2[0];
+    let my = n1[1] + n2[1];
+    const ml = Math.hypot(mx, my);
+    if (ml < 1e-6) return [q[0] + n1[0] * d, q[1] + n1[1] * d] as Pt;
+    mx /= ml;
+    my /= ml;
+    const cos = mx * n1[0] + my * n1[1];
+    const len = Math.min(d / Math.max(cos, 0.2), d * 2);
+    return [q[0] + mx * len, q[1] + my * len] as Pt;
+  });
+}
+
+/** Insert vertices along long edges so Chaikin only rounds corners. */
+function subdivide(pts: Pt[], maxLen = 0.5): Pt[] {
+  const p = dropClose(pts);
+  const out: Pt[] = [];
+  const n = p.length;
+  for (let i = 0; i < n; i++) {
+    const a = p[i];
+    const b = p[(i + 1) % n];
+    const steps = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / maxLen));
+    for (let s = 0; s < steps; s++) out.push([a[0] + ((b[0] - a[0]) * s) / steps, a[1] + ((b[1] - a[1]) * s) / steps]);
+  }
+  return out;
+}
+
+function chaikin(pts: Pt[], rounds = 2): Pt[] {
+  let p = dropClose(pts);
+  for (let k = 0; k < rounds; k++) {
+    const n = p.length;
+    const next: Pt[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = p[i];
+      const b = p[(i + 1) % n];
+      next.push([0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]]);
+      next.push([0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]]);
+    }
+    p = next;
+  }
+  return p;
+}
+
+/** Clockwise outer (and any hole) loops of a mask, in cell units: cell (r,c) is the square [c,c+1]×[r,r+1]. */
+function maskLoops(mask: Mask): Pt[][] {
+  const n = mask.length;
+  const used = (r: number, c: number) => !!mask[r]?.[c];
+  const outs = new Map<string, Pt[]>();
+  const add = (x0: number, y0: number, x1: number, y1: number) => {
+    const k = `${x0},${y0}`;
+    const list = outs.get(k);
+    if (list) list.push([x1, y1]);
+    else outs.set(k, [[x1, y1]]);
+  };
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) {
+      if (!used(r, c)) continue;
+      if (!used(r - 1, c)) add(c, r, c + 1, r);
+      if (!used(r, c + 1)) add(c + 1, r, c + 1, r + 1);
+      if (!used(r + 1, c)) add(c + 1, r + 1, c, r + 1);
+      if (!used(r, c - 1)) add(c, r + 1, c, r);
+    }
+  const seen = new Set<string>();
+  const loops: Pt[][] = [];
+  for (const [sk, dests] of outs) {
+    for (const d0 of dests) {
+      const [sx, sy] = sk.split(",").map(Number);
+      if (seen.has(`${sx},${sy},${d0[0]},${d0[1]}`)) continue;
+      const loop: Pt[] = [[sx, sy]];
+      let x = sx;
+      let y = sy;
+      let nx = d0[0];
+      let ny = d0[1];
+      for (let step = 0; step < n * n * 4 + 2; step++) {
+        seen.add(`${x},${y},${nx},${ny}`);
+        loop.push([nx, ny]);
+        if (nx === sx && ny === sy) break;
+        const cands = outs.get(`${nx},${ny}`) ?? [];
+        const unused = cands.filter((q) => !seen.has(`${nx},${ny},${q[0]},${q[1]}`));
+        if (!unused.length) break;
+        // Prefer the tightest right turn (interior stays to the right in y-down coords).
+        const idxx = x;
+        const idxy = y;
+        const turn = (q: Pt) => {
+          const ax = nx - idxx;
+          const ay = ny - idxy;
+          const bx = q[0] - nx;
+          const by = q[1] - ny;
+          return Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+        };
+        unused.sort((a, b) => turn(b) - turn(a)); // most positive = right turn with y-down
+        x = nx;
+        y = ny;
+        nx = unused[0][0];
+        ny = unused[0][1];
+      }
+      if (loop.length >= 4) loops.push(dropClose(loop));
+    }
+  }
+  return loops;
+}
+
+/**
+ * Smooth outline rings around the occupied (lettered) cells, padded by `pad`
+ * cells. The first ring is the outer silhouette; later rings are holes (for
+ * example the gap between a horse's legs). Word-search pages fill these with
+ * even-odd so grey never covers empty space.
+ */
+export function maskOutlines(mask: Mask, pad = OUTLINE_PAD): Pt[][] {
+  return maskLoops(mask).map((L) => chaikin(subdivide(offsetPoly(L, pad), 0.5), 2)).filter((L) => L.length >= 3);
+}
+
+/** Outer ring of {@link maskOutlines} (for bounding boxes and simple outlines). */
+export function maskOutline(mask: Mask, pad = OUTLINE_PAD): Pt[] {
+  const loops = maskOutlines(mask, pad);
+  if (!loops.length) return [];
+  let best = loops[0];
+  let bestA = 0;
+  for (const L of loops) {
+    const a = Math.abs(signedArea(L));
+    if (a > bestA) {
+      bestA = a;
+      best = L;
+    }
   }
   return best;
 }
@@ -378,8 +630,20 @@ export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null 
   const hit = cache.get(id);
   if (hit) return hit;
   const pts = shapeOutline(key, size);
-  const m: Mask = Array.from({ length: size }, (_, r) => Array.from({ length: size }, (_, c) => inside(pts, c + 0.5, r + 0.5) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6));
-  const open = shapeInfo(key).group === "animals" ? 2 : 3;
+  const animal = shapeInfo(key).group === "animals";
+  const cover = animal ? coverageGrid(pts, size) : null;
+  const m: Mask = Array.from({ length: size }, (_, r) =>
+    Array.from({ length: size }, (_, c) => {
+      if (animal) return cover![r][c] >= COVERAGE;
+      return inside(pts, c + 0.5, r + 0.5) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6;
+    }),
+  );
+  const open = animal ? 2 : 3;
+  if (animal) {
+    const closed = erode(dilate(m));
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) m[r][c] = closed[r][c];
+    thickenThin(m, (r, c) => cover![r]?.[c] ?? 0);
+  }
   const out = clean(m, open);
   cache.set(id, out);
   return out;

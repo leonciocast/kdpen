@@ -59,6 +59,37 @@ export function poly(pdf: jsPDF, pts: [number, number][], style: "S" | "F" | "FD
   pdf.lines(deltas, pts[0][0], pts[0][1], [1, 1], style, true);
 }
 
+function isRings(pts: P2[] | P2[][]): pts is P2[][] {
+  return Array.isArray(pts[0]?.[0]);
+}
+
+function asRings(pts: P2[] | P2[][]): P2[][] {
+  return isRings(pts) ? pts : [pts];
+}
+
+function writeRings(pdf: jsPDF, rings: P2[][]) {
+  for (const pts of rings) {
+    if (pts.length < 2) continue;
+    pdf.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) pdf.lineTo(pts[i][0], pts[i][1]);
+    pdf.close();
+  }
+}
+
+/** Fill or stroke one ring or a compound path (even-odd so holes stay empty). */
+export function polys(pdf: jsPDF, pts: P2[] | P2[][], style: "S" | "F" | "FD") {
+  const rings = asRings(pts).filter((r) => r.length >= 2);
+  if (!rings.length) return;
+  if (rings.length === 1) {
+    poly(pdf, rings[0], style);
+    return;
+  }
+  writeRings(pdf, rings);
+  if (style === "F") pdf.fillEvenOdd();
+  else if (style === "S") pdf.stroke();
+  else pdf.fillStrokeEvenOdd();
+}
+
 function regular(cx: number, cy: number, r: number, n: number, rot = -Math.PI / 2): [number, number][] {
   return Array.from({ length: n }, (_, i) => [cx + r * Math.cos(rot + (i * 2 * Math.PI) / n), cy + r * Math.sin(rot + (i * 2 * Math.PI) / n)] as [number, number]);
 }
@@ -701,36 +732,36 @@ export function framePolygon(pts: P2[], look: Look, unit: number): P2[] {
 }
 
 /** Soft shadow and optional shaded (or white) backing under a shaped grid (drawn before the letters). */
-export function drawOutlineBacking(pdf: jsPDF, pts: P2[], look: Look, unit: number) {
+export function drawOutlineBacking(pdf: jsPDF, pts: P2[] | P2[][], look: Look, unit: number) {
   const g = look.design.grid;
-  const shape = framePolygon(pts, look, unit);
+  const rings = asRings(pts).map((r) => framePolygon(r, look, unit));
   if (g.shadow && g.border !== "none") {
     const o = Math.max(2.5, unit * 0.22);
     fill(pdf, [205, 205, 205]);
-    poly(pdf, shape.map(([x, y]) => [x + o, y + o] as P2), "F");
+    polys(pdf, rings.map((r) => r.map(([x, y]) => [x + o, y + o] as P2)), "F");
   }
   if (look.design.shape.shade) {
     // Light grey cut-out, like a classic shaped word-search page. Stays readable in black & white.
     fill(pdf, look.design.color.grayscale ? [226, 226, 226] : tint(look.accent, 0.9));
-    poly(pdf, shape, "F");
+    polys(pdf, rings, "F");
   } else if (g.shadow || look.design.pattern.kind !== "none") {
     fill(pdf, [255, 255, 255]);
-    poly(pdf, shape, "F");
+    polys(pdf, rings, "F");
   }
 }
 
 /** Outline of any shape in the design's frame style (thickness, double, dashed, dotted, rounded). */
-export function drawOutline(pdf: jsPDF, pts: P2[], look: Look, unit: number) {
+export function drawOutline(pdf: jsPDF, pts: P2[] | P2[][], look: Look, unit: number) {
   const g = look.design.grid;
   if (g.border === "none" || g.frame <= 0) return;
-  const shape = framePolygon(pts, look, unit);
+  const rings = asRings(pts).map((r) => framePolygon(r, look, unit));
   stroke(pdf, [0, 0, 0]);
   pdf.setLineWidth(g.frame);
   withLineStyle(pdf, look, g.frame, () => {
-    poly(pdf, shape, "S");
+    polys(pdf, rings, "S");
     if (g.border === "double") {
       pdf.setLineWidth(Math.max(0.4, g.frame * 0.6));
-      poly(pdf, offsetPolygon(shape, Math.max(2.5, g.frame * 2.5)), "S");
+      polys(pdf, rings.map((r) => offsetPolygon(r, Math.max(2.5, g.frame * 2.5))), "S");
     }
   });
 }
