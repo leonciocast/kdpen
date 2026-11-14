@@ -24,6 +24,7 @@ await page.screenshot({ path: "review/20_tidy_input.png" });
 await page.click("text=Add to list");
 console.log("list:", (await page.locator('[data-testid="word-list"]').innerText()).split("\n").filter((l) => /[A-Z]{3}/.test(l)).join(" | "));
 await page.click('[data-testid="wizard-next"]');
+await page.click("text=Same size for all");
 await page.fill("#gridSize", "15");
 await page.click('[data-testid="wizard-next"]');
 await page.click('[data-testid="mode-manual"]');

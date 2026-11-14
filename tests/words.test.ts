@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { csvRowsToTokens, parseWords, tokenize, wordsToCsv } from "../src/lib/wordsearch/words";
+import { MAX_WORDS, csvRowsToEntries, csvRowsToTokens, entriesToCsv, parseWords, tokenize, wordsToCsv } from "../src/lib/wordsearch/words";
 import { gridForm } from "../src/lib/wordsearch/engine";
 
 describe("word input rules", () => {
@@ -34,9 +34,11 @@ describe("word input rules", () => {
   it("rejects entries without enough letters", () => {
     expect(parseWords(["-", " - ", "a"], [], 15).added).toEqual([]);
   });
-  it("stops at 200 words", () => {
+  it("allows 20,000 words and stops at the limit", () => {
+    expect(MAX_WORDS).toBeGreaterThanOrEqual(20000);
     const existing = Array.from({ length: 199 }, (_, i) => `W${i}X`);
-    const r = parseWords(["ALPHA", "BETA"], existing, 15);
+    expect(parseWords(["ALPHA", "BETA"], existing, 15).added).toEqual(["ALPHA", "BETA"]);
+    const r = parseWords(["ALPHA", "BETA"], existing, 15, 200);
     expect(r.added).toEqual(["ALPHA"]);
     expect(r.limitReached).toBe(true);
   });
@@ -44,5 +46,16 @@ describe("word input rules", () => {
     expect(csvRowsToTokens([["Word"], ["hello"], [42], [""], ["ice  cream"]]).tokens).toEqual(["hello", "42", "ice cream"]);
     expect(csvRowsToTokens([["a", "b"]]).error).toBeTruthy();
     expect(wordsToCsv(["A", "ICE CREAM"])).toBe("Word\nA\nICE CREAM\n");
+  });
+  it("CSV entries: word plus optional theme column, header optional", () => {
+    const r = csvRowsToEntries([["Word", "Theme"], ["whale", "Ocean"], ["ice  cream", ""], ["", ""], ["kiwi", "  Fruit  "]]);
+    expect(r.entries).toEqual([{ word: "whale", theme: "Ocean" }, { word: "ice cream" }, { word: "kiwi", theme: "Fruit" }]);
+    expect(csvRowsToEntries([["a", "b", "c"]]).error).toMatch(/3 columns/);
+    expect(csvRowsToEntries([["Word"], ["x1"]]).entries).toEqual([{ word: "x1" }]);
+  });
+  it("exports themed CSV that imports back", () => {
+    const csv = entriesToCsv([{ word: "ICE CREAM", theme: "Summer, Fun" }, { word: "WHALE" }]);
+    expect(csv.split("\n")[0]).toBe("Word,Theme");
+    expect(csv).toContain('"Summer, Fun"');
   });
 });

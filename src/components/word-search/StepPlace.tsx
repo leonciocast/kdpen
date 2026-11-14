@@ -2,6 +2,8 @@
 import React from "react";
 import { BsArrowRepeat, BsCursor, BsHandIndexThumb, BsLightningCharge, BsMagic } from "react-icons/bs";
 import Callout from "@/components/ui/Callout";
+import JobProgress from "@/components/ui/JobProgress";
+import type { Progress } from "@/lib/jobs/types";
 import { StepIntro } from "@/components/ui/Wizard";
 import { DirectionKey } from "@/lib/wordsearch/engine";
 import Editor from "./Editor";
@@ -17,11 +19,24 @@ interface Props {
   stale: boolean;
   create: (mode: "auto" | "manual") => void;
   finishAll: () => void;
+  /** Background generation in progress. */
+  running: { progress: Progress | null; cancel: () => void } | null;
 }
 
-export default function StepPlace({ puzzles, active, setActive, updateActive, autoDirs, stale, create, finishAll }: Props) {
+export default function StepPlace({ puzzles, active, setActive, updateActive, autoDirs, stale, create, finishAll, running }: Props) {
   const puzzle = puzzles[active];
   const done = puzzles.filter((p) => p.grid).length;
+
+  if (running) {
+    return (
+      <div>
+        <StepIntro icon={<BsCursor />} title="Building your puzzles">
+          Every word is being placed and every grid filled. Big books take a few seconds; you can cancel at any time.
+        </StepIntro>
+        <JobProgress title="Building puzzles" progress={running.progress} onCancel={running.cancel} />
+      </div>
+    );
+  }
 
   if (!puzzles.length) {
     return (
@@ -36,7 +51,7 @@ export default function StepPlace({ puzzles, active, setActive, updateActive, au
                 <BsLightningCharge />
               </span>
               <h3>Automatic</h3>
-              <p>Every puzzle is built and filled instantly using your step 2 settings. You can still edit any puzzle afterwards.</p>
+              <p>Every puzzle is built and filled using your step 2 settings, even for 10,000+ words. You can still edit any puzzle afterwards.</p>
             </button>
           </div>
           <div className="col-md-6">

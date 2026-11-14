@@ -3,6 +3,8 @@ import { DirectionKey, Placement } from "@/lib/wordsearch/engine";
 export interface PuzzleModel {
   id: number;
   title: string;
+  /** Theme from the CSV's second column (used for TOC sections). */
+  theme?: string;
   size: number;
   words: string[];
   placements: Placement[];
@@ -42,3 +44,8 @@ export const DIR_NAMES: Record<DirectionKey, string> = {
   NE: "Diagonal up-right",
   SW: "Diagonal down-left",
 };
+
+export interface WordEntry {
+  word: string;
+  theme?: string;
+}

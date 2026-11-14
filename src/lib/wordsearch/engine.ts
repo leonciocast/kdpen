@@ -36,7 +36,7 @@ export interface DirectionOptions {
 }
 
 export const MIN_GRID_SIZE = 8;
-export const MAX_GRID_SIZE = 25;
+export const MAX_GRID_SIZE = 30;
 
 export function allowedDirections(opts: DirectionOptions): DirectionKey[] {
   const out: DirectionKey[] = [];
@@ -288,6 +288,8 @@ export interface AutoPlaceOptions {
   timeLimitMs?: number;
   /** Candidate positions tried per word during backtracking. */
   branchLimit?: number;
+  /** Preference for sharing letters: negative avoids overlaps, positive seeks them. Default 0.15. */
+  overlapWeight?: number;
 }
 
 export interface AutoPlaceResult {
@@ -301,7 +303,8 @@ function candidatesFor(
   dirs: DirectionKey[],
   placements: Placement[],
   grid: LetterGrid,
-  rng: Rng
+  rng: Rng,
+  overlapWeight = 0.15
 ): Placement[] {
   const letters = gridForm(word);
   const out: { p: Placement; score: number }[] = [];
@@ -328,7 +331,7 @@ function candidatesFor(
         if (!ok || overlaps === letters.length) continue;
         const p: Placement = { word, letters, row: r, col: c, dir };
         // Small random score with a mild preference for sharing letters.
-        out.push({ p, score: rng() + overlaps * 0.15 });
+        out.push({ p, score: rng() + overlaps * overlapWeight });
       }
     }
   }
@@ -387,7 +390,7 @@ export function autoPlace(
   const dfs = (i: number): boolean => {
     if (i === order.length) return true;
     if (outOfBudget()) return false;
-    const cands = candidatesFor(size, order[i], dirs, [...fixed, ...placed], grid, rng).slice(0, branchLimit);
+    const cands = candidatesFor(size, order[i], dirs, [...fixed, ...placed], grid, rng, opts.overlapWeight).slice(0, branchLimit);
     for (const cand of cands) {
       steps++;
       const written = applyToGrid(grid, cand);
@@ -413,7 +416,7 @@ export function autoPlace(
     const miss: string[] = [];
     const attemptOrder = attempt === 0 ? order : shuffle(order, rng).sort((a, b) => gridForm(b).length - gridForm(a).length);
     for (const w of attemptOrder) {
-      const cand = candidatesFor(size, w, dirs, [...fixed, ...ps], g, rng)[0];
+      const cand = candidatesFor(size, w, dirs, [...fixed, ...ps], g, rng, opts.overlapWeight)[0];
       if (cand) {
         applyToGrid(g, cand);
         ps.push(cand);
@@ -441,17 +444,39 @@ export interface FillResult {
   warnings: string[];
 }
 
+export type DecoyLevel = "none" | "letters" | "fragments";
+
 /**
  * Fill every empty cell with a random letter, re-rolling filler cells that
  * would create an extra copy of any listed word.
+ * Decoys make puzzles harder: "letters" draws filler mostly from the words'
+ * own letters; "fragments" also plants partial words (e.g. "ELEPH").
  */
-export function fillGrid(size: number, placements: Placement[], rng: Rng, maxRounds = 300): FillResult {
+export function fillGrid(size: number, placements: Placement[], rng: Rng, maxRounds = 300, decoys: DecoyLevel = "none"): FillResult {
   const base = buildLetterGrid(size, placements);
   const alphabet = fillAlphabet(placements);
   const grid: LetterGrid = base.map((row) => row.slice());
   const isFiller = base.map((row) => row.map((v) => v === null));
-  const roll = () => alphabet[Math.floor(rng() * alphabet.length)];
+  const wordLetters = placements.map((p) => p.letters).join("");
+  const roll =
+    decoys === "none" || !wordLetters
+      ? () => alphabet[Math.floor(rng() * alphabet.length)]
+      : () => (rng() < 0.65 ? wordLetters[Math.floor(rng() * wordLetters.length)] : alphabet[Math.floor(rng() * alphabet.length)]);
   for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (isFiller[r][c]) grid[r][c] = roll();
+  if (decoys === "fragments") {
+    // Plant partial words into filler-only lines; the re-roll pass below removes any accidental full copies.
+    const tries = placements.length * 3;
+    for (let t = 0; t < tries; t++) {
+      const p = placements[Math.floor(rng() * placements.length)];
+      if (p.letters.length < 4) continue;
+      const frag = p.letters.slice(0, Math.max(2, p.letters.length - 1 - Math.floor(rng() * 2)));
+      const dir = ALL_DIRECTIONS[Math.floor(rng() * ALL_DIRECTIONS.length)];
+      const r0 = Math.floor(rng() * size);
+      const c0 = Math.floor(rng() * size);
+      const cells = cellsOf(r0, c0, dir, frag.length);
+      if (cells.every((cell) => inBounds(size, cell) && isFiller[cell[0]][cell[1]])) cells.forEach(([r, c], i) => (grid[r][c] = frag[i]));
+    }
+  }
 
   const warnings = new Set<string>();
   for (let round = 0; round < maxRounds; round++) {
@@ -499,7 +524,7 @@ export function generatePuzzle(
   dirs: DirectionKey[],
   rng: Rng,
   fixed: Placement[] = [],
-  opts?: AutoPlaceOptions
+  opts?: AutoPlaceOptions & { decoys?: DecoyLevel }
 ): GeneratedPuzzle {
   const fixedWords = new Set(fixed.map((p) => p.word));
   const toPlace = words.filter((w) => !fixedWords.has(w));
@@ -512,7 +537,7 @@ export function generatePuzzle(
     if (retry.placements.length >= result.placements.length) result = retry;
   }
   const placements = [...fixed, ...result.placements];
-  const fill = fillGrid(size, placements, rng);
+  const fill = fillGrid(size, placements, rng, 300, opts?.decoys ?? "none");
   const warnings = [...containedWordWarnings(words), ...fill.warnings];
   return { size, words, placements, grid: fill.grid, unplaced: result.unplaced, warnings };
 }

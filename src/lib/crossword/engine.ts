@@ -1,10 +1,13 @@
 /** Pure crossword layout engine: free-form, connected, numbered. Always terminates. */
 import { Rng, mulberry32 } from "../wordsearch/engine";
 import { tidySpaces } from "../text";
+import { LIMITS } from "../limits";
 
 export interface ClueEntry {
   answer: string; // as typed (uppercase); spaces/hyphens allowed
   clue: string;
+  /** Optional theme / section from the CSV's 3rd column. */
+  theme?: string;
 }
 
 export interface CwPlacement {
@@ -25,7 +28,7 @@ export interface Crossword {
   leftOut: string[];
 }
 
-export const CROSSWORD_MAX_WORDS = 50;
+export const CROSSWORD_MAX_WORDS = LIMITS.maxClues;
 export const CROSSWORD_MAX_LETTERS = 15;
 const VALID = /^[A-Za-z0-9Ññ -]+$/;
 const SEPARATORS = ["\t", " - ", " – ", " — ", ":", "|", "=", ","];
@@ -67,10 +70,10 @@ export interface ClueParseResult {
   limitReached: boolean;
 }
 
-export function validateEntries(candidates: { answer: string; clue: string }[], existing: ClueEntry[], max = CROSSWORD_MAX_WORDS): ClueParseResult {
+export function validateEntries(candidates: { answer: string; clue: string; theme?: string }[], existing: ClueEntry[], max = CROSSWORD_MAX_WORDS): ClueParseResult {
   const res: ClueParseResult = { added: [], errors: [], skipped: [], limitReached: false };
   const seen = new Set(existing.map((e) => cwLetters(e.answer)));
-  for (const { answer, clue } of candidates) {
+  for (const { answer, clue, theme } of candidates) {
     const letters = cwLetters(answer);
     if (!VALID.test(answer)) {
       res.errors.push(`"${answer}" has characters that can't go in a grid. Use letters, numbers, Ñ, spaces or hyphens.`);
@@ -97,7 +100,7 @@ export function validateEntries(candidates: { answer: string; clue: string }[], 
       break;
     }
     seen.add(letters);
-    res.added.push({ answer, clue: clue.trim() });
+    res.added.push(theme ? { answer, clue: clue.trim(), theme } : { answer, clue: clue.trim() });
   }
   return res;
 }

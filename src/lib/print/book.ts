@@ -1,27 +1,48 @@
 /**
- * Shared KDP book renderer (jsPDF, vector only): front matter, content pages,
- * page numbers, padding to an even page count of at least 24.
+ * Shared KDP book renderer (jsPDF, vector only). Plans the page order, draws
+ * front/back matter in the chosen design, numbers pages and pads the book to
+ * an even KDP page count (with lined notes pages instead of empty pages).
  */
 import { jsPDF } from "jspdf";
 import { FrontMatter, copyrightDetails, resolveNotice } from "./frontMatter";
-import { PT, PageSpec, TrimKey, contentBox, makePageSpec, paddedPageCount } from "./kdp";
+import { KDP_MIN_PAGES, PT, PageSpec, TrimKey, contentBox, makePageSpec } from "./kdp";
+import { FontData, familiesFor, registerFonts } from "./fonts";
+import { Box, Look, drawHeader, drawIcon, drawPageNumber, drawPattern, panel, paint, patternArea, poly, resolveLook } from "../design/paint";
+import { DEFAULT_DESIGN } from "../design/templates";
+import type { Design } from "../design/types";
 
-export interface PdfFonts {
-  sans: string; // base64 TrueType
-  sansBold: string;
-  serif: string;
-  serifBold: string;
-}
-
+export type { Box } from "../design/paint";
 export const SANS = "DejaVuSans";
 export const SERIF = "DejaVuSerif";
 
-export interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+export const DEFAULT_THANK_YOU =
+  "Thank you for choosing this book! We hope you enjoyed every puzzle.\n\nIf you did, would you leave a short review on Amazon? It takes a minute, helps other puzzle lovers find this book, and means a lot to a small publisher.";
+
+export interface BookExtras {
+  belongsTo: boolean;
+  howTo: boolean;
+  toc: boolean;
+  /** Intro page text; empty = no intro page. */
+  intro: string;
+  thankYou: boolean;
+  thankYouText: string;
+  notesPages: number;
+  /** Use lined notes pages (not empty pages) to reach the KDP page count. */
+  padWithNotes: boolean;
 }
+
+export const DEFAULT_EXTRAS: BookExtras = {
+  belongsTo: true,
+  howTo: true,
+  toc: true,
+  intro: "",
+  thankYou: true,
+  thankYouText: DEFAULT_THANK_YOU,
+  notesPages: 2,
+  padWithNotes: true,
+};
+
+export const NO_EXTRAS: BookExtras = { belongsTo: false, howTo: false, toc: false, intro: "", thankYou: false, thankYouText: "", notesPages: 0, padWithNotes: false };
 
 export interface PageContext {
   pdf: jsPDF;
@@ -32,29 +53,45 @@ export interface PageContext {
   s: number;
   pageW: number;
   pageH: number;
+  look: Look;
+  /** First page of the solutions section (for "solutions start on page N"). */
+  solutionsPage: number;
 }
 
 export type PageRenderer = (ctx: PageContext) => void;
 
-export interface HowTo {
-  heading: string;
-  paragraphs: string[];
+export interface Section {
+  title: string;
+  /** Index into `pages`. */
+  index: number;
+}
+
+export interface BookContent {
+  pages: PageRenderer[];
+  /** Table-of-contents entries pointing at content pages. */
+  sections: Section[];
+  /** Index of the first solutions page in `pages`. */
+  solutionsIndex: number;
+  howTo?: PageRenderer;
+  /** Short line on the title page, e.g. "100 Word Search Puzzles". */
+  titleDetail: string;
 }
 
 export interface RenderBookOptions {
   trim: TrimKey;
   bleed: boolean;
   frontMatter: FrontMatter | null;
-  howTo?: HowTo | null;
-  /** Short line on the title page, e.g. "100 Word Search Puzzles". */
-  titleDetail?: string;
-  content: PageRenderer[];
-  /** Pad to an even count of at least 24 pages (KDP paperback minimum). */
+  extras: BookExtras;
+  design?: Design;
+  content: BookContent;
   padForKdp?: boolean;
-  fonts: PdfFonts;
+  fonts: FontData;
+  volume?: { n: number; of: number };
+  /** Progress callback, called after each page. */
+  onPage?: (done: number, total: number) => void;
 }
 
-export type PageKind = "title" | "copyright" | "dedication" | "howto" | "content" | "blank";
+export type PageKind = "title" | "copyright" | "belongs" | "dedication" | "toc" | "intro" | "howto" | "content" | "notes" | "thanks" | "blank";
 
 export interface RenderedBook {
   pdf: jsPDF;
@@ -64,20 +101,47 @@ export interface RenderedBook {
   spec: PageSpec;
 }
 
+export const TOC_LINES_PER_PAGE = 26;
+
 export function scaleFor(trim: TrimKey): number {
   return trim === "6x9" ? 0.78 : 1;
 }
 
-export function planKinds(opts: Pick<RenderBookOptions, "frontMatter" | "howTo" | "content" | "padForKdp">): PageKind[] {
+export interface PlanInput {
+  frontMatter: FrontMatter | null;
+  extras: BookExtras;
+  contentCount: number;
+  sectionCount: number;
+  hasHowTo: boolean;
+  padForKdp?: boolean;
+}
+
+export function tocEntryCount(p: PlanInput): number {
+  const e = p.extras;
+  return (e.intro.trim() ? 1 : 0) + (e.howTo && p.hasHowTo ? 1 : 0) + p.sectionCount + (e.notesPages > 0 ? 1 : 0);
+}
+
+/** The page order of a book. Pure, so it doubles as the page-count estimate. */
+export function planKinds(p: PlanInput): PageKind[] {
+  const e = p.extras;
   const kinds: PageKind[] = [];
-  if (opts.frontMatter) {
-    kinds.push("title", "copyright");
-    if (opts.frontMatter.dedication.trim()) kinds.push("dedication");
-  }
-  if (opts.howTo) kinds.push("howto");
-  opts.content.forEach(() => kinds.push("content"));
-  const target = opts.padForKdp === false ? kinds.length + (kinds.length % 2) : paddedPageCount(kinds.length);
-  while (kinds.length < target) kinds.push("blank");
+  if (p.frontMatter) kinds.push("title", "copyright");
+  if (e.belongsTo) kinds.push("belongs");
+  if (p.frontMatter?.dedication.trim()) kinds.push("dedication");
+  if (e.toc) for (let i = 0; i < Math.max(1, Math.ceil(tocEntryCount(p) / TOC_LINES_PER_PAGE)); i++) kinds.push("toc");
+  if (e.intro.trim()) kinds.push("intro");
+  if (e.howTo && p.hasHowTo) kinds.push("howto");
+  for (let i = 0; i < p.contentCount; i++) kinds.push("content");
+  for (let i = 0; i < Math.max(0, Math.floor(e.notesPages)); i++) kinds.push("notes");
+  const tail: PageKind[] = e.thankYou ? ["thanks"] : [];
+  const total = kinds.length + tail.length;
+  // No throw here: estimates may exceed the KDP limit (the page spec enforces it when building).
+  const target = p.padForKdp === false ? total + (total % 2) : Math.max(KDP_MIN_PAGES, total + (total % 2));
+  const fillKind: PageKind = e.padWithNotes ? "notes" : "blank";
+  const pad = target - total;
+  if (fillKind === "notes") for (let i = 0; i < pad; i++) kinds.push("notes");
+  kinds.push(...tail);
+  if (fillKind === "blank") for (let i = 0; i < pad; i++) kinds.push("blank");
   return kinds;
 }
 
@@ -96,66 +160,58 @@ export function paragraph(pdf: jsPDF, text: string, x: number, y: number, width:
   return y + lines.length * leading;
 }
 
-/** Page heading with a rule under it; returns the y where content can start. */
-export function heading(ctx: PageContext, text: string): number {
-  const { pdf, box, s } = ctx;
-  pdf.setFont(SANS, "bold");
-  pdf.setFontSize(18 * s);
-  pdf.setTextColor(0, 0, 0);
-  pdf.text(text, box.x, box.y + 14 * s);
-  pdf.setDrawColor(0, 0, 0);
-  pdf.setLineWidth(0.9);
-  pdf.line(box.x, box.y + 24 * s, box.x + box.w, box.y + 24 * s);
-  return box.y + 36 * s;
+/** Page header in the book's design; returns the y where content can start. */
+export function heading(ctx: PageContext, text: string, number?: number, subtitle?: string): number {
+  return drawHeader(ctx.pdf, ctx.box, ctx.look, { text, number, subtitle }, ctx.s);
 }
 
-function drawTitlePage(ctx: PageContext, fm: FrontMatter, detail?: string) {
-  const { pdf, box, s } = ctx;
+// ---------------------------------------------------------------- front & back matter
+
+function drawTitlePage(ctx: PageContext, fm: FrontMatter, detail: string, volume?: { n: number; of: number }) {
+  const { pdf, box, s, look } = ctx;
   const cx = box.x + box.w / 2;
   const innerW = box.w * 0.86;
-
-  // Top ornament: thin double rule
-  pdf.setDrawColor(0, 0, 0);
+  const hf = look.font(look.design.fonts.heading);
+  paint.stroke(pdf, look.accent);
   pdf.setLineWidth(1.4);
   pdf.line(cx - box.w * 0.32, box.y + box.h * 0.16, cx + box.w * 0.32, box.y + box.h * 0.16);
   pdf.setLineWidth(0.5);
   pdf.line(cx - box.w * 0.32, box.y + box.h * 0.16 + 4, cx + box.w * 0.32, box.y + box.h * 0.16 + 4);
 
-  // Title
-  pdf.setFont(SERIF, "bold");
+  pdf.setFont(hf, "bold");
   const titleSize = 34 * s;
   pdf.setFontSize(titleSize);
   pdf.setTextColor(0, 0, 0);
   const titleLines = pdf.splitTextToSize(fm.title.trim() || "Puzzle Book", innerW) as string[];
-  const lead = titleSize * 1.18;
   let y = box.y + box.h * 0.3;
   titleLines.forEach((l) => {
     centered(pdf, l, cx, y);
-    y += lead;
+    y += titleSize * 1.18;
   });
-
-  // Subtitle
   if (fm.subtitle.trim()) {
     pdf.setFont(SERIF, "normal");
     pdf.setFontSize(15 * s);
     pdf.setTextColor(70, 70, 70);
-    const subLines = pdf.splitTextToSize(fm.subtitle.trim(), innerW) as string[];
     y += 4 * s;
-    subLines.forEach((l) => {
+    (pdf.splitTextToSize(fm.subtitle.trim(), innerW) as string[]).forEach((l) => {
       centered(pdf, l, cx, y);
       y += 20 * s;
     });
   }
-
-  // Small diamond divider
+  if (volume && volume.of > 1) {
+    pdf.setFont(hf, "bold");
+    pdf.setFontSize(16 * s);
+    paint.textColor(pdf, look.ink);
+    centered(pdf, `Volume ${volume.n}`, cx, y + 8 * s);
+    y += 26 * s;
+  }
   y += 14 * s;
-  pdf.setDrawColor(0, 0, 0);
-  pdf.setFillColor(0, 0, 0);
+  paint.stroke(pdf, look.accent);
+  paint.fill(pdf, look.accent);
   pdf.setLineWidth(0.6);
   pdf.line(cx - 60 * s, y, cx - 8 * s, y);
   pdf.line(cx + 8 * s, y, cx + 60 * s, y);
-  pdf.lines([[4 * s, -4 * s], [4 * s, 4 * s], [-4 * s, 4 * s], [-4 * s, -4 * s]], cx - 4 * s, y, [1, 1], "F", true);
-
+  poly(pdf, [[cx, y - 4 * s], [cx + 4 * s, y], [cx, y + 4 * s], [cx - 4 * s, y]], "F");
   if (detail) {
     pdf.setFont(SANS, "normal");
     pdf.setFontSize(11 * s);
@@ -164,8 +220,7 @@ function drawTitlePage(ctx: PageContext, fm: FrontMatter, detail?: string) {
     centered(pdf, detail.toUpperCase(), cx, y + 26 * s);
     pdf.setCharSpace(0);
   }
-
-  // Author and imprint near the bottom
+  if (look.design.header.icon !== "none") drawIcon(pdf, look.design.header.icon, cx, box.y + box.h * 0.66, 30 * s, look.accent);
   pdf.setTextColor(0, 0, 0);
   if (fm.author.trim()) {
     pdf.setFont(SERIF, "normal");
@@ -183,31 +238,28 @@ function drawTitlePage(ctx: PageContext, fm: FrontMatter, detail?: string) {
   pdf.setTextColor(0, 0, 0);
 }
 
-function drawCopyrightPage(ctx: PageContext, fm: FrontMatter) {
+function drawCopyrightPage(ctx: PageContext, fm: FrontMatter, volume?: { n: number; of: number }) {
   const { pdf, box, s } = ctx;
   const size = 9 * s;
   const leading = size * 1.5;
   const paras = resolveNotice(fm).split(/\n\s*\n/).map((p) => p.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
   const details = copyrightDetails(fm);
-  // Measure, then bottom-align the block (classic copyright-page placement).
   pdf.setFont(SERIF, "normal");
   pdf.setFontSize(size);
   const measure = (t: string) => (pdf.splitTextToSize(t, box.w) as string[]).length * leading;
-  let blockH = 30 * s; // title line
+  let blockH = 30 * s;
   paras.forEach((p) => (blockH += measure(p) + leading * 0.6));
   blockH += details.length * leading + leading;
   let y = Math.max(box.y + 10, box.y + box.h - blockH);
-
   pdf.setFont(SERIF, "bold");
   pdf.setFontSize(11 * s);
   pdf.setTextColor(0, 0, 0);
-  pdf.text(fm.title.trim() || "Puzzle Book", box.x, y);
+  const title = (fm.title.trim() || "Puzzle Book") + (volume && volume.of > 1 ? ` (Volume ${volume.n})` : "");
+  pdf.text(title, box.x, y);
   y += 20 * s;
   pdf.setFont(SERIF, "normal");
   pdf.setTextColor(40, 40, 40);
-  paras.forEach((p) => {
-    y = paragraph(pdf, p, box.x, y, box.w, size, leading) + leading * 0.6;
-  });
+  paras.forEach((p) => (y = paragraph(pdf, p, box.x, y, box.w, size, leading) + leading * 0.6));
   y += leading * 0.4;
   pdf.setFontSize(size);
   details.forEach((d) => {
@@ -225,99 +277,220 @@ function drawDedicationPage(ctx: PageContext, fm: FrontMatter) {
   pdf.setTextColor(0, 0, 0);
 }
 
-function drawHowToPage(ctx: PageContext, howTo: HowTo) {
-  const { pdf, box, s } = ctx;
-  let y = heading(ctx, howTo.heading) + 10 * s;
-  pdf.setFont(SANS, "normal");
-  pdf.setTextColor(20, 20, 20);
-  howTo.paragraphs.forEach((p) => {
-    y = paragraph(pdf, p, box.x, y, box.w, 12 * s, 18 * s) + 10 * s;
-  });
-}
-
-export function drawPageNumber(ctx: PageContext) {
-  const { pdf, box, spec, s, pageH, page } = ctx;
+function drawBelongsPage(ctx: PageContext) {
+  const { pdf, box, s, look } = ctx;
+  const hf = look.font(look.design.fonts.heading);
+  const w = box.w * 0.84;
+  const h = box.h * 0.46;
+  const x = box.x + (box.w - w) / 2;
+  const y = box.y + box.h * 0.18;
+  paint.fill(pdf, [255, 255, 255]);
+  paint.stroke(pdf, look.accent);
+  pdf.setLineWidth(2.2);
+  pdf.roundedRect(x, y, w, h, 22 * s, 22 * s, "FD");
+  pdf.setLineWidth(0.6);
+  pdf.roundedRect(x + 8 * s, y + 8 * s, w - 16 * s, h - 16 * s, 16 * s, 16 * s, "S");
+  const icon = look.design.header.icon === "none" ? "star" : look.design.header.icon;
+  paint.fill(pdf, [255, 255, 255]);
+  pdf.circle(x + w / 2, y, 22 * s, "FD");
+  drawIcon(pdf, icon, x + w / 2, y, 24 * s, look.accent);
+  pdf.setFont(hf, "bold");
+  pdf.setFontSize(28 * s);
+  paint.textColor(pdf, look.ink);
+  centered(pdf, "This Book Belongs To", x + w / 2, y + h * 0.27);
+  paint.stroke(pdf, [60, 60, 60]);
+  pdf.setLineWidth(0.8);
+  pdf.line(x + w * 0.14, y + h * 0.5, x + w * 0.86, y + h * 0.5);
   pdf.setFont(SANS, "normal");
   pdf.setFontSize(10 * s);
-  pdf.setTextColor(70, 70, 70);
-  centered(pdf, String(page), box.x + box.w / 2, pageH - (spec.bottom * PT) / 2);
+  pdf.setTextColor(110, 110, 110);
+  pdf.text("Name", x + w * 0.14, y + h * 0.5 + 13 * s);
+  const lw = w * 0.3;
+  pdf.line(x + w * 0.14, y + h * 0.75, x + w * 0.14 + lw, y + h * 0.75);
+  pdf.line(x + w * 0.86 - lw, y + h * 0.75, x + w * 0.86, y + h * 0.75);
+  pdf.text("Started on", x + w * 0.14, y + h * 0.75 + 13 * s);
+  pdf.text("Finished on", x + w * 0.86 - lw, y + h * 0.75 + 13 * s);
+  pdf.setFont(hf, "normal");
+  pdf.setFontSize(13 * s);
+  paint.textColor(pdf, look.ink);
+  centered(pdf, "Happy puzzling!", box.x + box.w / 2, y + h + 46 * s);
   pdf.setTextColor(0, 0, 0);
 }
 
+function drawNotesPage(ctx: PageContext) {
+  const { pdf, box, s } = ctx;
+  const top = heading(ctx, "NOTES") + 10 * s;
+  panel(pdf, { x: box.x - 6, y: top - 6, w: box.w + 12, h: box.y + box.h - top + 6 }, ctx.look);
+  paint.stroke(pdf, [185, 185, 185]);
+  pdf.setLineWidth(0.5);
+  for (let y = top + 24 * s; y < box.y + box.h - 6; y += 26 * s) pdf.line(box.x, y, box.x + box.w, y);
+}
+
+function drawThanksPage(ctx: PageContext, fm: FrontMatter | null, text: string) {
+  const { pdf, box, s, look } = ctx;
+  const cx = box.x + box.w / 2;
+  const hf = look.font(look.design.fonts.heading);
+  let y = box.y + box.h * 0.22;
+  pdf.setFont(hf, "bold");
+  pdf.setFontSize(32 * s);
+  paint.textColor(pdf, look.ink);
+  centered(pdf, "Thank You!", cx, y);
+  y += 40 * s;
+  // five outline stars, a gentle nudge toward a review
+  paint.stroke(pdf, look.accent);
+  pdf.setLineWidth(1.3);
+  for (let i = -2; i <= 2; i++) {
+    const sx = cx + i * 30 * s;
+    const pts: [number, number][] = [];
+    for (let k = 0; k < 10; k++) {
+      const a = -Math.PI / 2 + (k * Math.PI) / 5;
+      const r = k % 2 === 0 ? 11 * s : 5 * s;
+      pts.push([sx + r * Math.cos(a), y + r * Math.sin(a)]);
+    }
+    poly(pdf, pts, "S");
+  }
+  y += 36 * s;
+  pdf.setFont(SERIF, "normal");
+  pdf.setTextColor(40, 40, 40);
+  const paras = (text || DEFAULT_THANK_YOU).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  for (const p of paras) y = paragraph(pdf, p, box.x + box.w * 0.1, y, box.w * 0.8, 13 * s, 20 * s, "center") + 12 * s;
+  const sign = fm?.imprint.trim() || fm?.author.trim();
+  if (sign && sign !== "Your Name" && sign !== "Your Imprint") {
+    pdf.setFont(hf, "normal");
+    pdf.setFontSize(13 * s);
+    centered(pdf, `— ${sign}`, cx, y + 10 * s);
+    y += 26 * s;
+  }
+  if (fm?.website.trim()) {
+    pdf.setFont(SANS, "normal");
+    pdf.setFontSize(11 * s);
+    pdf.setTextColor(90, 90, 90);
+    centered(pdf, fm.website.trim(), cx, y + 10 * s);
+  }
+  pdf.setTextColor(0, 0, 0);
+}
+
+function drawIntroPage(ctx: PageContext, text: string) {
+  const { pdf, box, s, look } = ctx;
+  let y = heading(ctx, "INTRODUCTION") + 14 * s;
+  panel(pdf, { x: box.x - 8, y: y - 10, w: box.w + 16, h: box.y + box.h - y + 4 }, look);
+  pdf.setFont(SERIF, "normal");
+  pdf.setTextColor(25, 25, 25);
+  for (const p of text.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean)) y = paragraph(pdf, p, box.x, y + 4 * s, box.w, 12.5 * s, 19 * s) + 10 * s;
+  pdf.setTextColor(0, 0, 0);
+}
+
+function drawTocPage(ctx: PageContext, entries: { title: string; page: number }[], first: boolean) {
+  const { pdf, box, s, look } = ctx;
+  const top = (first ? heading(ctx, "CONTENTS") : box.y) + 14 * s;
+  panel(pdf, { x: box.x - 8, y: top - 10, w: box.w + 16, h: entries.length * 24 * s + 20 }, look);
+  const f = look.font(look.design.fonts.list);
+  entries.forEach((e, i) => {
+    const y = top + i * 24 * s + 8 * s;
+    pdf.setFont(f, "normal");
+    pdf.setFontSize(12.5 * s);
+    pdf.setTextColor(0, 0, 0);
+    const title = (pdf.splitTextToSize(e.title, box.w * 0.78) as string[])[0];
+    pdf.text(title, box.x, y);
+    const num = String(e.page);
+    pdf.text(num, box.x + box.w, y, { align: "right" });
+    const tw = pdf.getTextWidth(title);
+    const nw = pdf.getTextWidth(num);
+    paint.stroke(pdf, [150, 150, 150]);
+    pdf.setLineWidth(0.8);
+    pdf.setLineDashPattern([0.8, 3], 0);
+    pdf.line(box.x + tw + 6, y - 2, box.x + box.w - nw - 6, y - 2);
+    pdf.setLineDashPattern([], 0);
+  });
+}
+
+// ---------------------------------------------------------------- render
+
 export function renderBook(opts: RenderBookOptions): RenderedBook {
-  if (opts.content.length === 0) throw new Error("Nothing to export yet.");
-  const kinds = planKinds(opts);
+  const c = opts.content;
+  if (c.pages.length === 0) throw new Error("Nothing to export yet.");
+  const design = opts.design ?? DEFAULT_DESIGN;
+  const look = resolveLook(design);
+  const plan: PlanInput = { frontMatter: opts.frontMatter, extras: opts.extras, contentCount: c.pages.length, sectionCount: c.sections.length, hasHowTo: !!c.howTo, padForKdp: opts.padForKdp };
+  const kinds = planKinds(plan);
   const spec = makePageSpec(opts.trim, kinds.length, opts.bleed);
   const W = spec.pageWidth * PT;
   const H = spec.pageHeight * PT;
-  const pdf = new jsPDF({ unit: "pt", format: [W, H], orientation: "portrait", compress: true, putOnlyUsedFonts: true });
-  pdf.addFileToVFS("DejaVuSans.ttf", opts.fonts.sans);
-  pdf.addFont("DejaVuSans.ttf", SANS, "normal");
-  pdf.addFileToVFS("DejaVuSans-Bold.ttf", opts.fonts.sansBold);
-  pdf.addFont("DejaVuSans-Bold.ttf", SANS, "bold");
-  pdf.addFileToVFS("DejaVuSerif.ttf", opts.fonts.serif);
-  pdf.addFont("DejaVuSerif.ttf", SERIF, "normal");
-  pdf.addFileToVFS("DejaVuSerif-Bold.ttf", opts.fonts.serifBold);
-  pdf.addFont("DejaVuSerif-Bold.ttf", SERIF, "bold");
+  const pdf = new jsPDF({ unit: "pt", format: [W, H], orientation: "portrait", compress: true, putOnlyUsedFonts: true, floatPrecision: 2 });
+  registerFonts(pdf, familiesFor(design), opts.fonts);
   pdf.setFont(SANS, "normal");
   const fm = opts.frontMatter;
-  pdf.setProperties({
-    title: fm?.title || "Puzzle Book",
-    author: fm?.author || "",
-    subject: fm?.subtitle || "",
-    creator: "Puzzle Generator",
-  });
+  pdf.setProperties({ title: fm?.title || "Puzzle Book", author: fm?.author || "", subject: fm?.subtitle || "", creator: "Puzzle Generator" });
+
+  // Page numbers for the table of contents.
+  const firstContent = kinds.indexOf("content") + 1;
+  const pageOf = (kind: PageKind) => kinds.indexOf(kind) + 1;
+  const toc: { title: string; page: number }[] = [];
+  if (opts.extras.intro.trim()) toc.push({ title: "Introduction", page: pageOf("intro") });
+  if (kinds.includes("howto")) toc.push({ title: "How to Play", page: pageOf("howto") });
+  c.sections.forEach((sct) => toc.push({ title: sct.title, page: firstContent + sct.index }));
+  if (opts.extras.notesPages > 0 && kinds.includes("notes")) toc.push({ title: "Notes", page: pageOf("notes") });
+  const solutionsPage = firstContent + c.solutionsIndex;
 
   const s = scaleFor(opts.trim);
+  const area = patternArea(W, H, opts.bleed);
+  // The background pattern is drawn once as a PDF form object and reused on every page (tiny files).
+  const hasPattern = design.pattern.kind !== "none";
+  if (hasPattern) {
+    (pdf as any).advancedAPI((p: any) => {
+      p.beginFormObject(0, 0, W, H, p.unitMatrix);
+      drawPattern(p, design.pattern.kind, area, look, 7);
+      p.endFormObject("pg-pattern");
+    });
+  }
+  const stamp = () => {
+    (pdf as any).advancedAPI((p: any) => p.doFormObject("pg-pattern", p.unitMatrix));
+  };
   let contentIndex = 0;
+  let tocIndex = 0;
+  const numbered = new Set<PageKind>(["toc", "intro", "howto", "content", "notes"]);
+  const patterned = new Set<PageKind>(["belongs", "toc", "intro", "howto", "content", "notes", "thanks"]);
   kinds.forEach((kind, i) => {
     const page = i + 1;
     if (i > 0) pdf.addPage([W, H], "portrait");
-    const ctx: PageContext = { pdf, box: contentBox(spec, page), page, spec, s, pageW: W, pageH: H };
-    if (kind === "title" && fm) drawTitlePage(ctx, fm, opts.titleDetail);
-    else if (kind === "copyright" && fm) drawCopyrightPage(ctx, fm);
-    else if (kind === "dedication" && fm) drawDedicationPage(ctx, fm);
-    else if (kind === "howto" && opts.howTo) {
-      drawHowToPage(ctx, opts.howTo);
-      drawPageNumber(ctx);
-    } else if (kind === "content") {
-      opts.content[contentIndex++](ctx);
-      pdf.setFont(SANS, "normal");
-      pdf.setTextColor(0, 0, 0);
-      drawPageNumber(ctx);
+    const ctx: PageContext = { pdf, box: contentBox(spec, page), page, spec, s, pageW: W, pageH: H, look, solutionsPage };
+    if (hasPattern && patterned.has(kind)) stamp();
+    switch (kind) {
+      case "title":
+        if (fm) drawTitlePage(ctx, fm, c.titleDetail, opts.volume);
+        break;
+      case "copyright":
+        if (fm) drawCopyrightPage(ctx, fm, opts.volume);
+        break;
+      case "belongs":
+        drawBelongsPage(ctx);
+        break;
+      case "dedication":
+        if (fm) drawDedicationPage(ctx, fm);
+        break;
+      case "toc":
+        drawTocPage(ctx, toc.slice(tocIndex * TOC_LINES_PER_PAGE, (tocIndex + 1) * TOC_LINES_PER_PAGE), tocIndex === 0);
+        tocIndex++;
+        break;
+      case "intro":
+        drawIntroPage(ctx, opts.extras.intro);
+        break;
+      case "howto":
+        c.howTo?.(ctx);
+        break;
+      case "content":
+        c.pages[contentIndex++](ctx);
+        break;
+      case "notes":
+        drawNotesPage(ctx);
+        break;
+      case "thanks":
+        drawThanksPage(ctx, fm, opts.extras.thankYouText);
+        break;
     }
+    pdf.setTextColor(0, 0, 0);
+    if (numbered.has(kind)) drawPageNumber(pdf, design.pageNumber, page, ctx.box.x + ctx.box.w / 2, H - (spec.bottom * PT) / 2, look, s);
+    opts.onPage?.(page, kinds.length);
   });
   return { pdf, kinds, pageCount: kinds.length, contentPages: kinds.filter((k) => k !== "blank").length, spec };
-}
-
-// ---------------------------------------------------------------- font loading (browser)
-
-async function fetchBase64(url: string): Promise<string> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Could not load font ${url}`);
-  const bytes = new Uint8Array(await res.arrayBuffer());
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
-  }
-  return btoa(binary);
-}
-
-let fontCache: Promise<PdfFonts> | null = null;
-export function loadPdfFonts(): Promise<PdfFonts> {
-  if (!fontCache) {
-    fontCache = Promise.all([
-      fetchBase64("/fonts/DejaVuSans.ttf"),
-      fetchBase64("/fonts/DejaVuSans-Bold.ttf"),
-      fetchBase64("/fonts/DejaVuSerif.ttf"),
-      fetchBase64("/fonts/DejaVuSerif-Bold.ttf"),
-    ]).then(([sans, sansBold, serif, serifBold]) => ({ sans, sansBold, serif, serifBold }));
-    fontCache.catch(() => (fontCache = null));
-  }
-  return fontCache;
-}
-
-/** Trigger a download of a PDF in the browser. */
-export function savePdf(pdf: jsPDF, filename: string) {
-  pdf.save(filename.replace(/[^\w.-]+/g, "_"));
 }

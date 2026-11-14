@@ -229,3 +229,31 @@ a { text-underline-offset: 2px; }
   .print-clues ol { padding-left: 0; list-style: none; }
   .print-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18pt; }
 }
+
+/* Design step + live PDF preview */
+.pg-pdf-preview { position: relative; background: #e9edf3; border-radius: var(--pg-radius-sm); padding: 10px; }
+.pg-pdf-preview canvas { display: block; background: #fff; box-shadow: 0 4px 18px rgba(15, 23, 42, .18); border-radius: 2px; min-height: 120px; }
+.pg-pdf-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--pg-muted); font-size: .9rem; pointer-events: none; }
+.pg-template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; }
+.pg-template-card { text-align: left; border: 1px solid var(--pg-border); border-radius: var(--pg-radius-sm); background: #fff; padding: .7rem .75rem; transition: all .12s; }
+.pg-template-card:hover { border-color: #a5b4fc; }
+.pg-template-card.active { border-color: var(--pg-primary); box-shadow: 0 0 0 1px var(--pg-primary) inset; background: var(--pg-primary-50); }
+.pg-template-card strong { display: block; font-size: .92rem; }
+.pg-template-card span { display: block; font-size: .78rem; color: var(--pg-muted); line-height: 1.3; margin-top: .2rem; }
+.pg-swatch { width: 2.4rem; height: 2.1rem; padding: .2rem; }
+.pg-accordion summary { cursor: pointer; font-weight: 700; padding: .65rem .9rem; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+.pg-accordion summary::-webkit-details-marker { display: none; }
+.pg-accordion summary::after { content: "+"; color: var(--pg-muted); font-weight: 700; }
+.pg-accordion[open] summary::after { content: "–"; }
+.pg-accordion { border: 1px solid var(--pg-border); border-radius: var(--pg-radius-sm); background: #fff; }
+.pg-accordion + .pg-accordion { margin-top: .5rem; }
+.pg-accordion .pg-accordion-body { padding: 0 .9rem .9rem; }
+.pg-seg { display: inline-flex; flex-wrap: wrap; gap: .3rem; }
+.pg-seg button { border: 1px solid var(--pg-border); background: #fff; border-radius: 8px; padding: .3rem .65rem; font-size: .84rem; font-weight: 600; color: var(--pg-text); }
+.pg-seg button.active { background: var(--pg-primary); border-color: var(--pg-primary); color: #fff; }
+.pg-job { border: 1px solid #c7d2fe; background: var(--pg-primary-50); border-radius: var(--pg-radius-sm); padding: .8rem .9rem; }
+.pg-job .pg-progress { margin: .45rem 0 0; height: 8px; background: #dfe3fb; }
+.pg-stat { display: flex; justify-content: space-between; gap: 1rem; }
+.pg-pager { display: flex; align-items: center; gap: .5rem; flex-wrap: nowrap; min-width: 0; }
+.pg-pager select { width: auto; flex: 0 1 320px; min-width: 140px; }
+.pg-pager > span { white-space: nowrap; }

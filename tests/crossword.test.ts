@@ -1,3 +1,4 @@
+import { NO_EXTRAS } from "../src/lib/print/book";
 import { describe, expect, it } from "vitest";
 import { clueLists, generateCrossword, parseClueLine, validateEntries, cwLetters } from "../src/lib/crossword/engine";
 import { mulberry32 } from "../src/lib/wordsearch/engine";
@@ -64,7 +65,7 @@ describe("crossword layout", () => {
   });
   it("renders a book", () => {
     const cw = generateCrossword(ENTRIES, mulberry32(2));
-    const book = buildCrosswordBook([{ cw, title: "Crossword 1" }], { trim: "8.5x11", bleed: false, frontMatter: null }, nodeFonts());
+    const book = buildCrosswordBook([{ cw, title: "Crossword 1" }], { trim: "8.5x11", bleed: false, frontMatter: null, extras: NO_EXTRAS }, nodeFonts());
     expect(book.pageCount).toBe(24);
   });
 });

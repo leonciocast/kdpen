@@ -1,5 +1,6 @@
 import { gridForm } from "./engine";
 import { tidySpaces } from "../text";
+import { LIMITS } from "../limits";
 
 /**
  * Same rule for typed words and CSV uploads: letters, digits, Ñ/ñ, hyphens and
@@ -7,7 +8,7 @@ import { tidySpaces } from "../text";
  */
 export const VALID_WORD_REGEX = /^[A-Za-z0-9Ññ -]+$/;
 export const REPEATING_CHARS_REGEX = /(.)\1{3}/;
-export const MAX_WORDS = 200;
+export const MAX_WORDS = LIMITS.maxWords;
 export const MIN_WORD_LETTERS = 2;
 
 export interface ParseResult {
@@ -107,4 +108,38 @@ export function csvRowsToTokens(rows: unknown[][]): { tokens: string[]; error?: 
 export function wordsToCsv(words: string[]): string {
   const esc = (w: string) => (/[",\n]/.test(w) ? `"${w.replace(/"/g, '""')}"` : w);
   return ["Word", ...words.map(esc)].join("\n") + "\n";
+}
+
+export interface CsvEntry {
+  word: string;
+  theme?: string;
+}
+
+const WORD_HEADER = /^(word|words|word\/phrase|phrase|entry)$/i;
+const THEME_HEADER = /^(theme|title|theme\/title|category|topic|group)$/i;
+
+/**
+ * CSV/TXT rows -> entries. Column 1 is the word or phrase; an optional column 2
+ * is a theme/title used to group words into puzzles. A header row is optional.
+ */
+export function csvRowsToEntries(rows: unknown[][]): { entries: CsvEntry[]; error?: string } {
+  const entries: CsvEntry[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const cells = (rows[i] ?? []).map((v) => (v === null || v === undefined ? "" : tidySpaces(String(v))));
+    while (cells.length && !cells[cells.length - 1]) cells.pop();
+    if (cells.length === 0 || !cells[0]) continue;
+    if (cells.length > 2) {
+      return { entries: [], error: `Row ${i + 1} has ${cells.length} columns. Use one column for words, plus an optional second column for a theme.` };
+    }
+    if (i === 0 && WORD_HEADER.test(cells[0]) && (cells.length === 1 || THEME_HEADER.test(cells[1]))) continue;
+    entries.push(cells[1] ? { word: cells[0], theme: cells[1] } : { word: cells[0] });
+  }
+  return { entries };
+}
+
+export function entriesToCsv(entries: CsvEntry[]): string {
+  const esc = (w: string) => (/[",\n]/.test(w) ? `"${w.replace(/"/g, '""')}"` : w);
+  const themed = entries.some((e) => e.theme);
+  const head = themed ? "Word,Theme" : "Word";
+  return [head, ...entries.map((e) => (themed ? `${esc(e.word)},${esc(e.theme ?? "")}` : esc(e.word)))].join("\n") + "\n";
 }

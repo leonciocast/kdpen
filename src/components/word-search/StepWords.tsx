@@ -1,36 +1,57 @@
 "use client";
-import React, { useState } from "react";
-import { BsDownload, BsListUl, BsMagic, BsPlusLg, BsTrash } from "react-icons/bs";
+import React, { useMemo, useState } from "react";
+import { BsDownload, BsListUl, BsMagic, BsPlusLg, BsTrash, BsSearch } from "react-icons/bs";
 import { toast } from "react-toastify";
 import CsvDrop, { downloadText } from "@/components/ui/CsvDrop";
 import { tidyHandlers } from "@/components/ui/tidyText";
-import { tidyLines } from "@/lib/text";
+import { tidyLines, tidySpaces } from "@/lib/text";
 import EmptyState from "@/components/ui/EmptyState";
 import InfoTip from "@/components/ui/InfoTip";
 import { StepIntro } from "@/components/ui/Wizard";
 import { gridForm } from "@/lib/wordsearch/engine";
-import { MAX_WORDS, csvRowsToTokens, parseWords, tokenize, wordsToCsv } from "@/lib/wordsearch/words";
-import { SAMPLE_WORDS } from "./model";
+import { LIMITS } from "@/lib/limits";
+import { CsvEntry, csvRowsToEntries, entriesToCsv, normalizeEntry, parseWords, tokenize } from "@/lib/wordsearch/words";
+import { SAMPLE_WORDS, WordEntry } from "./model";
 
 interface Props {
-  words: string[];
-  setWords: React.Dispatch<React.SetStateAction<string[]>>;
-  gridSize: number;
+  entries: WordEntry[];
+  setEntries: React.Dispatch<React.SetStateAction<WordEntry[]>>;
 }
 
-export default function StepWords({ words, setWords, gridSize }: Props) {
-  const [input, setInput] = useState("");
+const SHOW = 200;
 
-  const addTokens = (tokens: string[], source: "typed" | "csv") => {
-    const res = parseWords(tokens, words, gridSize, MAX_WORDS);
+export default function StepWords({ entries, setEntries }: Props) {
+  const [input, setInput] = useState("");
+  const [theme, setTheme] = useState("");
+  const [query, setQuery] = useState("");
+
+  const addEntries = (list: CsvEntry[], source: "typed" | "csv") => {
+    const t0 = performance.now();
+    const existing = entries.map((e) => e.word);
+    const res = parseWords(
+      list.map((e) => e.word),
+      existing,
+      LIMITS.maxGridSize,
+      LIMITS.maxWords
+    );
+    const themeOf = new Map<string, string | undefined>();
+    for (const e of list) {
+      const key = normalizeEntry(e.word);
+      if (!themeOf.has(key)) themeOf.set(key, e.theme ? tidySpaces(e.theme) : undefined);
+    }
     res.errors.slice(0, 4).forEach((m) => toast.error(m));
     if (res.errors.length > 4) toast.error(`…and ${res.errors.length - 4} more entries couldn't be added.`);
     res.skipped.slice(0, 3).forEach((m) => toast.warning(m));
     if (res.skipped.length > 3) toast.warning(`…and ${res.skipped.length - 3} more were skipped.`);
-    if (res.limitReached) toast.error(`You've reached the limit of ${MAX_WORDS} words.`);
+    if (res.limitReached) toast.error(`You've reached the limit of ${LIMITS.maxWords.toLocaleString()} words.`);
     if (res.added.length) {
-      setWords((prev) => [...prev, ...res.added]);
-      toast.success(`Added ${res.added.length} ${res.added.length === 1 ? "entry" : "entries"}${source === "csv" ? " from your CSV" : ""}.`);
+      const added = res.added.map((w) => {
+        const th = themeOf.get(w);
+        return th ? { word: w, theme: th } : { word: w };
+      });
+      setEntries((prev) => [...prev, ...added]);
+      const ms = Math.round(performance.now() - t0);
+      toast.success(`Added ${res.added.length.toLocaleString()} ${res.added.length === 1 ? "entry" : "entries"}${source === "csv" ? ` from your file (${ms} ms)` : ""}.`);
     }
     return res;
   };
@@ -41,35 +62,43 @@ export default function StepWords({ words, setWords, gridSize }: Props) {
       toast.error("Please type at least one word or phrase first.");
       return;
     }
-    const res = addTokens(tokens, "typed");
-    // Keep only the entries that need fixing.
+    const th = tidySpaces(theme);
+    const res = addEntries(
+      tokens.map((w) => (th ? { word: w, theme: th } : { word: w })),
+      "typed"
+    );
     setInput(tidyLines(res.rejected.join("\n")));
   };
 
   const handleCsv = (rows: string[][]) => {
-    const { tokens, error } = csvRowsToTokens(rows);
+    const { entries: list, error } = csvRowsToEntries(rows);
     if (error) return toast.error(error);
-    if (!tokens.length) return toast.error("No valid words found in the CSV file.");
-    addTokens(tokens, "csv");
+    if (!list.length) return toast.error("No valid words found in the file.");
+    addEntries(list, "csv");
   };
 
-  const tooLong = words.filter((w) => gridForm(w).length > gridSize);
+  const themes = useMemo(() => new Set(entries.map((e) => e.theme).filter(Boolean)).size, [entries]);
+  const filtered = useMemo(() => {
+    const q = query.trim().toUpperCase();
+    const list = entries.map((e, i) => ({ ...e, i }));
+    return q ? list.filter((e) => e.word.includes(q) || (e.theme ?? "").toUpperCase().includes(q)) : list;
+  }, [entries, query]);
 
   return (
     <div>
       <StepIntro icon={<BsListUl />} title="Add your words">
-        Type one word or phrase per line, or upload a CSV file. Phrases like <b>ICE CREAM</b> are hidden in the grid without spaces.
+        Type one word or phrase per line, or upload a CSV/TXT file with thousands of words. Phrases like <b>ICE CREAM</b> are hidden without spaces. Add a theme to group words into titled puzzles.
       </StepIntro>
       <div className="row g-4">
         <div className="col-lg-6">
           <label htmlFor="wordInput" className="form-label">
             Words and phrases
-            <InfoTip text={`Letters A–Z, numbers, Ñ, spaces and hyphens. Up to ${gridSize} letters each (the grid size), ${MAX_WORDS} entries in total. Duplicates are skipped.`} />
+            <InfoTip text={`Letters A–Z, numbers, Ñ, spaces and hyphens. Up to ${LIMITS.maxGridSize} letters each and ${LIMITS.maxWords.toLocaleString()} entries in total. Duplicates are skipped.`} />
           </label>
           <textarea
             id="wordInput"
             className="form-control"
-            rows={7}
+            rows={6}
             placeholder={"One per line, for example:\nICE CREAM\nSUNSHINE\nBEACH BALL"}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -81,12 +110,19 @@ export default function StepWords({ words, setWords, gridSize }: Props) {
               }
             }}
           />
+          <div className="mt-2">
+            <label htmlFor="themeInput" className="form-label small">
+              Theme / puzzle title for these words <span className="text-muted fw-normal">(optional)</span>
+              <InfoTip text="Words with the same theme are kept together in their own puzzles, titled with the theme (e.g. “Ocean 1”, “Ocean 2”)." />
+            </label>
+            <input id="themeInput" className="form-control form-control-sm" maxLength={60} placeholder="e.g. Ocean Animals" value={theme} onChange={(e) => setTheme(e.target.value)} />
+          </div>
           <div className="d-flex flex-wrap gap-2 mt-2 align-items-center">
             <button type="button" className="btn btn-primary" onClick={handleAdd}>
               <BsPlusLg /> Add to list
             </button>
-            {words.length === 0 && (
-              <button type="button" className="btn btn-light" onClick={() => addTokens(SAMPLE_WORDS, "typed")}>
+            {entries.length === 0 && (
+              <button type="button" className="btn btn-light" onClick={() => addEntries(SAMPLE_WORDS.map((w) => ({ word: w, theme: "Summer Fun" })), "typed")}>
                 <BsMagic /> Try a sample list
               </button>
             )}
@@ -95,29 +131,33 @@ export default function StepWords({ words, setWords, gridSize }: Props) {
             </span>
           </div>
           <div className="mt-3">
-            <CsvDrop onRows={handleCsv} label="Upload a CSV file" hint="One word or phrase per row. A “Word” header row is optional." />
+            <CsvDrop onRows={handleCsv} label="Upload a CSV or TXT file" hint="Column 1: word or phrase. Optional column 2: theme/title. A header row is optional." />
           </div>
         </div>
         <div className="col-lg-6">
-          <div className="d-flex justify-content-between align-items-center mb-2">
+          <div className="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
             <span className="form-label m-0">
-              Your list <span className="pg-badge neutral ms-1">{words.length} / {MAX_WORDS}</span>
+              Your list{" "}
+              <span className="pg-badge neutral ms-1" data-testid="word-count">
+                {entries.length.toLocaleString()} / {LIMITS.maxWords.toLocaleString()}
+              </span>
+              {themes > 0 && <span className="pg-badge info ms-1">{themes} themes</span>}
             </span>
             <div className="d-flex gap-1">
               <button
                 type="button"
                 className="btn btn-ghost btn-sm"
-                onClick={() => downloadText(words.length ? "word-search-words.csv" : "word-search-template.csv", wordsToCsv(words.length ? words : SAMPLE_WORDS.slice(0, 3)))}
-                title={words.length ? "Download your list as a CSV file" : "Download a CSV template"}
+                onClick={() => downloadText(entries.length ? "word-search-words.csv" : "word-search-template.csv", entriesToCsv(entries.length ? entries : [{ word: "ICE CREAM", theme: "Summer" }, { word: "WHALE", theme: "Ocean" }]))}
+                title={entries.length ? "Download your list as a CSV file" : "Download a CSV template"}
               >
-                <BsDownload /> {words.length ? "Download CSV" : "CSV template"}
+                <BsDownload /> {entries.length ? "Download CSV" : "CSV template"}
               </button>
-              {words.length > 0 && (
+              {entries.length > 0 && (
                 <button
                   type="button"
                   className="btn btn-ghost btn-sm text-danger"
                   onClick={() => {
-                    if (window.confirm("Remove all words from the list?")) setWords([]);
+                    if (window.confirm(`Remove all ${entries.length.toLocaleString()} words from the list?`)) setEntries([]);
                   }}
                 >
                   <BsTrash /> Clear
@@ -125,31 +165,43 @@ export default function StepWords({ words, setWords, gridSize }: Props) {
               )}
             </div>
           </div>
-          {words.length === 0 ? (
+          {entries.length === 0 ? (
             <EmptyState icon={<BsListUl />} title="No words yet">
               Words you add will appear here.
             </EmptyState>
           ) : (
-            <div className="pg-list" data-testid="word-list">
-              {words.map((w, i) => {
-                const long = gridForm(w).length > gridSize;
-                return (
-                  <div className="pg-list-row" key={w}>
-                    <span className="pg-num">{i + 1}</span>
-                    <span className={`flex-grow-1 fw-semibold ${long ? "text-danger" : ""}`}>
-                      {w}
-                      {w.includes(" ") || w.includes("-") ? <span className="text-muted small fw-normal ms-2">grid: {gridForm(w)}</span> : null}
+            <>
+              {entries.length > 12 && (
+                <div className="input-group input-group-sm mb-2">
+                  <span className="input-group-text">
+                    <BsSearch />
+                  </span>
+                  <input className="form-control" placeholder="Search words or themes" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search your list" />
+                </div>
+              )}
+              <div className="pg-list" data-testid="word-list">
+                {filtered.slice(0, SHOW).map((e) => (
+                  <div className="pg-list-row" key={e.word}>
+                    <span className="pg-num">{e.i + 1}</span>
+                    <span className="flex-grow-1 fw-semibold">
+                      {e.word}
+                      {e.word.includes(" ") || e.word.includes("-") ? <span className="text-muted small fw-normal ms-2">grid: {gridForm(e.word)}</span> : null}
                     </span>
-                    <span className="small text-muted">{gridForm(w).length}</span>
-                    <button type="button" className="btn btn-ghost btn-icon" aria-label={`Remove ${w}`} onClick={() => setWords((prev) => prev.filter((x) => x !== w))}>
+                    {e.theme && <span className="pg-badge neutral text-truncate" style={{ maxWidth: 140 }}>{e.theme}</span>}
+                    <span className="small text-muted">{gridForm(e.word).length}</span>
+                    <button type="button" className="btn btn-ghost btn-icon" aria-label={`Remove ${e.word}`} onClick={() => setEntries((prev) => prev.filter((x) => x.word !== e.word))}>
                       <BsTrash />
                     </button>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+              {filtered.length > SHOW && (
+                <div className="form-text">
+                  Showing {SHOW} of {filtered.length.toLocaleString()}. Use search to find a word.
+                </div>
+              )}
+            </>
           )}
-          {tooLong.length > 0 && <div className="form-text text-danger mt-2">Red entries are longer than the {gridSize}×{gridSize} grid. Make the grid bigger in step 2 or remove them.</div>}
         </div>
       </div>
     </div>

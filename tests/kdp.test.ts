@@ -3,7 +3,7 @@ import { generatePuzzle, allowedDirections, mulberry32 } from "../src/lib/wordse
 import { insideMargin, makePageSpec, marginsForPage, paddedPageCount, outsideMargin } from "../src/lib/print/kdp";
 import { buildWordSearchBook, BookPuzzle } from "../src/lib/wordsearch/pdf";
 import { DEFAULT_FRONT_MATTER } from "../src/lib/print/frontMatter";
-import { planKinds } from "../src/lib/print/book";
+import { planKinds, NO_EXTRAS, DEFAULT_EXTRAS } from "../src/lib/print/book";
 import { nodeFonts } from "../src/lib/print/nodeFonts";
 
 describe("KDP rules", () => {
@@ -33,15 +33,27 @@ describe("KDP rules", () => {
 });
 
 describe("book plan", () => {
-  const noop = () => {};
+  const base = { extras: NO_EXTRAS, sectionCount: 2, hasHowTo: true };
   it("puts title, copyright, dedication, how-to before content and pads", () => {
-    const kinds = planKinds({ frontMatter: { ...DEFAULT_FRONT_MATTER, dedication: "For Mom" }, howTo: { heading: "x", paragraphs: [] }, content: [noop, noop, noop] });
+    const kinds = planKinds({ ...base, extras: { ...NO_EXTRAS, howTo: true }, frontMatter: { ...DEFAULT_FRONT_MATTER, dedication: "For Mom" }, contentCount: 3 });
     expect(kinds.slice(0, 7)).toEqual(["title", "copyright", "dedication", "howto", "content", "content", "content"]);
     expect(kinds.length).toBe(24);
   });
   it("skips dedication when empty and front matter when off", () => {
-    expect(planKinds({ frontMatter: DEFAULT_FRONT_MATTER, content: [noop] }).slice(0, 3)).toEqual(["title", "copyright", "content"]);
-    expect(planKinds({ frontMatter: null, content: [noop], padForKdp: false })).toEqual(["content", "blank"]);
+    expect(planKinds({ ...base, frontMatter: DEFAULT_FRONT_MATTER, contentCount: 1 }).slice(0, 3)).toEqual(["title", "copyright", "content"]);
+    expect(planKinds({ ...base, frontMatter: null, contentCount: 1, padForKdp: false })).toEqual(["content", "blank"]);
+  });
+  it("orders all extras and pads with notes before the thank-you page", () => {
+    const kinds = planKinds({ ...base, extras: { ...DEFAULT_EXTRAS, intro: "Hi" }, frontMatter: DEFAULT_FRONT_MATTER, contentCount: 4 });
+    expect(kinds.slice(0, 7)).toEqual(["title", "copyright", "belongs", "toc", "intro", "howto", "content"]);
+    expect(kinds[kinds.length - 1]).toBe("thanks");
+    expect(kinds.length).toBe(24);
+    expect(kinds.includes("blank")).toBe(false);
+    expect(kinds.filter((k) => k === "notes").length).toBe(24 - 11);
+  });
+  it("adds TOC pages for many sections", () => {
+    const kinds = planKinds({ ...base, extras: { ...NO_EXTRAS, toc: true }, frontMatter: null, contentCount: 2, sectionCount: 60 });
+    expect(kinds.filter((k) => k === "toc").length).toBe(3);
   });
 });
 
@@ -55,7 +67,7 @@ describe("word search book PDF", () => {
 
   it("renders a vector PDF with front matter, right page size and embedded fonts", () => {
     const fm = { ...DEFAULT_FRONT_MATTER, title: "My Test Book", author: "Test Author", isbn: "978-1-23456-789-7" };
-    const book = buildWordSearchBook(puzzles, { trim: "6x9", bleed: true, answersPerPage: 2, frontMatter: fm }, nodeFonts());
+    const book = buildWordSearchBook(puzzles, { trim: "6x9", bleed: true, answersPerPage: 2, frontMatter: fm, extras: { ...NO_EXTRAS, howTo: true } }, nodeFonts());
     expect(book.pageCount).toBe(24);
     expect(book.kinds.slice(0, 3)).toEqual(["title", "copyright", "howto"]);
     const pdf = book.pdf;
@@ -67,5 +79,13 @@ describe("word search book PDF", () => {
     expect(raw).not.toContain("/Helvetica");
     expect(raw).not.toContain("/Subtype /Image");
     expect(raw).toContain("My Test Book"); // document info title
+  });
+  it("every template renders with all extras", async () => {
+    const { TEMPLATES } = await import("../src/lib/design/templates");
+    for (const t of TEMPLATES) {
+      const book = buildWordSearchBook(puzzles, { trim: "8.5x11", bleed: false, answersPerPage: 4, frontMatter: DEFAULT_FRONT_MATTER, extras: { ...DEFAULT_EXTRAS, intro: "Hello" }, design: t.design }, nodeFonts());
+      expect(book.pageCount % 2).toBe(0);
+      expect(book.pdf.output()).not.toContain("/Helvetica");
+    }
   });
 });

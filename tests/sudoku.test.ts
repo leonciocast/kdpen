@@ -1,3 +1,4 @@
+import { NO_EXTRAS } from "../src/lib/print/book";
 import { describe, expect, it } from "vitest";
 import { generateSudokus, isValidSolution } from "../src/lib/sudoku";
 import { buildSudokuBook } from "../src/lib/sudoku/pdf";
@@ -15,7 +16,7 @@ describe("sudoku", () => {
     expect(generateSudokus(0, "easy")).toHaveLength(1);
   });
   it("renders a book with solutions", () => {
-    const book = buildSudokuBook(generateSudokus(6, "easy"), { trim: "6x9", bleed: false, frontMatter: null, puzzlesPerPage: 2 }, nodeFonts());
+    const book = buildSudokuBook(generateSudokus(6, "easy"), { trim: "6x9", bleed: false, frontMatter: null, extras: NO_EXTRAS, puzzlesPerPage: 2 }, nodeFonts());
     expect(book.kinds.filter((k) => k === "content")).toHaveLength(3 + 2);
   });
 });

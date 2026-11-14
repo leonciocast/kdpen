@@ -1,9 +1,10 @@
 /** Sudoku puzzles (via sudoku-gen) as 9x9 number grids; 0 = blank. */
 import { getSudoku } from "sudoku-gen";
+import { LIMITS } from "../limits";
 
 export type SudokuDifficulty = "easy" | "medium" | "hard" | "expert";
 export const SUDOKU_DIFFICULTIES: SudokuDifficulty[] = ["easy", "medium", "hard", "expert"];
-export const SUDOKU_MAX_PUZZLES = 100;
+export const SUDOKU_MAX_PUZZLES = LIMITS.maxSudokus;
 
 export interface SudokuPuzzle {
   difficulty: SudokuDifficulty;
@@ -40,3 +41,12 @@ export function isValidSolution(g: number[][]): boolean {
 }
 
 export const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+export type SudokuMix = Record<SudokuDifficulty, number>;
+
+/** Difficulty for each puzzle of a mixed book, easiest first (a gentle learning curve). */
+export function mixPlan(mix: SudokuMix): SudokuDifficulty[] {
+  const out: SudokuDifficulty[] = [];
+  for (const d of SUDOKU_DIFFICULTIES) for (let i = 0; i < Math.max(0, Math.floor(mix[d] || 0)); i++) out.push(d);
+  return out.slice(0, SUDOKU_MAX_PUZZLES);
+}

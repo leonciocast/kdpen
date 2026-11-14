@@ -1,78 +1,132 @@
 "use client";
 import { plural } from "@/lib/plural";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { BsArrowRepeat, BsEye, BsGrid3X3Gap, BsLightningCharge, BsSliders } from "react-icons/bs";
 import { toast } from "react-toastify";
 import PageHeader from "@/components/ui/PageHeader";
 import BookExport from "@/components/ui/BookExport";
+import DesignStep from "@/components/ui/DesignStep";
 import EmptyState from "@/components/ui/EmptyState";
 import InfoTip from "@/components/ui/InfoTip";
+import ItemPager from "@/components/ui/ItemPager";
+import JobProgress from "@/components/ui/JobProgress";
+import { useDesign } from "@/components/ui/useDesign";
 import { StepIntro, Stepper, WizardFooter } from "@/components/ui/Wizard";
-import { SUDOKU_DIFFICULTIES, SUDOKU_MAX_PUZZLES, SudokuDifficulty, SudokuPuzzle, capitalize, generateSudoku, generateSudokus } from "@/lib/sudoku";
-import { buildSudokuBook } from "@/lib/sudoku/pdf";
+import { SUDOKU_DIFFICULTIES, SUDOKU_MAX_PUZZLES, SudokuDifficulty, SudokuMix, SudokuPuzzle, capitalize, generateSudoku, mixPlan } from "@/lib/sudoku";
+import { buildSudokuBook, demoSudoku } from "@/lib/sudoku/pdf";
+import { JobCancelled, startJob } from "@/lib/jobs/client";
+import type { Progress } from "@/lib/jobs/types";
+import { DEFAULT_EXTRAS } from "@/lib/print/book";
+import { DEFAULT_FRONT_MATTER } from "@/lib/print/frontMatter";
+import type { Design } from "@/lib/design/types";
+import type { FontData } from "@/lib/print/fonts";
 import SudokuGrid from "./SudokuGrid";
 
-const STEPS = [{ label: "Choose puzzles" }, { label: "Review & solution" }, { label: "Export book" }];
+const STEPS = [{ label: "Choose puzzles" }, { label: "Review & solution" }, { label: "Design" }, { label: "Export book" }];
 const DIFF_TEXT: Record<SudokuDifficulty, string> = {
   easy: "Plenty of numbers to start",
   medium: "A steady challenge",
   hard: "For experienced solvers",
   expert: "Very few clues",
 };
+const QUICK: { label: string; mix: SudokuMix }[] = [
+  { label: "All easy", mix: { easy: 50, medium: 0, hard: 0, expert: 0 } },
+  { label: "Easy → hard (100)", mix: { easy: 30, medium: 40, hard: 30, expert: 0 } },
+  { label: "Balanced (200)", mix: { easy: 50, medium: 50, hard: 50, expert: 50 } },
+  { label: "Challenge (100)", mix: { easy: 0, medium: 20, hard: 50, expert: 30 } },
+];
+
+let sample: SudokuPuzzle[] | null = null;
+const samplePuzzles = () => (sample ??= [demoSudoku(), demoSudoku(), demoSudoku(), demoSudoku()]);
 
 export default function SudokuGenerator() {
   const [step, setStep] = useState(0);
-  const [difficulty, setDifficulty] = useState<SudokuDifficulty>("easy");
-  const [count, setCount] = useState(10);
+  const [mix, setMix] = useState<SudokuMix>({ easy: 10, medium: 0, hard: 0, expert: 0 });
   const [puzzles, setPuzzles] = useState<SudokuPuzzle[]>([]);
   const [active, setActive] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
-  const [perPage, setPerPage] = useState<1 | 2 | 4>(1);
+  const [running, setRunning] = useState<{ progress: Progress | null; cancel: () => void } | null>(null);
+  const designApi = useDesign("sudoku");
 
-  const generate = () => {
-    const list = generateSudokus(count, difficulty);
-    setPuzzles(list);
-    setActive(0);
-    setShowSolution(false);
-    toast.success(`${list.length} ${difficulty} sudoku puzzle${list.length === 1 ? " is" : "s are"} ready.`);
-    setStep(1);
+  const total = SUDOKU_DIFFICULTIES.reduce((n, d) => n + mix[d], 0);
+  const setCount = (d: SudokuDifficulty, v: number) => {
+    const others = total - mix[d];
+    setMix({ ...mix, [d]: Math.max(0, Math.min(SUDOKU_MAX_PUZZLES - others, Math.round(Number.isFinite(v) ? v : 0))) });
+  };
+
+  const generate = async () => {
+    if (!total) return toast.error("Choose at least one puzzle.");
+    const job = startJob({ type: "sd-generate", plan: mixPlan(mix) }, (p) => setRunning((r) => (r ? { ...r, progress: p } : r)));
+    setRunning({ progress: null, cancel: job.cancel });
+    const t0 = performance.now();
+    try {
+      const list = await job.promise;
+      setPuzzles(list);
+      setActive(0);
+      setShowSolution(false);
+      toast.success(`${plural(list.length, "sudoku puzzle")} ${list.length === 1 ? "is" : "are"} ready (${((performance.now() - t0) / 1000).toFixed(1)}s).`);
+      setStep(1);
+    } catch (e) {
+      if (e instanceof JobCancelled) toast.info("Stopped. Nothing was changed.");
+      else toast.error(`Sorry, the puzzles couldn't be generated: ${(e as Error).message}`);
+    } finally {
+      setRunning(null);
+    }
   };
 
   const puzzle = puzzles[active];
-  const answerPages = Math.ceil(puzzles.length / 4);
+  const levels = useMemo(() => new Set(puzzles.map((p) => p.difficulty)).size, [puzzles]);
+  const sampleBuilder = (design: Design, fonts: FontData) => {
+    const items = puzzles.length >= 2 ? puzzles.slice(0, 4) : samplePuzzles();
+    return buildSudokuBook(items, { trim: "8.5x11", bleed: false, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Sudoku Puzzle Book", subtitle: "Puzzles with Solutions" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, puzzlesPerPage: 2, answersPerPage: 4, padForKdp: false }, fonts);
+  };
+  const subtitle = levels > 1 ? "Easy to Hard Puzzles with Solutions" : `${capitalize(puzzles[0]?.difficulty ?? "easy")} Puzzles with Solutions`;
+
   return (
     <div className="container pb-4">
-      <PageHeader icon={<BsGrid3X3Gap />} title="Sudoku" lead="Generate sudoku puzzles from easy to expert, each with one solution, and export a print-ready book." />
-      <Stepper steps={STEPS} current={step} maxReachable={puzzles.length ? 2 : 0} onSelect={setStep} />
-      <div className="pg-card no-print">
+      <PageHeader icon={<BsGrid3X3Gap />} title="Sudoku" lead="Generate up to 1,000 sudoku puzzles from easy to expert, each with one solution, and export a print-ready book." />
+      <Stepper steps={STEPS} current={step} maxReachable={puzzles.length ? 3 : 0} onSelect={setStep} />
+      <div className="pg-card">
         <div className="pg-card-body">
           {step === 0 && (
             <div>
               <StepIntro icon={<BsSliders />} title="Choose your puzzles">
-                Pick a difficulty and how many puzzles you want, then generate them.
+                Choose how many puzzles of each difficulty you want. The book goes from easiest to hardest, with a section per level.
               </StepIntro>
-              <div className="form-label">Difficulty</div>
-              <div className="row g-2 mb-4" role="radiogroup" aria-label="Difficulty">
+              <div className="d-flex flex-wrap gap-2 mb-3 align-items-center">
+                <span className="small fw-semibold">Quick picks:</span>
+                {QUICK.map((q) => (
+                  <button key={q.label} type="button" className="btn btn-light btn-sm" onClick={() => setMix(q.mix)}>
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+              <div className="row g-2 mb-3">
                 {SUDOKU_DIFFICULTIES.map((d) => (
                   <div className="col-6 col-md-3" key={d}>
-                    <button type="button" role="radio" aria-checked={difficulty === d} className={`pg-option-card text-center ${difficulty === d ? "active" : ""}`} onClick={() => setDifficulty(d)}>
+                    <div className={`pg-option-card text-center ${mix[d] ? "active" : ""}`}>
                       <h3 className="mt-0">{capitalize(d)}</h3>
-                      <p className="small">{DIFF_TEXT[d]}</p>
-                    </button>
+                      <p className="small mb-2">{DIFF_TEXT[d]}</p>
+                      <label className="visually-hidden" htmlFor={`count-${d}`}>
+                        {capitalize(d)} puzzles
+                      </label>
+                      <input id={`count-${d}`} type="number" className="form-control text-center mx-auto" style={{ maxWidth: 110 }} min={0} max={SUDOKU_MAX_PUZZLES} value={mix[d]} onChange={(e) => setCount(d, Number(e.target.value))} data-testid={`count-${d}`} />
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="d-flex flex-wrap align-items-end gap-3">
-                <div>
-                  <label className="form-label" htmlFor="count">
-                    Number of puzzles <InfoTip text={`Between 1 and ${SUDOKU_MAX_PUZZLES}. Each one is unique.`} />
-                  </label>
-                  <input id="count" type="number" className="form-control" style={{ width: 140 }} min={1} max={SUDOKU_MAX_PUZZLES} value={count} onChange={(e) => setCount(Math.max(1, Math.min(SUDOKU_MAX_PUZZLES, Number(e.target.value) || 1)))} />
+              {running ? (
+                <JobProgress title="Generating sudoku" progress={running.progress} onCancel={running.cancel} />
+              ) : (
+                <div className="d-flex flex-wrap align-items-center gap-3">
+                  <button type="button" className="btn btn-primary btn-lg" onClick={generate} disabled={!total} data-testid="generate-sudoku">
+                    <BsLightningCharge /> Generate {plural(total, "puzzle")}
+                  </button>
+                  <span className="form-text">
+                    Up to {SUDOKU_MAX_PUZZLES.toLocaleString()} in total. Every puzzle is unique with exactly one solution. <InfoTip text="Generation runs in the background; hundreds of puzzles take a few seconds." />
+                  </span>
                 </div>
-                <button type="button" className="btn btn-primary btn-lg" onClick={generate} data-testid="generate-sudoku">
-                  <BsLightningCharge /> Generate {count} puzzle{count === 1 ? "" : "s"}
-                </button>
-              </div>
+              )}
             </div>
           )}
 
@@ -94,16 +148,12 @@ export default function SudokuGenerator() {
                     <div className="pg-subtle p-3">
                       <div className="d-flex justify-content-between align-items-center mb-2">
                         <span className="fw-bold">
-                          Puzzle {active + 1} of {puzzles.length}
+                          Puzzle {active + 1} of {puzzles.length.toLocaleString()}
                         </span>
                         <span className="pg-badge info">{capitalize(puzzle.difficulty)}</span>
                       </div>
-                      <div className="pg-tabs mb-3" role="tablist" style={{ maxHeight: 160, overflowY: "auto" }}>
-                        {puzzles.map((_, i) => (
-                          <button key={i} type="button" role="tab" aria-selected={i === active} className={`pg-tab ${i === active ? "active" : ""}`} onClick={() => setActive(i)}>
-                            {i + 1}
-                          </button>
-                        ))}
+                      <div className="mb-3">
+                        <ItemPager titles={puzzles.map((p, i) => (puzzles.length > 10 ? `${capitalize(p.difficulty)}` : String(i + 1)))} active={active} onSelect={setActive} label="Puzzles" />
                       </div>
                       <div className="form-check form-switch">
                         <input className="form-check-input" type="checkbox" role="switch" id="sdSolution" checked={showSolution} onChange={(e) => setShowSolution(e.target.checked)} />
@@ -127,55 +177,31 @@ export default function SudokuGenerator() {
             </div>
           )}
 
-          {step === 2 && (
+          {step === 2 && <DesignStep tool="sudoku" api={designApi} buildSample={sampleBuilder} />}
+
+          {step === 3 && (
             <BookExport
               tool="sudoku"
-              toolDefaults={{ title: "Sudoku Puzzle Book", subtitle: `${capitalize(difficulty)} Puzzles with Solutions` }}
-              detail={`${puzzles.length} Sudoku Puzzle${puzzles.length === 1 ? "" : "s"}`}
-              contentPages={Math.ceil(puzzles.length / perPage) + answerPages}
-              itemsLabel={`${plural(puzzles.length, "puzzle")} + ${plural(answerPages, "solution page")}`}
+              toolDefaults={{ title: "Sudoku Puzzle Book", subtitle }}
+              itemNoun="puzzle"
+              itemCount={puzzles.length}
+              sectionCount={Math.max(0, levels - 1)}
+              design={designApi.design}
+              items={() => ({ tool: "sudoku", items: puzzles })}
               fileBase="sudoku-book"
               disabledReason={puzzles.length ? undefined : "Generate puzzles first."}
-              onPrint={() => window.print()}
-              extraFields={
-                <div className="col-sm-6">
-                  <label className="form-label" htmlFor="perPage">
-                    Puzzles per page
-                  </label>
-                  <select id="perPage" className="form-select" value={perPage} onChange={(e) => setPerPage(Number(e.target.value) as 1 | 2 | 4)}>
-                    <option value={1}>1 per page (large print)</option>
-                    <option value={2}>2 per page</option>
-                    <option value={4}>4 per page</option>
-                  </select>
-                </div>
-              }
-              build={(s, fonts) => buildSudokuBook(puzzles, { trim: s.trim, bleed: s.bleed, frontMatter: s.frontMatter, puzzlesPerPage: perPage, padForKdp: s.padForKdp }, fonts)}
+              perPageChoice
+              defaultAnswersPerPage={6}
             />
           )}
         </div>
         <WizardFooter
           onBack={step > 0 ? () => setStep(step - 1) : undefined}
-          onNext={step === 0 ? (puzzles.length ? () => setStep(1) : undefined) : step === 1 ? () => setStep(2) : undefined}
-          nextDisabled={!puzzles.length}
-          hint={step === 0 ? (puzzles.length ? `${puzzles.length} puzzles already generated` : "Generate puzzles to continue") : step === 1 ? `${puzzles.length} puzzles ready` : ""}
+          onNext={step < STEPS.length - 1 && puzzles.length ? () => setStep(step + 1) : undefined}
+          nextDisabled={!puzzles.length || !!running}
+          nextLabel={step === 1 ? "Choose a design" : step === 2 ? "Continue to export" : undefined}
+          hint={step === 0 ? (puzzles.length ? `${plural(puzzles.length, "puzzle")} generated` : "Generate puzzles to continue") : step === 2 ? `Template: ${designApi.design.name}` : `${plural(puzzles.length, "puzzle")}`}
         />
-      </div>
-
-      <div className="print-only">
-        {puzzles.map((p, i) => (
-          <div className="print-page" key={`p-${i}`}>
-            <h2>
-              Sudoku {i + 1} · {capitalize(p.difficulty)}
-            </h2>
-            <SudokuGrid puzzle={p} showSolution={false} maxWidth={560} />
-          </div>
-        ))}
-        {puzzles.map((p, i) => (
-          <div className="print-page" key={`s-${i}`}>
-            <h2>Sudoku {i + 1}: Solution</h2>
-            <SudokuGrid puzzle={p} showSolution maxWidth={480} />
-          </div>
-        ))}
       </div>
     </div>
   );
