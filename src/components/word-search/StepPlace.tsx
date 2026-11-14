@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
-import { BsArrowRepeat, BsCursor, BsHandIndexThumb, BsLightningCharge, BsMagic } from "react-icons/bs";
+import { BsArrowRepeat, BsArrowRight, BsCheckCircleFill, BsCursor, BsGrid3X3, BsHandIndexThumb, BsLightningCharge, BsMagic } from "react-icons/bs";
+import { Panel } from "@/components/ui/Panel";
 import Callout from "@/components/ui/Callout";
 import JobProgress from "@/components/ui/JobProgress";
 import type { Progress } from "@/lib/jobs/types";
@@ -42,16 +43,22 @@ export default function StepPlace({ puzzles, active, setActive, updateActive, au
     return (
       <div>
         <StepIntro icon={<BsCursor />} title="Place the words">
-          Let us place every word for you, or place them yourself one by one. You can mix both: place a few by hand and auto-place the rest.
+          Choose how the words go into the grids. Most people pick the first option; you can still edit any puzzle afterwards.
         </StepIntro>
         <div className="row g-3">
           <div className="col-md-6">
-            <button type="button" className="pg-option-card" onClick={() => create("auto")} data-testid="mode-auto">
-              <span className="pg-icon-badge">
-                <BsLightningCharge />
-              </span>
-              <h3>Automatic</h3>
+            <button type="button" className="pg-option-card recommended" onClick={() => create("auto")} data-testid="mode-auto">
+              <div className="d-flex justify-content-between align-items-start">
+                <span className="pg-icon-badge">
+                  <BsLightningCharge />
+                </span>
+                <span className="pg-rec-badge">Recommended</span>
+              </div>
+              <h3>Place all words for me</h3>
               <p>Every puzzle is built and filled using your step 2 settings, even for 10,000+ words. You can still edit any puzzle afterwards.</p>
+              <span className="pg-fake-btn primary">
+                Place them for me <BsArrowRight />
+              </span>
             </button>
           </div>
           <div className="col-md-6">
@@ -59,8 +66,11 @@ export default function StepPlace({ puzzles, active, setActive, updateActive, au
               <span className="pg-icon-badge">
                 <BsHandIndexThumb />
               </span>
-              <h3>Place words myself</h3>
+              <h3>
+                Place words myself <span className="pg-optional">advanced</span>
+              </h3>
               <p>Choose where each word goes and which way it runs, with a live preview. Any direction is allowed.</p>
+              <span className="pg-fake-btn">Place them myself</span>
             </button>
           </div>
         </div>
@@ -86,20 +96,33 @@ export default function StepPlace({ puzzles, active, setActive, updateActive, au
           </div>
         </Callout>
       )}
-      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <PuzzleTabs puzzles={puzzles} active={active} onSelect={setActive} />
-        <span className="ms-auto d-flex align-items-center gap-2">
-          <span className={`pg-badge ${done === puzzles.length ? "ok" : "warn"}`}>
-            {done} of {puzzles.length} finished
-          </span>
-          {done < puzzles.length && (
-            <button type="button" className="btn btn-sm btn-outline-primary" onClick={finishAll}>
-              <BsMagic /> Finish the rest automatically
-            </button>
-          )}
-        </span>
-      </div>
-      {puzzle && <Editor key={puzzle.id} puzzle={puzzle} update={updateActive} autoDirs={autoDirs} />}
+      <Panel
+        tone="result"
+        title="Your puzzles"
+        icon={<BsGrid3X3 />}
+        aside={
+          <>
+            <span className={`pg-badge ${done === puzzles.length ? "ok" : "warn"}`}>
+              {done} of {puzzles.length} finished
+            </span>
+            {done < puzzles.length && (
+              <button type="button" className="btn btn-sm btn-primary" onClick={finishAll}>
+                <BsMagic /> Finish the rest automatically
+              </button>
+            )}
+          </>
+        }
+      >
+        <div className="mb-3">
+          <PuzzleTabs puzzles={puzzles} active={active} onSelect={setActive} />
+        </div>
+        {done === puzzles.length && (
+          <div className="pg-next-tip mb-3">
+            <BsCheckCircleFill /> <span>All puzzles are finished. Press <b>Next</b> to review them, or click a word below to change this puzzle.</span>
+          </div>
+        )}
+        {puzzle && <Editor key={puzzle.id} puzzle={puzzle} update={updateActive} autoDirs={autoDirs} />}
+      </Panel>
     </div>
   );
 }

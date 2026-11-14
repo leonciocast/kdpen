@@ -144,11 +144,11 @@ export default function WordSearch() {
   const nextInfo: { disabled: boolean; hint: React.ReactNode; label?: string } = (() => {
     switch (step) {
       case 0:
-        return { disabled: !entries.length, hint: entries.length ? `${entries.length.toLocaleString()} entr${entries.length === 1 ? "y" : "ies"} in your list` : "Add at least one word to continue" };
+        return { disabled: !entries.length, hint: entries.length ? `${entries.length.toLocaleString()} entr${entries.length === 1 ? "y" : "ies"} in your list` : "Add at least one word to your list to continue" };
       case 1:
         return { disabled: !entries.length, hint: `${plural(specs.length, "puzzle")}, ${preset.label.toLowerCase()} difficulty` };
       case 2:
-        return { disabled: !finished.length || !!running, hint: puzzles.length ? `${finished.length.toLocaleString()} of ${puzzles.length.toLocaleString()} puzzles finished` : "Choose automatic or manual placement" };
+        return { disabled: !finished.length || !!running, hint: running ? "Placing your words…" : !puzzles.length ? "Pick one of the two options above to continue" : finished.length ? `${finished.length.toLocaleString()} of ${puzzles.length.toLocaleString()} puzzles finished` : "Finish at least one puzzle to continue" };
       case 3:
         return { disabled: !finished.length, hint: `${plural(finished.length, "puzzle")} will go in your book`, label: "Choose a design" };
       case 4:
@@ -162,7 +162,7 @@ export default function WordSearch() {
     <div className="container pb-4">
       <PageHeader icon={<BsSearch />} title="Word Search" lead="Build word search puzzles step by step, from a dozen words to 20,000, and export a print-ready book with answer keys." />
       <Stepper steps={STEPS} current={step} maxReachable={maxReachable} onSelect={setStep} />
-      <div className="pg-card">
+      <div className="pg-card pg-wizard-card">
         <div className="pg-card-body">
           {step === 0 && <StepWords entries={entries} setEntries={setEntries} />}
           {step === 1 && <StepSettings settings={settings} setSettings={setSettings} specs={specs} wordCount={entries.length} themeCount={themeCount} />}

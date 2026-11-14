@@ -46,13 +46,13 @@ export default function Home() {
       </section>
 
       <section id="tools" aria-labelledby="tools-title" className="mb-5">
-        <h2 id="tools-title" className="visually-hidden">
-          Tools
+        <h2 id="tools-title" className="h5 fw-bold mb-3 text-center pg-tools-title">
+          Pick a tool to start
         </h2>
         <div className="row g-4">
           {tools.map((t) => (
             <div className="col-md-4" key={t.href}>
-              <Link href={t.href} className="pg-card pg-card-body pg-tool-card">
+              <Link href={t.href} className={`pg-card pg-card-body pg-tool-card ${t.tag ? "featured" : ""}`}>
                 <div className="d-flex justify-content-between align-items-start">
                   <span className="pg-icon-badge">{t.icon}</span>
                   {t.tag && <span className="pg-badge info">{t.tag}</span>}
@@ -68,7 +68,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="pg-card pg-card-body mb-5" aria-labelledby="how-title">
+      <section className="pg-card pg-card-body pg-how mb-5" aria-labelledby="how-title">
         <h2 id="how-title" className="h4 fw-bold mb-4 text-center">
           How it works
         </h2>

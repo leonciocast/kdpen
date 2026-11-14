@@ -1,6 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import { BsArrowRepeat, BsEye, BsMagic, BsPencil } from "react-icons/bs";
+import { BsArrowRepeat, BsCheck2Square, BsEye, BsMagic, BsPencil } from "react-icons/bs";
+import { Panel, SubStep } from "@/components/ui/Panel";
 import Callout from "@/components/ui/Callout";
 import { StepIntro } from "@/components/ui/Wizard";
 import PuzzleGrid, { SolutionStyle } from "./PuzzleGrid";
@@ -27,13 +28,14 @@ export default function StepReview({ puzzles, active, setActive, updateActive, s
   return (
     <div>
       <StepIntro icon={<BsEye />} title="Review your puzzles">
-        Check each puzzle, rename it, and look at the answer key. Black &amp; white shows exactly how answers print in the book.
+        Look through your puzzles and their answers. Everything is optional here: if they look good, press Next.
       </StepIntro>
-      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-        <PuzzleTabs puzzles={puzzles} active={active} onSelect={setActive} />
-      </div>
       <div className="row g-4">
         <div className="col-lg-7 col-xl-8">
+          <Panel tone="result" title="Puzzle preview" icon={<BsEye />}>
+          <div className="mb-3">
+            <PuzzleTabs puzzles={puzzles} active={active} onSelect={setActive} />
+          </div>
           {puzzle.grid ? (
             <div className="pg-grid-wrap">
               <PuzzleGrid id="review-grid" size={puzzle.size} letters={puzzle.grid} placements={puzzle.placements} colors={colorsFor(puzzle)} solution={solution} />
@@ -46,13 +48,11 @@ export default function StepReview({ puzzles, active, setActive, updateActive, s
               </button>
             </Callout>
           )}
+          </Panel>
         </div>
         <div className="col-lg-5 col-xl-4">
-          <div className="pg-subtle p-3">
-            <label className="form-label" htmlFor="puzzleTitle">
-              Puzzle title
-            </label>
-            <input id="puzzleTitle" className="form-control mb-3" value={puzzle.title} onChange={(e) => updateActive((p) => ({ ...p, title: e.target.value }))} />
+          <Panel tone="action" title="Check this puzzle" icon={<BsCheck2Square />}>
+            <SubStep n={1} title="Check the answers">
             <div className="form-check form-switch">
               <input
                 className="form-check-input"
@@ -72,7 +72,7 @@ export default function StepReview({ puzzles, active, setActive, updateActive, s
                 <button
                   key={s}
                   type="button"
-                  className={`btn ${style === s ? "btn-primary" : "btn-light"}`}
+                  className={`btn ${style === s ? "btn-outline-primary fw-bold" : "btn-light"}`}
                   onClick={() => {
                     setStyle(s);
                     if (show) setSolution(s);
@@ -82,8 +82,16 @@ export default function StepReview({ puzzles, active, setActive, updateActive, s
                 </button>
               ))}
             </div>
-            <div className="pg-divider" />
-            <div className="form-label">Words ({listedWords(puzzle).length})</div>
+            </SubStep>
+            <SubStep n={2} optional title="Rename it">
+              <label className="visually-hidden" htmlFor="puzzleTitle">
+                Puzzle title
+              </label>
+              <input id="puzzleTitle" className="form-control" value={puzzle.title} onChange={(e) => updateActive((p) => ({ ...p, title: e.target.value }))} />
+            </SubStep>
+          </Panel>
+          <Panel tone="options" title="Change this puzzle" optional className="mt-3">
+            <div className="form-label small">Words ({listedWords(puzzle).length})</div>
             <div className="d-flex flex-wrap gap-2 small mb-3">
               {listedWords(puzzle).map((w) => (
                 <span key={w} className="pg-badge neutral">
@@ -102,7 +110,7 @@ export default function StepReview({ puzzles, active, setActive, updateActive, s
                 <BsPencil /> Edit word positions
               </button>
             </div>
-          </div>
+          </Panel>
           {puzzle.unplaced.length > 0 && (
             <Callout tone="warn" className="mt-3">
               Not in this puzzle: <b>{puzzle.unplaced.join(", ")}</b>

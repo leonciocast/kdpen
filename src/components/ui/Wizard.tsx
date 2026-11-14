@@ -1,6 +1,6 @@
 "use client";
 import React from "react";
-import { BsArrowLeft, BsArrowRight, BsCheck2 } from "react-icons/bs";
+import { BsArrowLeft, BsArrowRight, BsCheck2, BsInfoCircleFill } from "react-icons/bs";
 
 export interface WizardStep {
   label: string;
@@ -75,16 +75,22 @@ export function WizardFooter({
       ) : (
         <span />
       )}
-      <div className="pg-hint" aria-live="polite">
-        {hint}
+      <div className="pg-footer-right">
+        <div aria-live="polite" data-testid="wizard-hint">
+          {hint ? nextDisabled && onNext ? (
+            <span className="pg-hint-blocked">
+              <BsInfoCircleFill aria-hidden="true" /> {hint}
+            </span>
+          ) : (
+            <span className="pg-hint-ok">{hint}</span>
+          ) : null}
+        </div>
+        {onNext && (
+          <button type="button" className="btn btn-primary" onClick={onNext} disabled={nextDisabled} data-testid="wizard-next">
+            {nextLabel} {nextIcon ?? <BsArrowRight />}
+          </button>
+        )}
       </div>
-      {onNext ? (
-        <button type="button" className="btn btn-primary" onClick={onNext} disabled={nextDisabled} data-testid="wizard-next">
-          {nextLabel} {nextIcon ?? <BsArrowRight />}
-        </button>
-      ) : (
-        <span />
-      )}
     </div>
   );
 }

@@ -21,7 +21,7 @@ await page.click("body", { position: { x: 5, y: 500 } });
 await page.waitForTimeout(150);
 console.log("after blur:", JSON.stringify(await ta.inputValue()));
 await page.screenshot({ path: "review/20_tidy_input.png" });
-await page.click("text=Add to list");
+await page.click('[data-testid="add-words"]');
 console.log("list:", (await page.locator('[data-testid="word-list"]').innerText()).split("\n").filter((l) => /[A-Z]{3}/.test(l)).join(" | "));
 await page.click('[data-testid="wizard-next"]');
 await page.click("text=Same size for all");

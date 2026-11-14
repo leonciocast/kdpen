@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import { BsBrush, BsDownload, BsTrash, BsUpload, BsArrowCounterclockwise, BsSave } from "react-icons/bs";
+import { BsBrush, BsDownload, BsEye, BsTrash, BsUpload, BsArrowCounterclockwise, BsSave } from "react-icons/bs";
+import { Panel } from "./Panel";
 import { toast } from "react-toastify";
 import { TEMPLATES, templateDesign } from "@/lib/design/templates";
 import { DESIGN_OPTIONS, designFromJson, designToJson } from "@/lib/design/presets";
@@ -139,12 +140,12 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
   return (
     <div>
       <StepIntro icon={<BsBrush />} title="Design your pages">
-        Pick a template, then fine-tune it. The preview on the right is the real PDF page, exactly as it will print. Your choice is remembered for next time.
+        Pick the look of your pages. That&apos;s all you need to do here; fine-tuning is optional.
       </StepIntro>
       <div className="row g-4">
         <div className="col-lg-7">
-          <div className="form-label">1. Choose a template</div>
-          <div className="pg-template-grid mb-3" role="radiogroup" aria-label="Templates">
+          <Panel tone="action" n={1} title="Pick a template">
+          <div className="pg-template-grid" role="radiogroup" aria-label="Templates">
             {TEMPLATES.map((t) => (
               <button
                 key={t.id}
@@ -161,14 +162,26 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
             ))}
           </div>
 
-          <div className="form-label d-flex justify-content-between align-items-center">
-            <span>2. Customize</span>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDesign({ ...templateDesign(design.template) })} title="Undo your changes to this template">
-              <BsArrowCounterclockwise /> Reset template
-            </button>
-          </div>
+          <div className="form-text mt-2 mb-0">Every template is black &amp; white safe for KDP. The preview updates instantly.</div>
+          </Panel>
 
-          <Section title="Header & title" open>
+          <details className="pg-panel pg-panel-options pg-more mt-3" data-testid="customize">
+            <summary className="pg-panel-head">
+              <span className="pg-num-badge quiet">2</span>
+              <h3 className="pg-panel-title">
+                Customize <span className="pg-optional">optional</span>
+              </h3>
+              <span className="pg-more-toggle">Show options</span>
+            </summary>
+            <div className="pg-panel-body">
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <span className="small text-muted">Header, fonts, grid, colour, {listName ?? "labels"} and page numbers.</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDesign({ ...templateDesign(design.template) })} title="Undo your changes to this template">
+                <BsArrowCounterclockwise /> Reset template
+              </button>
+            </div>
+
+          <Section title="Header & title">
             <div className="row g-2">
               <div className="col-sm-6">
                 <label className="form-label small" htmlFor="ds-title">
@@ -300,7 +313,7 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
           </Section>
 
           {listName && (
-            <Section title={`${listName[0].toUpperCase()}${listName.slice(1)}`} open>
+            <Section title={`${listName[0].toUpperCase()}${listName.slice(1)}`}>
               <div className="d-grid gap-2">
                 <div className="form-check form-switch">
                   <input className="form-check-input" type="checkbox" id="ds-check" checked={design.list.checkbox} onChange={(e) => set((d) => (d.list.checkbox = e.target.checked))} data-testid="checkbox-toggle" />
@@ -337,7 +350,18 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
             <Seg label="Page numbers" value={design.pageNumber} options={DESIGN_OPTIONS.NUMBERS} onChange={(v) => set((d) => (d.pageNumber = v))} />
           </Section>
 
-          <Section title="Save & reuse designs">
+            </div>
+          </details>
+
+          <details className="pg-panel pg-panel-options pg-more mt-3">
+            <summary className="pg-panel-head">
+              <span className="pg-num-badge quiet">3</span>
+              <h3 className="pg-panel-title">
+                Save &amp; reuse this design <span className="pg-optional">optional</span>
+              </h3>
+              <span className="pg-more-toggle">Show</span>
+            </summary>
+            <div className="pg-panel-body">
             <div className="d-flex gap-2 mb-2">
               <input className="form-control form-control-sm" placeholder="Name this design, e.g. Winter large print" value={presetName} maxLength={60} onChange={(e) => setPresetName(e.target.value)} aria-label="Design name" />
               <button
@@ -379,10 +403,12 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
               </button>
               <input ref={fileRef} type="file" accept=".json,application/json" className="d-none" onChange={(e) => importFile(e.target.files?.[0])} data-testid="design-import" />
             </div>
-          </Section>
+            </div>
+          </details>
         </div>
         <div className="col-lg-5">
           <div className="position-sticky" style={{ top: 84 }}>
+            <Panel tone="result" title="Live preview" icon={<BsEye />}>
             <div className="pg-seg mb-2" role="tablist" aria-label="Preview page">
               {tabs.map((t) => (
                 <button key={t.id} type="button" role="tab" aria-selected={current?.id === t.id} className={current?.id === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
@@ -391,7 +417,8 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
               ))}
             </div>
             <PdfPreview bytes={bytes} page={pageIndex + 1} label={`Preview: ${current?.label ?? "page"}`} />
-            <div className="form-text">Sample content. Your own puzzles use the same layout.</div>
+            <div className="form-text">This is the real PDF page. Your own puzzles use the same layout.</div>
+            </Panel>
           </div>
         </div>
       </div>

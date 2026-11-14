@@ -3,7 +3,8 @@ import { tidyHandlers } from "@/components/ui/tidyText";
 import { tidyLines, tidySpaces } from "@/lib/text";
 import { plural } from "@/lib/plural";
 import React, { useMemo, useRef, useState } from "react";
-import { BsArrowRepeat, BsDownload, BsGrid1X2, BsLightningCharge, BsListUl, BsMagic, BsPlusLg, BsPuzzle, BsSearch, BsTrash } from "react-icons/bs";
+import { BsArrowLeft, BsArrowRepeat, BsArrowUp, BsCheckCircleFill, BsDownload, BsGrid1X2, BsKeyboard, BsLightningCharge, BsListUl, BsMagic, BsPlusLg, BsPuzzle, BsSearch, BsTrash, BsUpload } from "react-icons/bs";
+import { ChoiceSwitch, Panel, SubStep } from "@/components/ui/Panel";
 import { toast } from "react-toastify";
 import PageHeader from "@/components/ui/PageHeader";
 import BookExport from "@/components/ui/BookExport";
@@ -13,7 +14,6 @@ import JobProgress from "@/components/ui/JobProgress";
 import { useDesign } from "@/components/ui/useDesign";
 import Callout from "@/components/ui/Callout";
 import CsvDrop, { downloadText } from "@/components/ui/CsvDrop";
-import EmptyState from "@/components/ui/EmptyState";
 import InfoTip from "@/components/ui/InfoTip";
 import { StepIntro, Stepper, WizardFooter } from "@/components/ui/Wizard";
 import { CROSSWORD_MAX_LETTERS, CROSSWORD_MAX_WORDS, ClueEntry, Crossword, generateCrossword, parseClueLine, validateEntries } from "@/lib/crossword/engine";
@@ -83,6 +83,7 @@ function groupsFor(entries: ClueEntry[], per: number) {
 export default function CrossWordGenerator() {
   const [step, setStep] = useState(0);
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<"type" | "upload">("type");
   const [entries, setEntries] = useState<ClueEntry[]>([]);
   const [perPuzzle, setPerPuzzle] = useState(12);
   const [puzzles, setPuzzles] = useState<CwPuzzle[]>([]);
@@ -139,6 +140,12 @@ export default function CrossWordGenerator() {
     add(cands, " from your file");
   };
 
+  const downloadTemplate = () =>
+    downloadText(
+      entries.length ? "crossword-clues.csv" : "crossword-template.csv",
+      ["Word,Clue,Theme", ...(entries.length ? entries : SAMPLE.slice(0, 3).map((l) => ({ ...(parseClueLine(l) as ClueEntry), theme: "Everyday" }))).map((e) => `${esc(e.answer)},${esc(e.clue)},${esc(e.theme ?? "")}`)].join("\n") + "\n"
+    );
+
   const groups = useMemo(() => groupsFor(entries, perPuzzle), [entries, perPuzzle]);
   const filtered = useMemo(() => {
     const q = query.trim().toUpperCase();
@@ -188,51 +195,78 @@ export default function CrossWordGenerator() {
     <div className="container pb-4">
       <PageHeader icon={<BsPuzzle />} title="Crossword" lead="Turn your words and clues into numbered crosswords, from one puzzle to hundreds, then export a print-ready book." />
       <Stepper steps={STEPS} current={step} maxReachable={maxReachable} onSelect={setStep} />
-      <div className="pg-card">
+      <div className="pg-card pg-wizard-card">
         <div className="pg-card-body">
           {step === 0 && (
             <div>
               <StepIntro icon={<BsListUl />} title="Add words and clues">
-                Write one per line as <b>WORD - clue</b>, or upload a CSV with thousands of clues. Phrases are fine: they go in the grid without spaces.
+                Follow the numbered steps on the left. Your words and clues appear on the right; when you have at least 2, press Next.
               </StepIntro>
               <div className="row g-4">
-                <div className="col-lg-6">
-                  <label htmlFor="clueInput" className="form-label">
-                    Words and clues
-                    <InfoTip text={`Separate the word and clue with " - ", ":" or a tab. Up to ${CROSSWORD_MAX_LETTERS} letters per word and ${CROSSWORD_MAX_WORDS.toLocaleString()} words in total.`} />
-                  </label>
-                  <textarea id="clueInput" className="form-control" rows={7} placeholder={"LION - King of the jungle\nICE CREAM - Frozen summer treat\nPIANO - Instrument with 88 keys"} value={input} onChange={(e) => setInput(e.target.value)} {...tidyHandlers(setInput, { keepTabs: true })} />
-                  <div className="d-flex flex-wrap gap-2 mt-2">
-                    <button type="button" className="btn btn-primary" onClick={handleAdd}>
-                      <BsPlusLg /> Add to list
-                    </button>
-                    {!entries.length && (
-                      <button type="button" className="btn btn-light" onClick={() => add(SAMPLE.map((l) => parseClueLine(l) as { answer: string; clue: string }), "")}>
-                        <BsMagic /> Try a sample list
-                      </button>
+                <div className="col-lg-7">
+                  <Panel tone="action" title="Add words and clues" icon={<BsPlusLg />}>
+                    <ChoiceSwitch
+                      label="How do you want to add clues?"
+                      value={mode}
+                      onChange={(v) => setMode(v as "type" | "upload")}
+                      options={[
+                        { value: "type", title: "Type my clues", text: "Recommended for most books", icon: <BsKeyboard />, testId: "choose-type" },
+                        { value: "upload", title: "Upload a file", text: "CSV with many words and clues", icon: <BsUpload />, testId: "choose-upload" },
+                      ]}
+                    />
+                    {mode === "type" ? (
+                      <>
+                        <SubStep n={1} title="Type each word and its clue" hint={<>One per line, like <b>LION - King of the jungle</b>. Phrases are fine.</>}>
+                          <label htmlFor="clueInput" className="visually-hidden">
+                            Words and clues
+                          </label>
+                          <textarea id="clueInput" className="form-control pg-big-input" rows={7} autoFocus placeholder={"LION - King of the jungle\nICE CREAM - Frozen summer treat\nPIANO - Instrument with 88 keys"} value={input} onChange={(e) => setInput(e.target.value)} {...tidyHandlers(setInput, { keepTabs: true })} />
+                          <div className="form-text">
+                            Separate word and clue with &quot; - &quot;, &quot;:&quot; or a tab. Up to {CROSSWORD_MAX_LETTERS} letters per word, {CROSSWORD_MAX_WORDS.toLocaleString()} words in total.
+                          </div>
+                        </SubStep>
+                        <SubStep n={2} title="Add them to your list">
+                          <button type="button" className={`btn btn-lg ${entries.length ? "btn-outline-primary" : "btn-primary"}`} onClick={handleAdd} data-testid="add-clues">
+                            <BsPlusLg /> Add to list
+                          </button>
+                        </SubStep>
+                        {!entries.length && (
+                          <div className="pg-secondary-row">
+                            Just exploring?{" "}
+                            <button type="button" className="pg-link-btn" onClick={() => add(SAMPLE.map((l) => parseClueLine(l) as { answer: string; clue: string }), "")}>
+                              <BsMagic /> Use a sample list
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <SubStep n={1} title="Choose your file" hint="Columns: word, clue, and an optional theme that groups clues into titled crosswords. A header row is optional.">
+                          <CsvDrop onRows={handleCsv} label="Upload a CSV file" hint="Drop it here or click to browse." />
+                        </SubStep>
+                        <SubStep n={2} optional title="Need an example file?">
+                          <button type="button" className="btn btn-light btn-sm" onClick={downloadTemplate}>
+                            <BsDownload /> Download the CSV template
+                          </button>
+                        </SubStep>
+                      </>
                     )}
-                  </div>
-                  <div className="mt-3">
-                    <CsvDrop onRows={handleCsv} label="Upload a CSV file" hint="Columns: word, clue, and an optional theme/title that groups clues into titled crosswords. A header row is optional." />
-                  </div>
+                  </Panel>
                 </div>
-                <div className="col-lg-6">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <span className="form-label m-0">
-                      Your list <span className="pg-badge neutral ms-1" data-testid="clue-count">{entries.length.toLocaleString()} / {CROSSWORD_MAX_WORDS.toLocaleString()}</span>
-                    </span>
-                    <div className="d-flex gap-1">
-                      <button
-                        type="button"
-                        className="btn btn-ghost btn-sm"
-                        onClick={() =>
-                          downloadText(
-                            entries.length ? "crossword-clues.csv" : "crossword-template.csv",
-                            ["Word,Clue,Theme", ...(entries.length ? entries : SAMPLE.slice(0, 3).map((l) => ({ ...(parseClueLine(l) as ClueEntry), theme: "Everyday" }))).map((e) => `${esc(e.answer)},${esc(e.clue)},${esc(e.theme ?? "")}`)].join("\n") + "\n"
-                          )
-                        }
-                      >
-                        <BsDownload /> {entries.length ? "Download CSV" : "CSV template"}
+                <div className="col-lg-5">
+                  <Panel
+                    tone="result"
+                    title={
+                      <>
+                        Your list <span className="pg-badge neutral" data-testid="clue-count">{entries.length.toLocaleString()} / {CROSSWORD_MAX_WORDS.toLocaleString()}</span>
+                      </>
+                    }
+                    icon={<BsListUl />}
+                    aside={
+                      entries.length > 0 && (
+                    <>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={downloadTemplate}>
+                        <BsDownload /> CSV
                       </button>
                       {entries.length > 0 && (
                         <button
@@ -248,12 +282,27 @@ export default function CrossWordGenerator() {
                           <BsTrash /> Clear
                         </button>
                       )}
-                    </div>
-                  </div>
+                    </>
+                      )
+                    }
+                  >
                   {entries.length === 0 ? (
-                    <EmptyState icon={<BsListUl />} title="No clues yet">
-                      Words and clues you add will appear here. You can edit clues right in the list.
-                    </EmptyState>
+                    <div className="pg-empty-pointer" data-testid="empty-list">
+                      <span className="pg-icon-badge">
+                        <BsArrowLeft className="d-none d-lg-inline" />
+                        <BsArrowUp className="d-lg-none" />
+                      </span>
+                      <h4>Your list is empty</h4>
+                      <p>
+                          {mode === "type" ? (
+                            <>
+                              Type a word and its clue on the left, then press <b>Add to list</b>.
+                            </>
+                          ) : (
+                            <>Choose a CSV file on the left. Its words and clues will show up here.</>
+                          )}
+                      </p>
+                    </div>
                   ) : (
                     <>
                       {entries.length > 12 && (
@@ -280,8 +329,14 @@ export default function CrossWordGenerator() {
                         ))}
                       </div>
                       {filtered.length > SHOW && <div className="form-text">Showing {SHOW} of {filtered.length.toLocaleString()}. Use search to find a clue.</div>}
+                      {entries.length >= 2 && (
+                        <div className="pg-next-tip mt-3">
+                          <BsCheckCircleFill /> <span>Looks good? Press <b>Next</b> to build your crosswords. You can edit clues right in the list.</span>
+                        </div>
+                      )}
                     </>
                   )}
+                  </Panel>
                 </div>
               </div>
             </div>
@@ -290,38 +345,40 @@ export default function CrossWordGenerator() {
           {step === 1 && (
             <div>
               <StepIntro icon={<BsGrid1X2 />} title="Build and review">
-                Your list is split into crosswords (by theme, if your file has one). Words that can&apos;t connect to the others are left out and listed below.
+                Choose how many words go in each crossword, then press Build. Words that can&apos;t connect to the others are listed below each puzzle.
               </StepIntro>
-              <div className="pg-subtle p-3 mb-3 d-flex flex-wrap align-items-end gap-3">
-                <div>
-                  <label className="form-label" htmlFor="perPuzzle">
-                    Words per crossword <InfoTip text={`8–15 words make a nicely connected crossword. Maximum ${LIMITS.maxCluesPerCrossword}.`} />
+              <Panel tone="action" title="Build your crosswords" icon={<BsLightningCharge />} className="mb-3">
+              <div className="d-flex flex-wrap align-items-end gap-4">
+                <SubStep n={1} title="Words per crossword" hint={`8–15 words connect nicely (max ${LIMITS.maxCluesPerCrossword}).`} className="mb-0">
+                  <label className="visually-hidden" htmlFor="perPuzzle">
+                    Words per crossword
                   </label>
                   <input id="perPuzzle" type="number" min={2} max={LIMITS.maxCluesPerCrossword} className="form-control" style={{ width: 120 }} value={perPuzzle} onChange={(e) => setPerPuzzle(Math.max(2, Math.min(LIMITS.maxCluesPerCrossword, Number(e.target.value) || 2)))} />
-                </div>
-                <span className="pg-badge info mb-2">
-                  {plural(entries.length, "word")} → {plural(groups.length, "crossword")}
-                </span>
-                <button type="button" className="btn btn-primary ms-auto" onClick={build} disabled={!!running} data-testid="build-crosswords">
-                  <BsLightningCharge /> {puzzles.length ? "Rebuild all" : "Build crosswords"}
-                </button>
+                  <span className="pg-badge info mt-2 d-inline-block">
+                    {plural(entries.length, "word")} → {plural(groups.length, "crossword")}
+                  </span>
+                </SubStep>
+                <SubStep n={2} title={puzzles.length ? "Rebuild if you changed something" : "Build them"} className="mb-0">
+                  <button type="button" className={`btn btn-lg ${puzzles.length ? "btn-outline-primary" : "btn-primary"}`} onClick={build} disabled={!!running} data-testid="build-crosswords">
+                    <BsLightningCharge /> {puzzles.length ? "Rebuild all" : "Build crosswords"}
+                  </button>
+                </SubStep>
               </div>
+              </Panel>
               {running ? (
                 <JobProgress title="Building crosswords" progress={running.progress} onCancel={running.cancel} />
               ) : !puzzle ? (
-                <EmptyState
-                  icon={<BsPuzzle />}
-                  title="Ready when you are"
-                  action={
-                    <button type="button" className="btn btn-primary" onClick={build}>
-                      <BsLightningCharge /> Build crosswords
-                    </button>
-                  }
-                >
-                  Click Build to create your crosswords.
-                </EmptyState>
+                <div className="pg-empty-pointer" data-testid="empty-crosswords">
+                  <span className="pg-icon-badge">
+                    <BsArrowUp />
+                  </span>
+                  <h4>No crosswords yet</h4>
+                  <p>
+                    Press <b>Build crosswords</b> above. It only takes a moment.
+                  </p>
+                </div>
               ) : (
-                <>
+                <Panel tone="result" title="Your crosswords" icon={<BsPuzzle />}>
                   <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
                     <ItemPager titles={puzzles.map((p) => p.title)} active={active} onSelect={setActive} label="Crosswords" />
                     <div className="ms-auto d-flex gap-2 align-items-center">
@@ -355,7 +412,7 @@ export default function CrossWordGenerator() {
                       )}
                     </div>
                   </div>
-                </>
+                </Panel>
               )}
             </div>
           )}

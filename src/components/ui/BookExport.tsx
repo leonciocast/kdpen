@@ -1,6 +1,7 @@
 "use client";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { BsBook, BsBoxArrowUpRight, BsCheckCircleFill, BsDownload, BsFilePdf } from "react-icons/bs";
+import { BsBook, BsBoxArrowUpRight, BsCheckCircleFill, BsDownload, BsEye, BsFilePdf } from "react-icons/bs";
+import { Panel } from "./Panel";
 import { toast } from "react-toastify";
 import { FrontMatter } from "@/lib/print/frontMatter";
 import { TRIM_SIZES, TrimKey, insideMargin } from "@/lib/print/kdp";
@@ -140,6 +141,7 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
   };
 
   const t = TRIM_SIZES[trim];
+  const extrasOn = [extras.belongsTo, extras.toc, extras.howTo, extras.thankYou, !!extras.intro.trim(), extras.notesPages > 0].filter(Boolean).length;
   const answerChoices: PerPage[] = tool === "crossword" ? [1, 2, 4] : [1, 2, 4, 6];
   const volumes = plan.ranges.length;
   const biggest = Math.max(0, ...plan.pages);
@@ -147,14 +149,11 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
   return (
     <div>
       <StepIntro icon={<BsBook />} title="Export your book">
-        Choose the size, the extra pages and your title page, then create a print-ready PDF interior for Amazon KDP. Big books are built in the background, so the page stays responsive.
+        Check the book size and your title page, then press <b>Create &amp; download</b>. The defaults are ready for Amazon KDP.
       </StepIntro>
       <div className="row g-4">
         <div className="col-lg-7">
-          <section className="pg-subtle p-3 mb-3" aria-labelledby="fmt-title">
-            <h3 id="fmt-title" className="pg-section-title mb-3">
-              Book format
-            </h3>
+          <Panel tone="action" n={1} title="Book size">
             <BookFormatFields
               trim={trim}
               setTrim={setTrim}
@@ -193,31 +192,28 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                 </>
               }
             />
-          </section>
-          <section className="pg-subtle p-3 mb-3" aria-labelledby="extras-title">
-            <h3 id="extras-title" className="pg-section-title mb-3">
-              Extra pages
-            </h3>
-            <BookExtrasFields extras={extras} setExtras={setExtras} />
-          </section>
-          <section className="pg-subtle p-3" aria-labelledby="fm-title-h">
-            <h3 id="fm-title-h" className="pg-section-title mb-3">
-              Title, copyright &amp; dedication
-            </h3>
+          </Panel>
+          <Panel tone="action" n={2} title="Title & copyright pages" aside={<span className="small text-muted">Tip: put your name or brand as the author</span>}>
             <FrontMatterForm fm={fm} update={update} reset={reset} enabled={includeFm} setEnabled={setIncludeFm} />
-          </section>
+          </Panel>
+          <details className="pg-panel pg-panel-options pg-more mt-3" data-testid="extras-panel">
+            <summary className="pg-panel-head">
+              <span className="pg-num-badge quiet">3</span>
+              <h3 className="pg-panel-title">
+                Extra pages <span className="pg-optional">optional</span>
+              </h3>
+              <span className="small text-muted ms-2 d-none d-md-inline">{extrasOn} turned on</span>
+              <span className="pg-more-toggle">Change</span>
+            </summary>
+            <div className="pg-panel-body">
+              <BookExtrasFields extras={extras} setExtras={setExtras} />
+            </div>
+          </details>
         </div>
         <div className="col-lg-5">
           <div className="position-sticky" style={{ top: 84 }}>
-            {includeFm && (
-              <div className="mb-3">
-                <div className="form-label">Title page preview</div>
-                <FrontMatterPreview fm={fm} trim={trim} detail={`${itemCount.toLocaleString()} ${itemNoun[0].toUpperCase()}${itemNoun.slice(1)}${itemCount === 1 ? "" : "s"}`} />
-              </div>
-            )}
-            <div className="pg-card pg-card-body" data-testid="book-stats">
-              <h3 className="pg-section-title">Your book</h3>
-              <ul className="list-unstyled small my-3 d-grid gap-2">
+            <Panel tone="summary" n={4} title="Create your PDF" testId="book-stats">
+              <ul className="list-unstyled small mb-3 d-grid gap-2">
                 <li className="pg-stat">
                   <span className="text-muted">Contents</span>
                   <span className="fw-semibold text-end">{plural(itemCount, itemNoun)} + solutions</span>
@@ -276,7 +272,7 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                 <JobProgress title="Creating your PDF" progress={progress} onCancel={() => job.cancel()} />
               ) : (
                 <div className="d-grid gap-2">
-                  <button type="button" className="btn btn-primary btn-lg" onClick={build} disabled={!!blocked || volumes === 0} data-testid="download-pdf">
+                  <button type="button" className="btn btn-primary btn-lg pg-create-btn" onClick={build} disabled={!!blocked || volumes === 0} data-testid="download-pdf">
                     <BsFilePdf /> {volumes > 1 ? `Create ${volumes} PDF volumes` : "Create & download KDP PDF"}
                   </button>
                 </div>
@@ -303,7 +299,12 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                   <div className="form-text">To print at home, open the PDF and use your browser&apos;s print button.</div>
                 </div>
               )}
-            </div>
+            </Panel>
+            {includeFm && (
+              <Panel tone="result" title="Title page preview" icon={<BsEye />} className="mt-3">
+                <FrontMatterPreview fm={fm} trim={trim} detail={`${itemCount.toLocaleString()} ${itemNoun[0].toUpperCase()}${itemNoun.slice(1)}${itemCount === 1 ? "" : "s"}`} />
+              </Panel>
+            )}
           </div>
         </div>
       </div>
