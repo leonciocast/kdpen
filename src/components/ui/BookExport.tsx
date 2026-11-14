@@ -15,13 +15,26 @@ import { JobCancelled, startJob, RunningJob } from "@/lib/jobs/client";
 import type { Progress } from "@/lib/jobs/types";
 import { BookFormatFields, FrontMatterForm, FrontMatterPreview } from "./FrontMatterPanel";
 import { useFrontMatter } from "./useFrontMatter";
-import { StepIntro } from "./Wizard";
+import { FlowCtl, Question, QuestionFlow } from "./Flow";
 import Callout from "./Callout";
 import InfoTip from "./InfoTip";
 import BookExtrasFields from "./BookExtrasFields";
 import JobProgress from "./JobProgress";
 
 type PerPage = 1 | 2 | 4 | 6;
+
+/** Keeps a value while the user moves between wizard steps (the component unmounts in between). */
+const sticky = new Map<string, unknown>();
+function useSticky<T>(key: string, init: T): [T, (v: T) => void] {
+  const [v, setV] = useState<T>(() => (sticky.has(key) ? (sticky.get(key) as T) : init));
+  return [
+    v,
+    (n: T) => {
+      sticky.set(key, n);
+      setV(n);
+    },
+  ];
+}
 const nowMs = () => performance.now();
 const EXTRAS_KEY = "puzzle-generator.extras.v1";
 
@@ -51,6 +64,7 @@ interface Props {
   /** Sudoku: choose how many puzzles per page. */
   perPageChoice?: boolean;
   defaultAnswersPerPage?: PerPage;
+  flow: FlowCtl;
 }
 
 interface Built {
@@ -60,16 +74,16 @@ interface Built {
   url: string;
 }
 
-export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, sectionCount, design, items, fileBase, disabledReason, perPageChoice, defaultAnswersPerPage = 4 }: Props) {
+export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, sectionCount, design, items, fileBase, disabledReason, perPageChoice, defaultAnswersPerPage = 4, flow }: Props) {
   const { fm, update, reset } = useFrontMatter(tool, toolDefaults);
-  const [includeFm, setIncludeFm] = useState(true);
-  const [trim, setTrim] = useState<TrimKey>("8.5x11");
-  const [bleed, setBleed] = useState(false);
-  const [pad, setPad] = useState(true);
+  const [includeFm, setIncludeFm] = useSticky(`${tool}.fm`, true);
+  const [trim, setTrim] = useSticky<TrimKey>(`${tool}.trim`, "8.5x11");
+  const [bleed, setBleed] = useSticky(`${tool}.bleed`, false);
+  const [pad, setPad] = useSticky(`${tool}.pad`, true);
   const [extras, setExtras] = useState<BookExtras>(() => loadExtras(tool));
-  const [answersPerPage, setAnswersPerPage] = useState<PerPage>(defaultAnswersPerPage);
-  const [perPage, setPerPage] = useState<PerPage>(1);
-  const [autoSplit, setAutoSplit] = useState(true);
+  const [answersPerPage, setAnswersPerPage] = useSticky<PerPage>(`${tool}.answers`, defaultAnswersPerPage);
+  const [perPage, setPerPage] = useSticky<PerPage>(`${tool}.perPage`, 1);
+  const [autoSplit, setAutoSplit] = useSticky(`${tool}.split`, true);
   const [job, setJob] = useState<RunningJob<unknown> | null>(null);
   const [progress, setProgress] = useState<Progress | null>(null);
   const [files, setFiles] = useState<Built[]>([]);
@@ -146,14 +160,12 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
   const volumes = plan.ranges.length;
   const biggest = Math.max(0, ...plan.pages);
 
-  return (
-    <div>
-      <StepIntro icon={<BsBook />} title="Export your book">
-        Check the book size and your title page, then press <b>Create &amp; download</b>. The defaults are ready for Amazon KDP.
-      </StepIntro>
-      <div className="row g-4">
-        <div className="col-lg-7">
-          <Panel tone="action" n={1} title="Book size">
+  const sizeQ: Question = {
+    key: "size",
+    title: "What size is your book?",
+    lead: "8.5 × 11 inch large print is the most popular for puzzle books. The other settings are already right for Amazon KDP.",
+    hint: `${t.width}" × ${t.height}"${bleed ? " + bleed" : ""}`,
+    body: (
             <BookFormatFields
               trim={trim}
               setTrim={setTrim}
@@ -192,27 +204,56 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                 </>
               }
             />
-          </Panel>
-          <Panel tone="action" n={2} title="Title & copyright pages" aside={<span className="small text-muted">Tip: put your name or brand as the author</span>}>
-            <FrontMatterForm fm={fm} update={update} reset={reset} enabled={includeFm} setEnabled={setIncludeFm} />
-          </Panel>
-          <details className="pg-panel pg-panel-options pg-more mt-3" data-testid="extras-panel">
-            <summary className="pg-panel-head">
-              <span className="pg-num-badge quiet">3</span>
-              <h3 className="pg-panel-title">
-                Extra pages <span className="pg-optional">optional</span>
-              </h3>
-              <span className="small text-muted ms-2 d-none d-md-inline">{extrasOn} turned on</span>
-              <span className="pg-more-toggle">Change</span>
-            </summary>
-            <div className="pg-panel-body">
-              <BookExtrasFields extras={extras} setExtras={setExtras} />
-            </div>
-          </details>
+    ),
+  };
+
+  const titleQ: Question = {
+    key: "title",
+    wide: true,
+    title: "Your title and copyright pages",
+    lead: "These are the first pages of your book. Put your pen name or brand as the author.",
+    body: (
+      <div className="row g-4">
+        <div className="col-lg-7">
+          <FrontMatterForm fm={fm} update={update} reset={reset} enabled={includeFm} setEnabled={setIncludeFm} />
         </div>
         <div className="col-lg-5">
           <div className="position-sticky" style={{ top: 84 }}>
-            <Panel tone="summary" n={4} title="Create your PDF" testId="book-stats">
+            {includeFm ? (
+              <Panel tone="result" title="Preview" icon={<BsEye />}>
+                <FrontMatterPreview fm={fm} trim={trim} detail={`${itemCount.toLocaleString()} ${itemNoun[0].toUpperCase()}${itemNoun.slice(1)}${itemCount === 1 ? "" : "s"}`} />
+              </Panel>
+            ) : (
+              <Callout>Your book will start straight with the puzzles.</Callout>
+            )}
+          </div>
+        </div>
+      </div>
+    ),
+  };
+
+  const extrasQ: Question = {
+    key: "extras",
+    title: "Add extra pages?",
+    optional: true,
+    lead: `A “This book belongs to” page, contents, how to play, notes and more. ${extrasOn} ${extrasOn === 1 ? "is" : "are"} turned on already.`,
+    skipLabel: "Skip, keep these",
+    body: <BookExtrasFields extras={extras} setExtras={setExtras} />,
+  };
+
+  const createQ: Question = {
+    key: "create",
+    title: files.length ? "Your book is ready" : "Create your book",
+    lead: files.length ? "Download it below, or change anything and create it again." : "Everything is set. Press the big button to create your print-ready PDF.",
+    hideNext: true,
+    body: (
+      <>
+      {files.length > 0 && !job && (
+        <div className="pg-next-tip mb-3 mt-0">
+          <BsCheckCircleFill /> <span>{files.length === 1 ? "Done! Your PDF was downloaded." : `Done! Your ${files.length} volumes are ready: download each one below.`} Upload {files.length === 1 ? "it" : "them"} to Amazon KDP as your paperback interior.</span>
+        </div>
+      )}
+      <Panel tone="summary" title="Your book" icon={<BsBook />} testId="book-stats">
               <ul className="list-unstyled small mb-3 d-grid gap-2">
                 <li className="pg-stat">
                   <span className="text-muted">Contents</span>
@@ -272,8 +313,8 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                 <JobProgress title="Creating your PDF" progress={progress} onCancel={() => job.cancel()} />
               ) : (
                 <div className="d-grid gap-2">
-                  <button type="button" className="btn btn-primary btn-lg pg-create-btn" onClick={build} disabled={!!blocked || volumes === 0} data-testid="download-pdf">
-                    <BsFilePdf /> {volumes > 1 ? `Create ${volumes} PDF volumes` : "Create & download KDP PDF"}
+                  <button type="button" className={`btn btn-lg ${files.length ? "btn-outline-primary" : "btn-primary pg-create-btn"}`} onClick={build} disabled={!!blocked || volumes === 0} data-testid="download-pdf">
+                    <BsFilePdf /> {files.length ? "Create it again" : volumes > 1 ? `Create ${volumes} PDF volumes` : "Create & download KDP PDF"}
                   </button>
                 </div>
               )}
@@ -299,15 +340,10 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                   <div className="form-text">To print at home, open the PDF and use your browser&apos;s print button.</div>
                 </div>
               )}
-            </Panel>
-            {includeFm && (
-              <Panel tone="result" title="Title page preview" icon={<BsEye />} className="mt-3">
-                <FrontMatterPreview fm={fm} trim={trim} detail={`${itemCount.toLocaleString()} ${itemNoun[0].toUpperCase()}${itemNoun.slice(1)}${itemCount === 1 ? "" : "s"}`} />
-              </Panel>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+      </Panel>
+      </>
+    ),
+  };
+
+  return <QuestionFlow flow={flow} questions={[sizeQ, titleQ, extrasQ, createQ]} />;
 }

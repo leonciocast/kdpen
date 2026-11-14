@@ -6,6 +6,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 await page.goto("http://localhost:3000/word-search", { waitUntil: "networkidle" });
+await page.click('[data-testid="choose-type"]');
 const ta = page.locator("#wordInput");
 await ta.click();
 await ta.evaluate((el) => {
@@ -21,12 +22,15 @@ await page.click("body", { position: { x: 5, y: 500 } });
 await page.waitForTimeout(150);
 console.log("after blur:", JSON.stringify(await ta.inputValue()));
 await page.screenshot({ path: "review/20_tidy_input.png" });
-await page.click('[data-testid="add-words"]');
+await page.click('[data-testid="wizard-next"]'); // words -> theme
+await page.click('[data-testid="wizard-skip"]'); // no theme -> words added, list shown
 console.log("list:", (await page.locator('[data-testid="word-list"]').innerText()).split("\n").filter((l) => /[A-Z]{3}/.test(l)).join(" | "));
-await page.click('[data-testid="wizard-next"]');
+await page.click('[data-testid="wizard-next"]'); // list -> difficulty
+await page.click('[data-testid="wizard-next"]'); // keep medium -> size
 await page.click("text=Same size for all");
 await page.fill("#gridSize", "15");
-await page.click('[data-testid="wizard-next"]');
+await page.click('[data-testid="wizard-next"]'); // size -> rules
+await page.click('[data-testid="wizard-next"]'); // rules -> place words
 await page.click('[data-testid="mode-manual"]');
 await page.waitForTimeout(300);
 const cell = (r, c) => page.locator(`#active-grid [data-cell="${r},${c}"]`);

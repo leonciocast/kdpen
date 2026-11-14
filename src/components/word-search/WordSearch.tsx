@@ -7,7 +7,8 @@ import PageHeader from "@/components/ui/PageHeader";
 import BookExport from "@/components/ui/BookExport";
 import DesignStep from "@/components/ui/DesignStep";
 import { useDesign } from "@/components/ui/useDesign";
-import { Stepper, WizardFooter } from "@/components/ui/Wizard";
+import { Stepper } from "@/components/ui/Wizard";
+import { useStages } from "@/components/ui/useStages";
 import { allowedDirections, autoPlace, containedWordWarnings, fillGrid, mulberry32, randomSeed } from "@/lib/wordsearch/engine";
 import { buildWordSearchBook, BookPuzzle } from "@/lib/wordsearch/pdf";
 import { presetFor } from "@/lib/wordsearch/difficulty";
@@ -43,7 +44,6 @@ function samplePuzzles(): BookPuzzle[] {
 const toBook = (p: PuzzleModel): BookPuzzle => ({ title: p.title, theme: p.theme, size: p.size, grid: p.grid!, words: listedWords(p), placements: p.placements });
 
 export default function WordSearch() {
-  const [step, setStep] = useState(0);
   const [entries, setEntries] = useState<WordEntry[]>([]);
   const [settings, setSettings] = useState<WsSettings>({ difficulty: "medium", dirOpts: dirOptsFor("medium"), wordsPerPuzzle: 20, sizeMode: "auto", gridSize: 15, groupByTheme: true });
   const [puzzles, setPuzzles] = useState<PuzzleModel[]>([]);
@@ -68,15 +68,21 @@ export default function WordSearch() {
 
   const updateActive = (fn: (p: PuzzleModel) => PuzzleModel) => setPuzzles((prev) => prev.map((p, i) => (i === active ? fn(p) : p)));
 
-  const create = async (mode: "auto" | "manual") => {
-    if (!entries.length) return toast.error("Add some words in step 1 first.");
-    if (mode === "auto" && !dirs.length) return toast.error("Choose at least one direction in step 2.");
+  const create = async (mode: "auto" | "manual"): Promise<boolean> => {
+    if (!entries.length) {
+      toast.error("Add some words in step 1 first.");
+      return false;
+    }
+    if (mode === "auto" && !dirs.length) {
+      toast.error("Choose at least one direction in step 2.");
+      return false;
+    }
     setSolution("hidden");
     setActive(0);
     if (mode === "manual") {
       setPuzzles(specs.map((s) => ({ id: idRef.current++, title: s.title, theme: s.theme || undefined, size: s.size, words: s.words, placements: [], grid: null, unplaced: [], warnings: containedWordWarnings(s.words) })));
       setSignature(currentSig);
-      return;
+      return true;
     }
     const job = startJob({ type: "ws-generate", specs, settings: genSettings }, (p) => setRunning((r) => (r ? { ...r, progress: p } : r)));
     setRunning({ progress: null, cancel: job.cancel });
@@ -90,9 +96,11 @@ export default function WordSearch() {
       const secs = ((performance.now() - t0) / 1000).toFixed(1);
       if (misfits.length) toast.warning(`Some words didn't fit and were left out: ${misfits.slice(0, 12).join(", ")}${misfits.length > 12 ? ` and ${misfits.length - 12} more` : ""}`, { autoClose: 9000 });
       else toast.success(`${plural(list.length, "puzzle")} ${list.length === 1 ? "is" : "are"} ready (${secs}s).`);
+      return true;
     } catch (e) {
       if (e instanceof JobCancelled) toast.info("Stopped. Your previous puzzles were kept.");
       else toast.error(`Sorry, the puzzles couldn't be built: ${(e as Error).message}`);
+      return false;
     } finally {
       setRunning(null);
     }
@@ -141,36 +149,21 @@ export default function WordSearch() {
   const maxReachable = entries.length === 0 ? 0 : finished.length === 0 ? 2 : 5;
   const exportThemes = useMemo(() => new Set(finished.map((p) => p.theme).filter(Boolean)).size, [finished]);
 
-  const nextInfo: { disabled: boolean; hint: React.ReactNode; label?: string } = (() => {
-    switch (step) {
-      case 0:
-        return { disabled: !entries.length, hint: entries.length ? `${entries.length.toLocaleString()} entr${entries.length === 1 ? "y" : "ies"} in your list` : "Add at least one word to your list to continue" };
-      case 1:
-        return { disabled: !entries.length, hint: `${plural(specs.length, "puzzle")}, ${preset.label.toLowerCase()} difficulty` };
-      case 2:
-        return { disabled: !finished.length || !!running, hint: running ? "Placing your words…" : !puzzles.length ? "Pick one of the two options above to continue" : finished.length ? `${finished.length.toLocaleString()} of ${puzzles.length.toLocaleString()} puzzles finished` : "Finish at least one puzzle to continue" };
-      case 3:
-        return { disabled: !finished.length, hint: `${plural(finished.length, "puzzle")} will go in your book`, label: "Choose a design" };
-      case 4:
-        return { disabled: !finished.length, hint: `Template: ${designApi.design.name}`, label: "Continue to export" };
-      default:
-        return { disabled: true, hint: "" };
-    }
-  })();
+  const { step, goTo, flow } = useStages(STEPS.length);
 
   return (
     <div className="container pb-4">
       <PageHeader icon={<BsSearch />} title="Word Search" lead="Build word search puzzles step by step, from a dozen words to 20,000, and export a print-ready book with answer keys." />
-      <Stepper steps={STEPS} current={step} maxReachable={maxReachable} onSelect={setStep} />
+      <Stepper steps={STEPS} current={step} maxReachable={maxReachable} onSelect={goTo} />
       <div className="pg-card pg-wizard-card">
-        <div className="pg-card-body">
-          {step === 0 && <StepWords entries={entries} setEntries={setEntries} />}
-          {step === 1 && <StepSettings settings={settings} setSettings={setSettings} specs={specs} wordCount={entries.length} themeCount={themeCount} />}
-          {step === 2 && <StepPlace puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} autoDirs={dirs} stale={stale} create={create} finishAll={finishAll} running={running} />}
+        <>
+          {step === 0 && <StepWords entries={entries} setEntries={setEntries} flow={flow(0)} />}
+          {step === 1 && <StepSettings settings={settings} setSettings={setSettings} specs={specs} wordCount={entries.length} themeCount={themeCount} flow={flow(1)} />}
+          {step === 2 && <StepPlace puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} autoDirs={dirs} stale={stale} create={create} finishAll={finishAll} running={running} flow={flow(2)} />}
           {step === 3 && (
-            <StepReview puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} solution={solution} setSolution={setSolution} reshuffle={reshuffle} regenerate={regenerate} edit={() => setStep(2)} />
+            <StepReview puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} solution={solution} setSolution={setSolution} reshuffle={reshuffle} regenerate={regenerate} edit={() => goTo(2, "puzzles")} flow={flow(3)} />
           )}
-          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" />}
+          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" flow={flow(4)} />}
           {step === 5 && (
             <BookExport
               tool="word-search"
@@ -182,10 +175,10 @@ export default function WordSearch() {
               items={() => ({ tool: "word-search", items: finished.map(toBook) })}
               fileBase="word-search-book"
               disabledReason={finished.length ? undefined : "Finish at least one puzzle first."}
+              flow={flow(5)}
             />
           )}
-        </div>
-        <WizardFooter onBack={step > 0 ? () => setStep(step - 1) : undefined} onNext={step < STEPS.length - 1 ? () => setStep(step + 1) : undefined} nextDisabled={nextInfo.disabled} nextLabel={nextInfo.label} hint={nextInfo.hint} />
+        </>
       </div>
     </div>
   );

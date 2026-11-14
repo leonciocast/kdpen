@@ -1,6 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
-import { BsBrush, BsDownload, BsEye, BsTrash, BsUpload, BsArrowCounterclockwise, BsSave } from "react-icons/bs";
+import { BsCheck2Circle, BsCheckCircleFill, BsDownload, BsEye, BsSliders, BsTrash, BsUpload, BsArrowCounterclockwise, BsSave } from "react-icons/bs";
 import { Panel } from "./Panel";
 import { toast } from "react-toastify";
 import { TEMPLATES, templateDesign } from "@/lib/design/templates";
@@ -9,7 +9,7 @@ import { FONT_FAMILIES, FONT_KEYS, FontKey } from "@/lib/design/fonts";
 import { Design, TOOL_HEADER, ToolKind } from "@/lib/design/types";
 import { fetchFonts, familiesFor, filesFor, FontData } from "@/lib/print/fonts";
 import type { PageKind, RenderedBook } from "@/lib/print/book";
-import { StepIntro } from "./Wizard";
+import { ChoiceCards, FlowCtl, Question, QuestionFlow } from "./Flow";
 import InfoTip from "./InfoTip";
 import PdfPreview from "./PdfPreview";
 import { downloadText } from "./CsvDrop";
@@ -58,6 +58,9 @@ function Section({ title, children, open }: { title: string; children: React.Rea
   );
 }
 
+/** Remembers "I chose to customize" while the user moves between wizard steps. */
+const customizingByTool = new Map<string, boolean>();
+
 interface Props {
   tool: ToolKind;
   api: DesignApi;
@@ -65,9 +68,15 @@ interface Props {
   buildSample: (design: Design, fonts: FontData) => RenderedBook;
   /** "word list" / "clue list"; omit when the puzzle has no list (sudoku). */
   listName?: string;
+  flow: FlowCtl;
 }
 
-export default function DesignStep({ tool, api, buildSample, listName }: Props) {
+export default function DesignStep({ tool, api, buildSample, listName, flow }: Props) {
+  const [customizing, setCustomizingState] = useState(() => flow.sub === "customize" || !!customizingByTool.get(tool));
+  const setCustomizing = (v: boolean) => {
+    customizingByTool.set(tool, v);
+    setCustomizingState(v);
+  };
   const { design, setDesign, presets, savePreset, deletePreset } = api;
   const [bytes, setBytes] = useState<ArrayBuffer | null>(null);
   const [kinds, setKinds] = useState<PageKind[]>([]);
@@ -137,14 +146,31 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
     </div>
   );
 
-  return (
-    <div>
-      <StepIntro icon={<BsBrush />} title="Design your pages">
-        Pick the look of your pages. That&apos;s all you need to do here; fine-tuning is optional.
-      </StepIntro>
+  const preview = (
+    <div className="position-sticky" style={{ top: 84 }}>
+            <Panel tone="result" title="Live preview" icon={<BsEye />}>
+            <div className="pg-seg mb-2" role="tablist" aria-label="Preview page">
+              {tabs.map((t) => (
+                <button key={t.id} type="button" role="tab" aria-selected={current?.id === t.id} className={current?.id === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <PdfPreview bytes={bytes} page={pageIndex + 1} label={`Preview: ${current?.label ?? "page"}`} />
+            <div className="form-text">This is the real PDF page. Your own puzzles use the same layout.</div>
+            </Panel>
+    </div>
+  );
+
+  const pickTemplate: Question = {
+    key: "template",
+    wide: true,
+    title: "Pick a look for your pages",
+    lead: "Click a template and watch the preview on the right. Every template is black & white safe for KDP.",
+    hint: `Template: ${design.name}`,
+    body: (
       <div className="row g-4">
         <div className="col-lg-7">
-          <Panel tone="action" n={1} title="Pick a template">
           <div className="pg-template-grid" role="radiogroup" aria-label="Templates">
             {TEMPLATES.map((t) => (
               <button
@@ -156,24 +182,56 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
                 onClick={() => setDesign({ ...templateDesign(t.id), header: { ...templateDesign(t.id).header, text: design.header.text } })}
                 data-testid={`template-${t.id}`}
               >
-                <strong>{t.name}</strong>
+                <strong>
+                  {t.name}
+                  {design.template === t.id && <BsCheckCircleFill className="pg-template-check" aria-label="Selected" />}
+                </strong>
                 <span>{t.description}</span>
               </button>
             ))}
           </div>
 
-          <div className="form-text mt-2 mb-0">Every template is black &amp; white safe for KDP. The preview updates instantly.</div>
-          </Panel>
+        </div>
+        <div className="col-lg-5">{preview}</div>
+      </div>
+    ),
+  };
 
-          <details className="pg-panel pg-panel-options pg-more mt-3" data-testid="customize">
-            <summary className="pg-panel-head">
-              <span className="pg-num-badge quiet">2</span>
-              <h3 className="pg-panel-title">
-                Customize <span className="pg-optional">optional</span>
-              </h3>
-              <span className="pg-more-toggle">Show options</span>
-            </summary>
-            <div className="pg-panel-body">
+  const tune: Question = {
+    key: "tune",
+    title: "Happy with this design?",
+    lead: `You picked “${design.name}”. Most people use it as it is. You can also fine-tune fonts, header, grid and more.`,
+    hideNext: true,
+    body: (
+      <ChoiceCards
+        label="Customize the design?"
+        value={null}
+        onPick={(v) => {
+          if (v === "keep") {
+            setCustomizing(false);
+            return flow.onFinish();
+          }
+          setCustomizing(true);
+          flow.setSub("customize");
+        }}
+        options={[
+          { value: "keep", title: "Use it as it is", text: "Go straight to creating your book. You can come back and change the design any time.", icon: <BsCheck2Circle />, testId: "design-keep", badge: "Recommended", cta: "Continue to export" },
+          { value: "custom", title: "Customize it", text: "Change the header, fonts, grid style, colours, page numbers and more, with a live preview. You can save it for next time.", icon: <BsSliders />, testId: "design-customize", cta: "Customize" },
+        ]}
+      />
+    ),
+  };
+
+  const customize: Question = {
+    key: "customize",
+    wide: true,
+    title: "Customize your design",
+    lead: "Open any section to change it. The preview updates as you go.",
+    nextLabel: "Continue to export",
+    hint: `Template: ${design.name}`,
+    body: (
+      <div className="row g-4" data-testid="customize">
+        <div className="col-lg-7">
             <div className="d-flex justify-content-between align-items-center mb-2">
               <span className="small text-muted">Header, fonts, grid, colour, {listName ?? "labels"} and page numbers.</span>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDesign({ ...templateDesign(design.template) })} title="Undo your changes to this template">
@@ -181,7 +239,7 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
               </button>
             </div>
 
-          <Section title="Header & title">
+          <Section title="Header & title" open>
             <div className="row g-2">
               <div className="col-sm-6">
                 <label className="form-label small" htmlFor="ds-title">
@@ -349,19 +407,7 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
           <Section title="Page numbers">
             <Seg label="Page numbers" value={design.pageNumber} options={DESIGN_OPTIONS.NUMBERS} onChange={(v) => set((d) => (d.pageNumber = v))} />
           </Section>
-
-            </div>
-          </details>
-
-          <details className="pg-panel pg-panel-options pg-more mt-3">
-            <summary className="pg-panel-head">
-              <span className="pg-num-badge quiet">3</span>
-              <h3 className="pg-panel-title">
-                Save &amp; reuse this design <span className="pg-optional">optional</span>
-              </h3>
-              <span className="pg-more-toggle">Show</span>
-            </summary>
-            <div className="pg-panel-body">
+          <Section title="Save & reuse this design">
             <div className="d-flex gap-2 mb-2">
               <input className="form-control form-control-sm" placeholder="Name this design, e.g. Winter large print" value={presetName} maxLength={60} onChange={(e) => setPresetName(e.target.value)} aria-label="Design name" />
               <button
@@ -403,25 +449,12 @@ export default function DesignStep({ tool, api, buildSample, listName }: Props) 
               </button>
               <input ref={fileRef} type="file" accept=".json,application/json" className="d-none" onChange={(e) => importFile(e.target.files?.[0])} data-testid="design-import" />
             </div>
-            </div>
-          </details>
+          </Section>
         </div>
-        <div className="col-lg-5">
-          <div className="position-sticky" style={{ top: 84 }}>
-            <Panel tone="result" title="Live preview" icon={<BsEye />}>
-            <div className="pg-seg mb-2" role="tablist" aria-label="Preview page">
-              {tabs.map((t) => (
-                <button key={t.id} type="button" role="tab" aria-selected={current?.id === t.id} className={current?.id === t.id ? "active" : ""} onClick={() => setTab(t.id)}>
-                  {t.label}
-                </button>
-              ))}
-            </div>
-            <PdfPreview bytes={bytes} page={pageIndex + 1} label={`Preview: ${current?.label ?? "page"}`} />
-            <div className="form-text">This is the real PDF page. Your own puzzles use the same layout.</div>
-            </Panel>
-          </div>
-        </div>
+        <div className="col-lg-5">{preview}</div>
       </div>
-    </div>
-  );
+    ),
+  };
+
+  return <QuestionFlow flow={flow} questions={customizing ? [pickTemplate, tune, customize] : [pickTemplate, tune]} />;
 }

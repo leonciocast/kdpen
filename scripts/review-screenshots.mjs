@@ -47,15 +47,18 @@ await shot(page, "01_home");
 
 // ---------- Word search: small book with manual placement ----------
 await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.click('[data-testid="choose-type"]');
 await page.fill("#wordInput", "ICE CREAM\nSunshine\nBeach Ball\nSandcastle\nSeashell\nSurfing\nLemonade\nSunglasses\nPicnic\nWaves\nT-REX");
+await next(); // -> theme
 await page.fill("#themeInput", "Summer Fun");
-await page.click('[data-testid="add-words"]');
+await next(); // add to list -> list
 await pause();
 await shot(page, "02_ws_step1_words");
 await next();
-await page.click('[data-testid="difficulty-hard"]');
+await page.click('[data-testid="difficulty-hard"]'); // picks and moves on to size
 await shot(page, "03_ws_step2_settings");
-await next();
+await next(); // -> rules
+await next(); // -> place words
 await page.click('[data-testid="mode-manual"]');
 await pause();
 await page.click('[data-word="ICE CREAM"]');
@@ -74,7 +77,8 @@ for (const id of ["kids", "elegant", "largeprint"]) {
   await shot(page, `07_ws_design_${id}`);
 }
 await page.click('[data-testid="template-banner"]');
-await page.click('[data-testid="customize"] > summary');
+await next(); // -> happy with it?
+await page.click('[data-testid="design-customize"]');
 await page.click('[data-testid="customize"] summary:has-text("Word list")');
 await page.click('[data-testid="checkbox-toggle"]');
 await waitPreview();
@@ -83,8 +87,11 @@ await page.click('[data-testid="checkbox-toggle"]');
 await page.click('[role="tablist"] >> text=How to play');
 await waitPreview();
 await page.locator('[data-testid="design-preview"]').screenshot({ path: `${OUT}/09_ws_preview_howto.png` });
-await next();
+await next(); // -> export: size
 await shot(page, "10_ws_export");
+await next(); // title
+await next(); // extras
+await next(); // create
 await exportBook("ws_small_book.pdf");
 
 // ---------- Word search: 10,000 words ----------
@@ -113,12 +120,14 @@ await page.setInputFiles('[data-testid="csv-input"]', "/tmp/ws_10k.csv");
 await page.waitForFunction(() => document.querySelector('[data-testid="word-count"]')?.textContent?.startsWith("10,000"), null, { timeout: 60000 });
 log.push(`10k CSV import: ${((t() - t0) / 1000).toFixed(1)}s`);
 await shot(page, "11_ws10k_words", false);
-await next();
+await next(); // -> difficulty
+await next(); // keep medium -> size
 await page.fill("#wordsPerPuzzle", "36");
 await pause();
 log.push("10k split: " + (await page.locator('[data-testid="split-stats"]').innerText()).replace(/\n/g, " "));
 await shot(page, "12_ws10k_settings", false);
-await next();
+await next(); // -> rules
+await next(); // -> place words
 t0 = t();
 await page.click('[data-testid="mode-auto"]');
 await page.waitForSelector('[data-testid="job-progress"]', { timeout: 10000 }).catch(() => {});
@@ -127,10 +136,14 @@ await shot(page, "13_ws10k_generating", false);
 await page.waitForSelector('[data-testid="puzzle-pager"]', { timeout: 300000 });
 log.push(`10k generation (worker): ${((t() - t0) / 1000).toFixed(1)}s`);
 await shot(page, "14_ws10k_placed", false);
-await next();
-await next();
+await next(); // -> review
+await next(); // -> design
 await waitPreview();
+await next(); // -> happy?
+await page.click('[data-testid="design-keep"]'); // -> export
 await next();
+await next();
+await next(); // -> create
 await pause(500);
 log.push("10k book stats: " + (await page.locator('[data-testid="page-estimate"]').innerText()));
 await shot(page, "15_ws10k_export");
@@ -156,7 +169,7 @@ await page.setInputFiles('[data-testid="csv-input"]', "/tmp/cw.csv");
 await pause(800);
 log.push("crossword clues: " + (await page.locator('[data-testid="clue-count"]').innerText()));
 await shot(page, "16_cw_clues", false);
-await next();
+await next(); // -> words per crossword
 t0 = t();
 await page.click('[data-testid="build-crosswords"]');
 await page.waitForSelector("#cw-grid", { timeout: 180000 });
@@ -166,10 +179,15 @@ await next();
 await waitPreview();
 await shot(page, "18_cw_design");
 await next();
+await page.click('[data-testid="design-keep"]');
+await next();
+await next();
+await next();
 await exportBook("crossword_book.pdf");
 
 // ---------- Sudoku: 100 puzzles, mixed difficulty ----------
 await page.goto(BASE + "/sudoku", { waitUntil: "networkidle" });
+await page.click('[data-testid="quick-custom"]');
 await page.fill('[data-testid="count-easy"]', "30");
 await page.fill('[data-testid="count-medium"]', "40");
 await page.fill('[data-testid="count-hard"]', "30");
@@ -183,8 +201,12 @@ await page.click('[data-testid="template-modern"]');
 await waitPreview();
 await shot(page, "20_sd_design");
 await next();
+await page.click('[data-testid="design-keep"]');
 await page.selectOption('[data-testid="per-page"]', "4");
 await pause();
+await next();
+await next();
+await next(); // -> create
 log.push("sudoku stats: " + (await page.locator('[data-testid="page-estimate"]').innerText()));
 await shot(page, "21_sd_export");
 await exportBook("sudoku_100_book.pdf");

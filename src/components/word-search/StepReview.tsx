@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { BsArrowRepeat, BsCheck2Square, BsEye, BsMagic, BsPencil } from "react-icons/bs";
 import { Panel, SubStep } from "@/components/ui/Panel";
 import Callout from "@/components/ui/Callout";
-import { StepIntro } from "@/components/ui/Wizard";
+import { FlowCtl, QuestionFlow } from "@/components/ui/Flow";
 import PuzzleGrid, { SolutionStyle } from "./PuzzleGrid";
 import PuzzleTabs from "./PuzzleTabs";
 import { PuzzleModel, colorsFor, listedWords } from "./model";
@@ -18,18 +18,16 @@ interface Props {
   reshuffle: () => void;
   regenerate: () => void;
   edit: () => void;
+  flow: FlowCtl;
 }
 
-export default function StepReview({ puzzles, active, setActive, updateActive, solution, setSolution, reshuffle, regenerate, edit }: Props) {
+export default function StepReview({ puzzles, active, setActive, updateActive, solution, setSolution, reshuffle, regenerate, edit, flow }: Props) {
   const [style, setStyle] = useState<"color" | "bw">("color");
   const puzzle = puzzles[active];
-  if (!puzzle) return null;
   const show = solution !== "hidden";
-  return (
+  if (!puzzle) return <QuestionFlow flow={flow} questions={[{ key: "review", title: "Check your puzzles", body: <p>No puzzles yet. Go back and place your words.</p>, canNext: false, blockedHint: "Finish at least one puzzle first" }]} />;
+  const body = (
     <div>
-      <StepIntro icon={<BsEye />} title="Review your puzzles">
-        Look through your puzzles and their answers. Everything is optional here: if they look good, press Next.
-      </StepIntro>
       <div className="row g-4">
         <div className="col-lg-7 col-xl-8">
           <Panel tone="result" title="Puzzle preview" icon={<BsEye />}>
@@ -124,5 +122,24 @@ export default function StepReview({ puzzles, active, setActive, updateActive, s
         </div>
       </div>
     </div>
+  );
+  const finished = puzzles.filter((p) => p.grid).length;
+  return (
+    <QuestionFlow
+      flow={flow}
+      questions={[
+        {
+          key: "review",
+          wide: true,
+          title: "Check your puzzles",
+          lead: "Look through your puzzles and their answers. Everything here is optional: if they look good, press Next.",
+          canNext: finished > 0,
+          blockedHint: "Finish at least one puzzle first",
+          hint: `${finished.toLocaleString()} ${finished === 1 ? "puzzle" : "puzzles"} will go in your book`,
+          nextLabel: "Choose a design",
+          body,
+        },
+      ]}
+    />
   );
 }
