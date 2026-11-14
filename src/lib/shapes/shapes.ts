@@ -8,6 +8,7 @@
  * by the engine, the PDF renderer, the UI and tests.
  */
 
+import polygonClipping from "polygon-clipping";
 import { ANIMALS } from "./animals";
 import { mapRect, pathToUnit } from "./silhouettes";
 
@@ -274,6 +275,8 @@ const INSET = 0.5 + OUTLINE_PAD;
 /** Animals: include a cell when this fraction of it sits inside the silhouette. */
 const COVERAGE = 0.2;
 const COVERAGE_SAMPLES = 5;
+/** Lettered cells are dilated by this many cells (round joins) before clipping the SVG silhouette. */
+export const CELL_DILATE = 0.55;
 
 // ---------------------------------------------------------------- geometry
 
@@ -339,7 +342,7 @@ function erode(m: Mask): Mask {
  * Grow 1-cell-wide tips (antlers, legs, trunks) just enough to form a 2×2,
  * preferring to expand into cells the silhouette already covers.
  */
-function thickenThin(m: Mask, score: (r: number, c: number) => number) {
+function thickenThin(m: Mask, score: (r: number, c: number) => number, allow: (r: number, c: number) => boolean = () => true) {
   const n = m.length;
   const used = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
   const inBlock = (r: number, c: number) => {
@@ -358,9 +361,14 @@ function thickenThin(m: Mask, score: (r: number, c: number) => number) {
       let at: [number, number] | null = null;
       for (const [a, b] of [[r - 1, c - 1], [r - 1, c], [r, c - 1], [r, c]] as [number, number][]) {
         if (a < 0 || b < 0 || a + 1 >= n || b + 1 >= n) continue;
+        let ok = true;
         let s = 0;
-        for (let i = 0; i < 2; i++)
-          for (let j = 0; j < 2; j++) s += used(a + i, b + j) ? 10 : score(a + i, b + j);
+        for (let i = 0; i < 2 && ok; i++)
+          for (let j = 0; j < 2 && ok; j++) {
+            if (!allow(a + i, b + j)) ok = false;
+            else s += used(a + i, b + j) ? 10 : score(a + i, b + j);
+          }
+        if (!ok) continue;
         if (s > best) {
           best = s;
           at = [a, b];
@@ -547,6 +555,128 @@ export function maskOutline(mask: Mask, pad = OUTLINE_PAD): Pt[] {
   return best;
 }
 
+function closeRing(pts: Pt[]): Pt[] {
+  const p = dropClose(pts);
+  if (p.length < 3) return p;
+  return [...p, [p[0][0], p[0][1]] as Pt];
+}
+
+function lineIntersect(p: Pt, p2: Pt, q: Pt, q2: Pt): Pt | null {
+  const rx = p2[0] - p[0];
+  const ry = p2[1] - p[1];
+  const sx = q2[0] - q[0];
+  const sy = q2[1] - q[1];
+  const den = rx * sy - ry * sx;
+  if (Math.abs(den) < 1e-12) return null;
+  const t = ((q[0] - p[0]) * sy - (q[1] - p[1]) * sx) / den;
+  return [p[0] + t * rx, p[1] + t * ry];
+}
+
+/**
+ * Offset a loop away from the used cells (visual left) by `r`, with round
+ * joins on convex corners so tips stay circular rather than blocky.
+ */
+function offsetRound(pts: Pt[], r: number, arcPts = 12): Pt[] {
+  const p = dropColinear(dropClose(pts));
+  const n = p.length;
+  if (n < 3 || r === 0) return p;
+  const out: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = p[(i - 1 + n) % n];
+    const b = p[i];
+    const c = p[(i + 1) % n];
+    const d1x = b[0] - a[0];
+    const d1y = b[1] - a[1];
+    const d2x = c[0] - b[0];
+    const d2y = c[1] - b[1];
+    const l1 = Math.hypot(d1x, d1y) || 1;
+    const l2 = Math.hypot(d2x, d2y) || 1;
+    const n1: Pt = [d1y / l1, -d1x / l1];
+    const n2: Pt = [d2y / l2, -d2x / l2];
+    const cross = d1x * d2y - d1y * d2x;
+    const dot = d1x * d2x + d1y * d2y;
+    if (Math.abs(cross) < 1e-9 * l1 * l2 && dot > 0) {
+      out.push([b[0] + n1[0] * r, b[1] + n1[1] * r]);
+      continue;
+    }
+    if (cross > 0) {
+      // Right turn in y-down = convex outer corner: quarter-circle (or whatever the turn) around b.
+      const cr = n1[0] * n2[1] - n1[1] * n2[0];
+      const dt = Math.atan2(cr, n1[0] * n2[0] + n1[1] * n2[1]);
+      const steps = Math.max(1, Math.round((Math.abs(dt) / (Math.PI / 2)) * arcPts));
+      for (let s = 0; s <= steps; s++) {
+        const t = (dt * s) / steps;
+        const cos = Math.cos(t);
+        const sin = Math.sin(t);
+        const nx = n1[0] * cos - n1[1] * sin;
+        const ny = n1[0] * sin + n1[1] * cos;
+        out.push([b[0] + r * nx, b[1] + r * ny]);
+      }
+    } else {
+      const aOff: Pt = [a[0] + n1[0] * r, a[1] + n1[1] * r];
+      const bOff1: Pt = [b[0] + n1[0] * r, b[1] + n1[1] * r];
+      const bOff2: Pt = [b[0] + n2[0] * r, b[1] + n2[1] * r];
+      const cOff: Pt = [c[0] + n2[0] * r, c[1] + n2[1] * r];
+      const hit = lineIntersect(aOff, bOff1, bOff2, cOff);
+      if (hit && Math.hypot(hit[0] - b[0], hit[1] - b[1]) <= r * 4) out.push(hit);
+      else {
+        out.push(bOff1);
+        out.push(bOff2);
+      }
+    }
+  }
+  return dropClose(out);
+}
+
+function ringsToMulti(rings: Pt[][]): [number, number][][][] {
+  const closed = rings.map(closeRing).filter((r) => r.length >= 4);
+  let outers = closed.filter((r) => signedArea(r) > 0);
+  const holes = closed.filter((r) => signedArea(r) <= 0);
+  if (!outers.length && closed.length) outers = closed.map((r) => closeRing([...dropClose(r)].reverse()));
+  return outers.map((o) => [o, ...holes.filter((h) => inside(o, h[0][0], h[0][1]))]);
+}
+
+function multiToRings(multi: [number, number][][][]): Pt[][] {
+  const rings = multi.flat().map((r) => dropClose(r)).filter((r) => r.length >= 3 && Math.abs(signedArea(r)) > 1e-4);
+  rings.sort((a, b) => Math.abs(signedArea(b)) - Math.abs(signedArea(a)));
+  return rings;
+}
+
+const letteredCache = new Map<string, Pt[][]>();
+
+/**
+ * Word-search shade/outline: the professional silhouette curve clipped to the
+ * lettered cells dilated by {@link CELL_DILATE} with round joins. Where the
+ * body is full of letters the original curve shows; unlettered tips are
+ * trimmed smoothly just past the last letters. `style: "blocky"` keeps the
+ * cell-hugging staircase as an optional look.
+ */
+export type OutlineStyle = "smooth" | "blocky";
+
+export function letteredOutlines(key: ShapeKey | undefined, size: number, style: OutlineStyle = "smooth"): Pt[][] {
+  const mask = shapeMask(key, size);
+  if (!mask) return [];
+  if (style === "blocky") return maskOutlines(mask, CELL_DILATE);
+  const id = `${key}:${size}:smooth`;
+  const hit = letteredCache.get(id);
+  if (hit) return hit;
+  const sil = ringsToMulti([shapeOutline(key, size)]);
+  const dil = ringsToMulti(maskLoops(mask).map((L) => offsetRound(L, CELL_DILATE)));
+  let rings: Pt[][] = [];
+  try {
+    if (sil.length && dil.length) rings = multiToRings(polygonClipping.intersection(sil, dil));
+  } catch {
+    rings = [];
+  }
+  if (!rings.length) rings = maskOutlines(mask, CELL_DILATE);
+  letteredCache.set(id, rings);
+  return rings;
+}
+
+export function letteredOutline(key: ShapeKey | undefined, size: number, style: OutlineStyle = "smooth"): Pt[] {
+  return letteredOutlines(key, size, style)[0] ?? [];
+}
+
 /** The shape's outline in cell units for an N×N puzzle (the box around all N×N cells + padding). */
 export function shapeOutline(key: ShapeKey | undefined, size: number): Pt[] {
   const info = shapeInfo(key);
@@ -562,19 +692,25 @@ export type Mask = boolean[][];
 
 /**
  * Remove cells that can't hold words and keep the biggest connected piece.
- * `open` is the opening block (3 for geometric shapes, 2 for animals so trunks,
- * antlers and legs survive).
+ * `open` is the opening block (3 for geometric shapes). Animals skip this so
+ * 1-cell-wide antlers and legs can keep letters; isolated spikes are still
+ * removed and thin parts are thickened when a 2×2 fits inside the silhouette.
  */
 function clean(m: Mask, open = 3): Mask {
   const n = m.length;
   const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
+  // Animals (open < 2): 8-connected so diagonal antlers are not eaten from the tips.
+  const dirs: [number, number][] = open >= 2
+    ? [[1, 0], [-1, 0], [0, 1], [0, -1]]
+    : [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
   let changed = true;
   while (changed) {
     changed = false;
     for (let r = 0; r < n; r++)
       for (let c = 0; c < n; c++) {
         if (!m[r][c]) continue;
-        const k = +on(r - 1, c) + +on(r + 1, c) + +on(r, c - 1) + +on(r, c + 1);
+        let k = 0;
+        for (const [dr, dc] of dirs) if (on(r + dr, c + dc)) k++;
         if (k < 2) {
           m[r][c] = false;
           changed = true;
@@ -605,7 +741,7 @@ function clean(m: Mask, open = 3): Mask {
       while (stack.length) {
         const [a, b] = stack.pop()!;
         comp.push([a, b]);
-        for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        for (const [dr, dc] of dirs) {
           const y = a + dr;
           const x = b + dc;
           if (on(y, x) && !seen[y][x]) {
@@ -632,17 +768,21 @@ export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null 
   const pts = shapeOutline(key, size);
   const animal = shapeInfo(key).group === "animals";
   const cover = animal ? coverageGrid(pts, size) : null;
+  const inCenter = (r: number, c: number) => inside(pts, c + 0.5, r + 0.5);
   const m: Mask = Array.from({ length: size }, (_, r) =>
     Array.from({ length: size }, (_, c) => {
-      if (animal) return cover![r][c] >= COVERAGE;
-      return inside(pts, c + 0.5, r + 0.5) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6;
+      if (animal) return cover![r][c] >= COVERAGE && inCenter(r, c);
+      return inCenter(r, c) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6;
     }),
   );
-  const open = animal ? 2 : 3;
+  const open = animal ? 1 : 3;
   if (animal) {
     const closed = erode(dilate(m));
-    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) m[r][c] = closed[r][c];
-    thickenThin(m, (r, c) => cover![r]?.[c] ?? 0);
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
+      // Morphological close can spill a cell just outside the silhouette; keep letters inside the curve.
+      m[r][c] = closed[r][c] && inCenter(r, c);
+    }
+    thickenThin(m, (r, c) => cover![r]?.[c] ?? 0, inCenter);
   }
   const out = clean(m, open);
   cache.set(id, out);

@@ -1,6 +1,6 @@
 /** Word search book pages in the chosen design, on the shared KDP renderer. */
 import type { Slot } from "../print/arrange";
-import { OUTLINE_PAD, ShapeKey, maskBox, maskOutlines, shapeMask } from "../shapes/shapes";
+import { OUTLINE_PAD, OutlineStyle, ShapeKey, maskBox, letteredOutlines, shapeMask } from "../shapes/shapes";
 import type { jsPDF } from "jspdf";
 import { Placement, fillGrid, makePlacement, mulberry32, placementCells } from "./engine";
 import { placementCapsule } from "./geometry";
@@ -77,12 +77,12 @@ export interface WsGeometry {
   ext: { x0: number; y0: number; x1: number; y1: number };
 }
 
-export function wsGeometry(pz: Pick<BookPuzzle, "size" | "shape">): WsGeometry {
+export function wsGeometry(pz: Pick<BookPuzzle, "size" | "shape">, outlineStyle: OutlineStyle = "smooth"): WsGeometry {
   const n = pz.size;
   const mask = shapeMask(pz.shape, n);
   if (!mask) return { rows: n, cols: n, r0: 0, c0: 0, isCell: () => true, outline: null, ext: { x0: -OUTLINE_PAD, y0: -OUTLINE_PAD, x1: n + OUTLINE_PAD, y1: n + OUTLINE_PAD } };
   const [r0, c0, r1, c1] = maskBox(mask, n);
-  const outline = maskOutlines(mask).map((ring) => ring.map(([x, y]) => [x - c0, y - r0] as [number, number]));
+  const outline = letteredOutlines(pz.shape, n, outlineStyle).map((ring) => ring.map(([x, y]) => [x - c0, y - r0] as [number, number]));
   const rows = r1 - r0 + 1;
   const cols = c1 - c0 + 1;
   const xs = outline.flatMap((ring) => ring.map((p) => p[0]));
@@ -100,7 +100,7 @@ export function wsGeometry(pz: Pick<BookPuzzle, "size" | "shape">): WsGeometry {
 
 /** Draw a word search grid with its first used cell at (x, y). */
 export function drawWordSearchGrid(pdf: jsPDF, look: Look, puzzle: BookPuzzle, x: number, y: number, cell: number, o: GridDrawOptions) {
-  const geo = wsGeometry(puzzle);
+  const geo = wsGeometry(puzzle, look.design.shape.outline ?? "smooth");
   const { rows, cols, r0, c0 } = geo;
   const pad = cell * OUTLINE_PAD;
   const frameBox = { x: x - pad, y: y - pad, w: cols * cell + 2 * pad, h: rows * cell + 2 * pad };
@@ -167,7 +167,7 @@ function puzzlePage(pz: BookPuzzle, number: number, headerText: string): PageRen
       layout = layoutList(pdf, items, listW, lf, layout.fontSize - 0.5, { columns: d.list.columns, checkbox: d.list.checkbox });
       availH = box.y + box.h - top - layout.height - gapH - 14 - lpad;
     }
-    const geo = wsGeometry(pz);
+    const geo = wsGeometry(pz, look.design.shape.outline ?? "smooth");
     const extW = geo.ext.x1 - geo.ext.x0;
     const extH = geo.ext.y1 - geo.ext.y0;
     const cell = Math.min((box.w - 10) / (extW + 0.06), availH / (extH + 0.06), 36 * s);
@@ -197,7 +197,7 @@ function answersPage(puzzles: { pz: BookPuzzle; number: number }[], first: boole
       const sx = box.x + col * (slotW + gap);
       const sy = top + row * (slotH + gap);
       const labelH = 18 * s;
-      const geo = wsGeometry(pz);
+      const geo = wsGeometry(pz, look.design.shape.outline ?? "smooth");
       const extW = geo.ext.x1 - geo.ext.x0;
       const extH = geo.ext.y1 - geo.ext.y0;
       const cell = Math.min(slotW / (extW + 0.16), (slotH - labelH) / (extH + 0.16), 30);

@@ -232,7 +232,12 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
     body: (
       <div className="row g-4">
         <div className="col-lg-7">
-          <ShapePicker tool={tool} design={design} themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { kind, mix, shade: shade ?? d.shape.shade }))} />
+          <ShapePicker tool={tool} design={design} themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { ...d.shape, kind, mix, shade: shade ?? d.shape.shade }))} />
+          {tool === "word-search" && (
+            <div className="mt-3">
+              <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Smooth", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => (d.shape.outline = v))} />
+            </div>
+          )}
           {shapeStatus && <div className="pg-shape-status small" aria-live="polite">{shapeStatus}</div>}
         </div>
         <div className="col-lg-5">{preview}</div>
@@ -401,7 +406,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
           </Section>
 
           <Section title={tool === "sudoku" ? "Frame shape" : "Shape"}>
-            <ShapePicker tool={tool} design={design} compact themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { kind, mix, shade: shade ?? d.shape.shade }))} />
+            <ShapePicker tool={tool} design={design} compact themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { ...d.shape, kind, mix, shade: shade ?? d.shape.shade }))} />
             {shapeStatus && <div className="pg-shape-status small">{shapeStatus}</div>}
           </Section>
 

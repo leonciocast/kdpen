@@ -2,7 +2,7 @@
 import React from "react";
 import { Cell, LetterGrid, Placement, placementCells } from "@/lib/wordsearch/engine";
 import { placementCapsule, pointsToSvgPath } from "@/lib/wordsearch/geometry";
-import { OUTLINE_PAD, ShapeKey, maskBox, maskOutlines, shapeMask } from "@/lib/shapes/shapes";
+import { OUTLINE_PAD, ShapeKey, maskBox, letteredOutlines, shapeMask } from "@/lib/shapes/shapes";
 
 export type SolutionStyle = "hidden" | "color" | "bw";
 
@@ -56,7 +56,7 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   let view = `${-pad - 2} ${-pad - 2} ${side + pad * 2 + 4} ${side + pad * 2 + 4}`;
   let outlinePath: string | null = null;
   if (mask) {
-    const rings = maskOutlines(mask).map((ring) => ring.map(([x, y]) => [x * CELL, y * CELL] as [number, number]));
+    const rings = letteredOutlines(shape, size).map((ring) => ring.map(([x, y]) => [x * CELL, y * CELL] as [number, number]));
     const pts = rings[0] ?? [];
     outlinePath = rings.map((ring) => "M" + ring.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z").join("");
     const [r0, c0, r1, c1] = maskBox(mask, size);

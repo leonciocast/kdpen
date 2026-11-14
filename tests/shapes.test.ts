@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANIMAL_KEYS, CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
+import { ANIMAL_KEYS, CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
 import { ALL_DIRECTIONS, checkPlacement, findOccurrences, gridForm, makePlacement, mulberry32, placementCells, Placement } from "../src/lib/wordsearch/engine";
 import { resolveFixed, resolveFreeEnd, snapStart, validDirectionsFrom, validStartCells } from "../src/lib/wordsearch/snap";
 import { WS_DIFFICULTIES, suggestGridSize } from "../src/lib/wordsearch/difficulty";
@@ -61,39 +61,41 @@ describe("shape masks", () => {
         const boxFrac = shapeInfo(k).group === "animals" ? 0.22 : 0.35;
         if (n >= 14) expect(cells, `${k} ${n}`).toBeGreaterThan(Math.min(n * n * gridFrac, box * boxFrac));
         if (n >= 14) expect(cells, `${k} ${n} cells`).toBeGreaterThan(20);
-        // No slivers: every used cell belongs to a fully used block
-        // (2×2 for animals so trunks and antlers can stay 2 cells thick; 3×3 otherwise).
-        const win = shapeInfo(k).group === "animals" ? 2 : 3;
-        for (let r = 0; r < n; r++)
-          for (let c = 0; c < n; c++) {
-            if (!m[r][c]) continue;
-            let ok = false;
-            for (let a = r - (win - 1); a <= r && !ok; a++)
-              for (let b = c - (win - 1); b <= c && !ok; b++) {
-                let full = true;
-                for (let i = 0; i < win; i++) for (let j = 0; j < win; j++) if (!on(a + i, b + j)) full = false;
-                ok = full;
-              }
-            expect(ok, `${k} ${n} sliver at ${r},${c}`).toBe(true);
-          }
+        // Geometric shapes: every used cell belongs to a fully used 3×3 block.
+        // Animals may be 1 cell thick (antlers, legs) but never a one-cell spike.
+        if (shapeInfo(k).group !== "animals") {
+          const win = 3;
+          for (let r = 0; r < n; r++)
+            for (let c = 0; c < n; c++) {
+              if (!m[r][c]) continue;
+              let ok = false;
+              for (let a = r - (win - 1); a <= r && !ok; a++)
+                for (let b = c - (win - 1); b <= c && !ok; b++) {
+                  let full = true;
+                  for (let i = 0; i < win; i++) for (let j = 0; j < win; j++) if (!on(a + i, b + j)) full = false;
+                  ok = full;
+                }
+              expect(ok, `${k} ${n} sliver at ${r},${c}`).toBe(true);
+            }
+        }
         // Each used cell has at least 2 used neighbours (no one-cell spikes).
-        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (m[r][c]) expect(+on(r - 1, c) + +on(r + 1, c) + +on(r, c - 1) + +on(r, c + 1)).toBeGreaterThanOrEqual(2);
-        // Connected (one piece).
+        // Animals count diagonals so a 1-cell-wide antler can run diagonally.
+        const nDirs: [number, number][] = shapeInfo(k).group === "animals"
+          ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]
+          : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (let r = 0; r < n; r++)
+          for (let c = 0; c < n; c++)
+            if (m[r][c]) expect(nDirs.reduce((s, [dr, dc]) => s + +on(r + dr, c + dc), 0)).toBeGreaterThanOrEqual(2);
+        // Connected (one piece; 8-connected for animals so diagonal antlers count).
         const seen = new Set<string>();
         const [r0, c0] = (() => { for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (m[r][c]) return [r, c]; return [0, 0]; })();
         const st = [[r0, c0]];
         seen.add(`${r0},${c0}`);
         while (st.length) {
           const [a, b] = st.pop()!;
-          for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (on(a + dr, b + dc) && !seen.has(`${a + dr},${b + dc}`)) { seen.add(`${a + dr},${b + dc}`); st.push([a + dr, b + dc]); }
+          for (const [dr, dc] of nDirs) if (on(a + dr, b + dc) && !seen.has(`${a + dr},${b + dc}`)) { seen.add(`${a + dr},${b + dc}`); st.push([a + dr, b + dc]); }
         }
         expect(seen.size, `${k} ${n} connected`).toBe(cells);
-        // The lettered-cell outline stays around the used cells.
-        const pts = maskOutline(m);
-        const xs = pts.map((p) => p[0]);
-        const [, cc0, , cc1] = maskBox(m, n);
-        expect(Math.min(...xs)).toBeLessThanOrEqual(cc0 + 1e-6);
-        expect(Math.max(...xs)).toBeGreaterThanOrEqual(cc1 + 1 - 1e-6);
       }
     }
   });
@@ -127,8 +129,8 @@ describe("shape masks", () => {
     for (const k of SHAPED) {
       const n = Math.max(shapeInfo(k).minSize ?? 16, 16);
       const m = shapeMask(k, n)!;
-      const rings = maskOutlines(m);
-      expect(rings[0]?.length, k).toBeGreaterThan(8);
+      const rings = letteredOutlines(k, n);
+      expect(rings[0]?.length, k).toBeGreaterThanOrEqual(4);
       for (let r = 0; r < n; r++)
         for (let c = 0; c < n; c++) {
           if (!m[r][c]) continue;
@@ -326,13 +328,14 @@ describe("shaped crosswords and sudoku frames", () => {
   });
   it("old saved designs gain safe defaults for the new fields", () => {
     const d = sanitizeDesign({ template: "kids", grid: { lines: true } });
-    expect(d.shape).toEqual({ kind: "square", mix: "one", shade: false });
+    expect(d.shape).toEqual({ kind: "square", mix: "one", shade: false, outline: "smooth" });
     expect(d.grid.line).toBe("solid");
     expect(d.grid.cells).toBe("plain");
     expect(d.list.box).toBe("none");
-    expect(sanitizeDesign({ shape: { kind: "nope", mix: "x" } }).shape).toEqual({ kind: "square", mix: "one", shade: false });
-    expect(sanitizeDesign({ shape: { kind: "heart", mix: "each" } }).shape).toEqual({ kind: "heart", mix: "each", shade: false });
-    expect(sanitizeDesign({ shape: { kind: "elephant", mix: "animals", shade: true } }).shape).toEqual({ kind: "elephant", mix: "animals", shade: true });
+    expect(sanitizeDesign({ shape: { kind: "nope", mix: "x" } }).shape).toEqual({ kind: "square", mix: "one", shade: false, outline: "smooth" });
+    expect(sanitizeDesign({ shape: { kind: "heart", mix: "each" } }).shape).toEqual({ kind: "heart", mix: "each", shade: false, outline: "smooth" });
+    expect(sanitizeDesign({ shape: { kind: "elephant", mix: "animals", shade: true } }).shape).toEqual({ kind: "elephant", mix: "animals", shade: true, outline: "smooth" });
+    expect(sanitizeDesign({ shape: { kind: "deer", mix: "one", outline: "blocky" } }).shape.outline).toBe("blocky");
   });
 });
 

@@ -1,5 +1,5 @@
 import type { FontKey } from "./fonts";
-import type { ShapeKey, ShapeMix } from "../shapes/shapes";
+import type { OutlineStyle, ShapeKey, ShapeMix } from "../shapes/shapes";
 
 export type HeaderStyle = "rule" | "banner" | "ribbon" | "underline" | "boxed" | "tab" | "minimal";
 export type BadgeShape = "circle" | "rounded" | "diamond" | "hexagon";
@@ -60,6 +60,8 @@ export interface Design {
     mix: ShapeMix;
     /** Light shaded silhouette behind the letters (the grey fill of a shaped word search). */
     shade: boolean;
+    /** Smooth = the professional silhouette clipped to the letters; blocky = a cell-hugging pixel outline. */
+    outline: OutlineStyle;
   };
   color: {
     accent: string;

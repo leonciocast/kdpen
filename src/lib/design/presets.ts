@@ -3,7 +3,7 @@ import { FONT_KEYS, FontKey } from "./fonts";
 import { isHexColor } from "./color";
 import { DEFAULT_DESIGN, TEMPLATES, templateDesign } from "./templates";
 import type { BadgeShape, CellStyle, Design, GridBorder, GridShade, HeaderStyle, IconKey, LineStyle, ListBox, ListSort, PageNumberStyle, PatternKey, TemplateId } from "./types";
-import { SHAPE_KEYS, ShapeMix } from "../shapes/shapes";
+import { SHAPE_KEYS, OutlineStyle, ShapeMix } from "../shapes/shapes";
 
 const HEADERS: HeaderStyle[] = ["rule", "banner", "ribbon", "underline", "boxed", "tab", "minimal"];
 const BADGES: BadgeShape[] = ["circle", "rounded", "diamond", "hexagon"];
@@ -17,8 +17,9 @@ const LINES: LineStyle[] = ["solid", "dashed", "dotted"];
 const CELLS: CellStyle[] = ["plain", "boxed", "rounded", "circles"];
 const LIST_BOXES: ListBox[] = ["none", "solid", "rounded", "dashed", "double"];
 const MIXES: ShapeMix[] = ["one", "each", "theme", "animals"];
+const OUTLINES: OutlineStyle[] = ["smooth", "blocky"];
 
-export const DESIGN_OPTIONS = { HEADERS, BADGES, ICONS, PATTERNS, BORDERS, SHADES, NUMBERS, SORTS, LINES, CELLS, LIST_BOXES, MIXES };
+export const DESIGN_OPTIONS = { HEADERS, BADGES, ICONS, PATTERNS, BORDERS, SHADES, NUMBERS, SORTS, LINES, CELLS, LIST_BOXES, MIXES, OUTLINES };
 
 const pick = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
 const num = (v: unknown, lo: number, hi: number, fallback: number) => (typeof v === "number" && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback);
@@ -66,7 +67,7 @@ export function sanitizeDesign(input: unknown): Design {
       shadow: bool(g.shadow, d.grid.shadow),
       cells: pick(g.cells, CELLS, d.grid.cells),
     },
-    shape: { kind: pick(s.kind, SHAPE_KEYS, d.shape.kind), mix: pick(s.mix, MIXES, d.shape.mix), shade: bool(s.shade, d.shape.shade) },
+    shape: { kind: pick(s.kind, SHAPE_KEYS, d.shape.kind), mix: pick(s.mix, MIXES, d.shape.mix), shade: bool(s.shade, d.shape.shade), outline: pick(s.outline, OUTLINES, d.shape.outline) },
     color: { accent: isHexColor(c.accent) ? c.accent : d.color.accent, grayscale: bool(c.grayscale, d.color.grayscale) },
     pattern: { kind: pick(p.kind, PATTERNS, d.pattern.kind), strength: num(p.strength, 0, 1, d.pattern.strength) },
     pageNumber: pick(i.pageNumber, NUMBERS, d.pageNumber),

@@ -68,7 +68,7 @@ const clues = "APPLE BANANA CHERRY GRAPE LEMON MANGO ORANGE PEACH PEAR PLUM MELO
 const owl = generateCrossword(clues, mulberry32(21), 40, "owl");
 console.log("crossword owl left out", owl.leftOut);
 const cwd = templateDesign("elegant");
-cwd.shape = { kind: "owl", mix: "one", shade: true };
+cwd.shape = { kind: "owl", mix: "one", shade: true, outline: "smooth" };
 cwd.grid = { ...cwd.grid, border: "square", frame: 1.6, line: "solid" };
 const cwBook = buildCrosswordBook([{ cw: owl, title: "Owl" }], { trim: "8.5x11", bleed: false, frontMatter: null, extras: NO_EXTRAS, design: cwd, answersPerPage: 4 }, fonts);
 render("cw-owl", cwBook.pdf.output("arraybuffer"), [1, 1], 90);
@@ -103,7 +103,7 @@ const tenk = specs.map((s, i) => {
 });
 const genMs = Date.now() - t0;
 const tenkDesign = base();
-tenkDesign.shape = { kind: "elephant", mix: "animals", shade: true };
+tenkDesign.shape = { kind: "elephant", mix: "animals", shade: true, outline: "smooth" };
 const t1 = Date.now();
 const tenkBook = buildWordSearchBook(tenk, { trim: "8.5x11", bleed: false, answersPerPage: 4, frontMatter: null, extras: NO_EXTRAS, design: tenkDesign }, fonts);
 writeFileSync(join(out, "ws_10k_animals.pdf"), Buffer.from(tenkBook.pdf.output("arraybuffer")));
