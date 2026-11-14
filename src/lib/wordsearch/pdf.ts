@@ -1,4 +1,5 @@
 /** Word search book pages in the chosen design, on the shared KDP renderer. */
+import type { Slot } from "../print/arrange";
 import type { jsPDF } from "jspdf";
 import { Placement, fillGrid, makePlacement, mulberry32, placementCells } from "./engine";
 import { placementCapsule } from "./geometry";
@@ -30,6 +31,8 @@ export interface WordSearchBookOptions {
   padForKdp?: boolean;
   volume?: { n: number; of: number };
   onPage?: (done: number, total: number) => void;
+  /** Custom page order from the preview (items must already be in arranged order). */
+  slots?: Slot[];
   /** Number of the first puzzle (for volumes that continue numbering). */
   firstNumber?: number;
 }
@@ -279,5 +282,6 @@ export function buildWordSearchBook(puzzles: BookPuzzle[], opts: WordSearchBookO
     fonts,
     volume: opts.volume,
     onPage: opts.onPage,
+    slots: opts.slots,
   });
 }

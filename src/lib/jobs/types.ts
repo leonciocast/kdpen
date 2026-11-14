@@ -7,6 +7,7 @@ import type { FrontMatter } from "../print/frontMatter";
 import type { TrimKey } from "../print/kdp";
 import type { BookExtras } from "../print/book";
 import type { Design } from "../design/types";
+import type { Slot } from "../print/arrange";
 import type { CrosswordItem } from "../crossword/pdf";
 
 export interface WsGenSettings {
@@ -44,7 +45,7 @@ export type Job =
   | { type: "ws-generate"; specs: PuzzleSpec[]; settings: WsGenSettings }
   | { type: "cw-generate"; groups: { title: string; theme?: string; entries: ClueEntry[] }[] }
   | { type: "sd-generate"; plan: SudokuDifficulty[] }
-  | ({ type: "build"; settings: BookSettings; volumes: [number, number][]; fileBase: string } & BuildItems);
+  | ({ type: "build"; settings: BookSettings; volumes: [number, number][]; fileBase: string; /** Custom page order (single-volume books only). */ slots?: Slot[] } & BuildItems);
 
 export interface BuiltFile {
   name: string;

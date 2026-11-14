@@ -1,4 +1,5 @@
 /** Sudoku book pages in the chosen design. */
+import type { Slot } from "../print/arrange";
 import type { jsPDF } from "jspdf";
 import { SudokuPuzzle, capitalize } from "./index";
 import { FrontMatter } from "../print/frontMatter";
@@ -23,6 +24,10 @@ export interface SudokuBookOptions {
   padForKdp?: boolean;
   volume?: { n: number; of: number };
   onPage?: (done: number, total: number) => void;
+  /** Puzzles on each puzzle page (arranged books; default: puzzlesPerPage each). */
+  pageSizes?: number[];
+  /** Custom page order from the preview (items must already be in arranged order). */
+  slots?: Slot[];
 }
 
 /** Highlight sets for the how-to diagram. */
@@ -170,19 +175,21 @@ export function sudokuHowTo(): PageRenderer {
   };
 }
 
-export function sudokuContent(puzzles: SudokuPuzzle[], design: Design = DEFAULT_DESIGN, per: PerPage = 1, answersPer: PerPage = 4): BookContent {
+export function sudokuContent(puzzles: SudokuPuzzle[], design: Design = DEFAULT_DESIGN, per: PerPage = 1, answersPer: PerPage = 4, pageSizes?: number[]): BookContent {
   const headerText = design.header.text.trim() || TOOL_HEADER.sudoku;
   const items = puzzles.map((p, i) => ({ p, n: i + 1 }));
   const pages: PageRenderer[] = [];
   const sections: Section[] = [];
   let last = "";
-  for (let i = 0; i < items.length; i += per) {
+  const sizes = pageSizes ?? [];
+  for (let i = 0, g = 0; i < items.length; i += sizes[g - 1] ?? per) {
+    const size = sizes[g++] ?? per;
     const d = items[i].p.difficulty;
     if (d !== last) {
       sections.push({ title: `${capitalize(d)} puzzles`, index: pages.length });
       last = d;
     }
-    pages.push(page(items.slice(i, i + per), per, headerText, false, false));
+    pages.push(page(items.slice(i, i + size), per, headerText, false, false));
   }
   const solutionsIndex = pages.length;
   for (let i = 0; i < items.length; i += answersPer) pages.push(page(items.slice(i, i + answersPer), answersPer, headerText, true, i === 0));
@@ -199,10 +206,11 @@ export function buildSudokuBook(puzzles: SudokuPuzzle[], opts: SudokuBookOptions
     frontMatter: opts.frontMatter,
     extras: opts.extras,
     design,
-    content: sudokuContent(puzzles, design, opts.puzzlesPerPage, opts.answersPerPage ?? 4),
+    content: sudokuContent(puzzles, design, opts.puzzlesPerPage, opts.answersPerPage ?? 4, opts.pageSizes),
     padForKdp: opts.padForKdp,
     fonts,
     volume: opts.volume,
     onPage: opts.onPage,
+    slots: opts.slots,
   });
 }

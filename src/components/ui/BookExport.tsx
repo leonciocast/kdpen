@@ -20,6 +20,8 @@ import Callout from "./Callout";
 import InfoTip from "./InfoTip";
 import BookExtrasFields from "./BookExtrasFields";
 import JobProgress from "./JobProgress";
+import BookPreview, { PreviewPdf, Sorter } from "./preview/BookPreview";
+import { CheckFix, Slot, applyOrderFix, arrangementSignature, defaultSlots, describePages, isDefaultOrder, readinessChecks, reorderPuzzles, restoreDeleted, seededShuffle } from "@/lib/print/arrange";
 
 type PerPage = 1 | 2 | 4 | 6;
 
@@ -65,6 +67,13 @@ interface Props {
   perPageChoice?: boolean;
   defaultAnswersPerPage?: PerPage;
   flow: FlowCtl;
+}
+
+interface Arranged {
+  sig: string;
+  slots: Slot[];
+  past: Slot[][];
+  future: Slot[][];
 }
 
 interface Built {
@@ -113,6 +122,26 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
       return { ranges: [] as [number, number][], pages: [] as number[], maxItemsPerVolume: 0 };
     }
   }, [itemCount, over, autoSplit, pagesFor, single]);
+  // ---- page arrangement (preview)
+  const shape = useMemo(() => ({ items: itemCount, perPage: layout.perPage, answersPerPage }), [itemCount, layout.perPage, answersPerPage]);
+  const defaults = useMemo(() => (itemCount > 0 ? defaultSlots({ frontMatter, extras, sectionCount: sectionCount + 2, hasHowTo: true, padForKdp: pad }, shape) : []), [itemCount, frontMatter, extras, sectionCount, pad, shape]);
+  const sig = useMemo(() => arrangementSignature(defaults, shape), [defaults, shape]);
+  const [arr, setArr] = useSticky<Arranged | null>(`${tool}.arrange`, null);
+  const custom = arr && arr.sig === sig ? arr : null;
+  const staleOrder = !!arr && arr.sig !== sig && !isDefaultOrder(arr.slots, defaults);
+  const slots = custom?.slots ?? defaults;
+  const desc = useMemo(() => describePages(slots, shape, extras, pad, itemNoun[0].toUpperCase() + itemNoun.slice(1)), [slots, shape, extras, pad, itemNoun]);
+  const arranged = !!custom && !isDefaultOrder(custom.slots, defaults);
+  const changeSlots = (next: Slot[]) => setArr({ sig, slots: next, past: [...(custom?.past ?? []), slots].slice(-100), future: [] });
+  const undo = () => {
+    if (!custom?.past.length) return;
+    setArr({ sig, slots: custom.past[custom.past.length - 1], past: custom.past.slice(0, -1), future: [slots, ...custom.future] });
+  };
+  const redo = () => {
+    if (!custom?.future.length) return;
+    setArr({ sig, slots: custom.future[0], past: [...custom.past, slots], future: custom.future.slice(1) });
+  };
+
   const blocked = disabledReason || (over && !autoSplit ? `This book would have ${single} pages. KDP allows at most ${LIMITS.kdpMaxPages}. Turn on automatic volumes or use fewer ${itemNoun}s.` : "");
 
   const clearFiles = () => {
@@ -121,10 +150,17 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
     setFiles([]);
   };
 
+  // One volume: the book is built from the arranged pages (the preview uses the very same job).
+  const canArrange = plan.ranges.length === 1 && !over && itemCount > 0;
+  const makeJob = (): Job => {
+    const settings: BookSettings = { trim, bleed, padForKdp: pad, frontMatter, extras, design, answersPerPage, perPage: perPageChoice ? perPage : undefined };
+    return { type: "build", settings, volumes: plan.ranges, fileBase, ...(canArrange ? { slots: desc.resolved.slots } : {}), ...items() } as Job;
+  };
+  const pageTotal = canArrange ? desc.pages.length : single;
+
   const build = async () => {
     clearFiles();
-    const settings: BookSettings = { trim, bleed, padForKdp: pad, frontMatter, extras, design, answersPerPage, perPage: perPageChoice ? perPage : undefined };
-    const job = { type: "build", settings, volumes: plan.ranges, fileBase, ...items() } as Job;
+    const job = makeJob();
     const started = nowMs();
     const running = startJob(job, setProgress);
     setJob(running as RunningJob<unknown>);
@@ -143,6 +179,88 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
     } finally {
       setJob(null);
     }
+  };
+
+  // ---- live preview build (debounced, cancels the previous one)
+  const [preview, setPreview] = useState<PreviewPdf | null>(null);
+  const [pvBusy, setPvBusy] = useState(false);
+  const [pvProgress, setPvProgress] = useState<Progress | null>(null);
+  const [pvError, setPvError] = useState<string | null>(null);
+  const onPreview = flow.sub === "preview" && canArrange && !disabledReason;
+  const pvKey = JSON.stringify([trim, bleed, pad, frontMatter, extras, design, answersPerPage, perPageChoice ? perPage : 0, desc.resolved.slots, itemCount]);
+  const makeJobRef = useRef(makeJob);
+  const keysRef = useRef<string[]>([]);
+  useEffect(() => {
+    makeJobRef.current = makeJob;
+    keysRef.current = desc.pages.map((p) => p.key);
+  });
+  const pvVersion = useRef(0);
+  const pvFirst = useRef(true);
+  useEffect(() => {
+    if (!onPreview) return;
+    let running: RunningJob<unknown> | null = null;
+    let alive = true;
+    const timer = window.setTimeout(
+      () => {
+        pvFirst.current = false;
+        setPvBusy(true);
+        setPvError(null);
+        const keys = keysRef.current;
+        const started = nowMs();
+        running = startJob(makeJobRef.current(), (p) => alive && setPvProgress(p)) as RunningJob<unknown>;
+        running.promise.then(
+          (out) => {
+            if (!alive) return;
+            const f = (out as { bytes: ArrayBuffer }[])[0];
+            (window as unknown as { __kdpenPreviewMs?: number }).__kdpenPreviewMs = nowMs() - started;
+            setPreview({ bytes: f.bytes, keys, version: ++pvVersion.current });
+            setPvBusy(false);
+            setPvProgress(null);
+          },
+          (e) => {
+            if (!alive || e instanceof JobCancelled) return;
+            setPvError((e as Error).message);
+            setPvBusy(false);
+          },
+        );
+      },
+      pvFirst.current ? 0 : 450,
+    );
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+      running?.cancel();
+    };
+  }, [onPreview, pvKey]);
+
+  const sorters: Sorter[] = useMemo(() => {
+    const per = Math.max(1, shape.perPage);
+    const sortBy = (label: string, key: string, value: (it: Record<string, unknown>) => string | number) => ({
+      key,
+      label,
+      apply: () => {
+        const list = items().items as unknown as Record<string, unknown>[];
+        const v = (ref: number) => value(list[ref * per] ?? {});
+        changeSlots(reorderPuzzles(slots, (refs) => refs.slice().sort((a, b) => (v(a) < v(b) ? -1 : v(a) > v(b) ? 1 : a - b))));
+      },
+    });
+    const rank: Record<string, number> = { easy: 0, medium: 1, hard: 2, expert: 3 };
+    const out: Sorter[] = [];
+    if (tool === "sudoku") out.push(sortBy("Sort easy → hard", "difficulty", (it) => rank[String(it.difficulty)] ?? 9));
+    else if (sectionCount > 0) out.push(sortBy("Group by theme (A–Z)", "theme", (it) => String(it.theme ?? "").toLowerCase()));
+    out.push({ key: "original", label: `Original ${itemNoun} order`, apply: () => changeSlots(reorderPuzzles(slots, (refs) => refs.slice().sort((a, b) => a - b))) });
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slots, shape, tool, sectionCount, itemNoun, sig, custom]);
+
+  const checks = useMemo(
+    () => readinessChecks({ pages: desc.pages, frontMatter, padForKdp: pad, originalItems: itemCount, items: desc.resolved.itemOrder.length, unit: itemNoun }),
+    [desc, frontMatter, pad, itemCount, itemNoun],
+  );
+  const onFix = (f: CheckFix) => {
+    if (f === "size" || f === "title" || f === "extras") flow.setSub(f);
+    else if (f === "undo-delete") changeSlots(restoreDeleted(slots, shape));
+    else changeSlots(applyOrderFix(slots, f));
   };
 
   const download = (f: Built) => {
@@ -241,6 +359,55 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
     body: <BookExtrasFields extras={extras} setExtras={setExtras} />,
   };
 
+  const previewQ: Question = {
+    key: "preview",
+    wide: true,
+    title: "Preview & arrange your book",
+    lead: canArrange ? "Every page exactly as it will print. Drag pages to change the order: page numbers, puzzle numbers, answers and the contents page follow automatically." : "This book is split into several volumes, so each volume keeps the standard page order.",
+    nextLabel: "Looks good",
+    body: canArrange ? (
+      <>
+        {staleOrder && (
+          <Callout tone="warn" className="mb-3">
+            <span>
+              Your earlier page order was reset because the book changed (different {itemNoun}s or extra pages).{" "}
+              <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => setArr(null)}>
+                OK
+              </button>
+            </span>
+          </Callout>
+        )}
+        <BookPreview
+          pages={desc.pages}
+          slots={slots}
+          onChange={changeSlots}
+          undo={undo}
+          redo={redo}
+          canUndo={!!custom?.past.length}
+          canRedo={!!custom?.future.length}
+          onReset={() => changeSlots(defaults)}
+          isDefault={!arranged}
+          pdf={preview}
+          building={pvBusy}
+          progress={pvProgress}
+          error={pvError}
+          checks={checks}
+          onFix={onFix}
+          trim={trim}
+          bleed={bleed}
+          unit={itemNoun[0].toUpperCase() + itemNoun.slice(1)}
+          sorters={sorters}
+          onShuffle={() => changeSlots(reorderPuzzles(slots, (refs) => seededShuffle(refs, Math.floor(Math.random() * 1e9))))}
+          notify={(m) => toast.info(m)}
+        />
+      </>
+    ) : (
+      <Callout>
+        {disabledReason || `Your book has ${single.toLocaleString()} pages, more than KDP's ${LIMITS.kdpMaxPages}, so it will be created as ${volumes} volumes in the standard order. To arrange pages yourself, use fewer ${itemNoun}s per book.`}
+      </Callout>
+    ),
+  };
+
   const createQ: Question = {
     key: "create",
     title: files.length ? "Your book is ready" : "Create your book",
@@ -257,8 +424,19 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
               <ul className="list-unstyled small mb-3 d-grid gap-2">
                 <li className="pg-stat">
                   <span className="text-muted">Contents</span>
-                  <span className="fw-semibold text-end">{plural(itemCount, itemNoun)} + solutions</span>
+                  <span className="fw-semibold text-end">{plural(canArrange ? desc.resolved.itemOrder.length : itemCount, itemNoun)} + solutions</span>
                 </li>
+                {canArrange && arranged && (
+                  <li className="pg-stat">
+                    <span className="text-muted">Page order</span>
+                    <span className="fw-semibold" data-testid="order-custom">
+                      Your arrangement{" "}
+                      <button type="button" className="btn btn-link btn-sm p-0 align-baseline" onClick={() => flow.setSub("preview")}>
+                        edit
+                      </button>
+                    </span>
+                  </li>
+                )}
                 <li className="pg-stat">
                   <span className="text-muted">Trim size</span>
                   <span className="fw-semibold">
@@ -268,7 +446,7 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                 <li className="pg-stat">
                   <span className="text-muted">Estimated pages</span>
                   <span className="fw-semibold" data-testid="page-estimate">
-                    {volumes > 1 ? `${volumes} volumes, up to ${biggest} pages each` : single.toLocaleString()}
+                    {volumes > 1 ? `${volumes} volumes, up to ${biggest} pages each` : pageTotal.toLocaleString()}
                   </span>
                 </li>
                 <li className="pg-stat">
@@ -277,10 +455,10 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
                     {LIMITS.kdpMinPages}–{LIMITS.kdpMaxPages} pages
                   </span>
                 </li>
-                {!over && single > 0 && (
+                {!over && pageTotal > 0 && pageTotal <= LIMITS.kdpMaxPages && (
                   <li className="pg-stat">
                     <span className="text-muted">Inside margin (gutter)</span>
-                    <span className="fw-semibold">{insideMargin(single)}&quot;</span>
+                    <span className="fw-semibold">{insideMargin(pageTotal)}&quot;</span>
                   </li>
                 )}
               </ul>
@@ -345,5 +523,5 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
     ),
   };
 
-  return <QuestionFlow flow={flow} questions={[sizeQ, titleQ, extrasQ, createQ]} />;
+  return <QuestionFlow flow={flow} questions={[sizeQ, titleQ, extrasQ, previewQ, createQ]} />;
 }

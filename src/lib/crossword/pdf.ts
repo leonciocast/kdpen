@@ -1,4 +1,5 @@
 /** Crossword book pages in the chosen design. */
+import type { Slot } from "../print/arrange";
 import type { jsPDF } from "jspdf";
 import { ClueEntry, Crossword, cellNumbers, clueLists, generateCrossword } from "./engine";
 import { mulberry32 } from "../wordsearch/engine";
@@ -27,6 +28,8 @@ export interface CrosswordBookOptions {
   padForKdp?: boolean;
   volume?: { n: number; of: number };
   onPage?: (done: number, total: number) => void;
+  /** Custom page order from the preview (items must already be in arranged order). */
+  slots?: Slot[];
 }
 
 export function drawCrosswordGrid(pdf: jsPDF, look: Look, cw: Crossword, x: number, y: number, cell: number, answers: boolean, filled?: Set<string>) {
@@ -232,5 +235,6 @@ export function buildCrosswordBook(items: CrosswordItem[], opts: CrosswordBookOp
     fonts,
     volume: opts.volume,
     onPage: opts.onPage,
+    slots: opts.slots,
   });
 }

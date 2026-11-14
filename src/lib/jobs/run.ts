@@ -8,6 +8,10 @@ import { buildCrosswordBook } from "../crossword/pdf";
 import { buildSudokuBook } from "../sudoku/pdf";
 import { FontData, familiesFor, filesFor } from "../print/fonts";
 import type { RenderedBook } from "../print/book";
+import { resolveSlots } from "../print/arrange";
+import type { BookPuzzle } from "../wordsearch/pdf";
+import type { CrosswordItem } from "../crossword/pdf";
+import type { SudokuPuzzle } from "../sudoku";
 import type { BuiltFile, GeneratedWs, Job, JobResultMap, Progress } from "./types";
 
 export interface JobEnv {
@@ -77,9 +81,15 @@ export async function runJob<J extends Job>(job: J, env: JobEnv): Promise<JobRes
       const fonts = await env.loadFonts(filesFor(familiesFor(st.design)));
       const files: BuiltFile[] = [];
       const of = job.volumes.length;
+      if (job.slots && of > 1) throw new Error("A custom page order works on single-volume books only.");
+      // An arranged book: put the items in the arranged order (numbers and answers follow it).
+      const shape = { items: job.items.length, perPage: job.tool === "sudoku" ? (st.perPage ?? 1) : 1, answersPerPage: st.answersPerPage };
+      const arranged = job.slots ? resolveSlots(job.slots, shape) : null;
+      const items = arranged ? (arranged.itemOrder.map((i) => job.items[i]) as typeof job.items) : job.items;
+      const volumes = arranged ? ([[0, items.length]] as [number, number][]) : job.volumes;
       for (let v = 0; v < of; v++) {
         await check(v * 5 + 4);
-        const [a, b] = job.volumes[v];
+        const [a, b] = volumes[v];
         const common = {
           trim: st.trim,
           bleed: st.bleed,
@@ -87,15 +97,16 @@ export async function runJob<J extends Job>(job: J, env: JobEnv): Promise<JobRes
           frontMatter: st.frontMatter,
           extras: st.extras,
           design: st.design,
+          slots: arranged?.slots,
           volume: of > 1 ? { n: v + 1, of } : undefined,
           onPage: (done: number, total: number) => {
             if (done % 4 === 0 || done === total) env.progress({ phase: of > 1 ? `Creating volume ${v + 1} of ${of}` : "Creating PDF pages", done: done, total });
           },
         };
         let book: RenderedBook;
-        if (job.tool === "word-search") book = buildWordSearchBook(job.items.slice(a, b), { ...common, answersPerPage: st.answersPerPage }, fonts);
-        else if (job.tool === "crossword") book = buildCrosswordBook(job.items.slice(a, b), { ...common, answersPerPage: st.answersPerPage }, fonts);
-        else book = buildSudokuBook(job.items.slice(a, b), { ...common, puzzlesPerPage: st.perPage ?? 1, answersPerPage: st.answersPerPage }, fonts);
+        if (job.tool === "word-search") book = buildWordSearchBook((items as BookPuzzle[]).slice(a, b), { ...common, answersPerPage: st.answersPerPage }, fonts);
+        else if (job.tool === "crossword") book = buildCrosswordBook((items as CrosswordItem[]).slice(a, b), { ...common, answersPerPage: st.answersPerPage }, fonts);
+        else book = buildSudokuBook((items as SudokuPuzzle[]).slice(a, b), { ...common, puzzlesPerPage: st.perPage ?? 1, answersPerPage: st.answersPerPage, pageSizes: arranged?.puzzlePageSizes }, fonts);
         env.progress({ phase: "Saving PDF", done: 1, total: 1 });
         const bytes = book.pdf.output("arraybuffer");
         const suffix = of > 1 ? `_vol${v + 1}` : "";

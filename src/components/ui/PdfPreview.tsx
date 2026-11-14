@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 type PdfJs = typeof import("pdfjs-dist");
 let pdfjsPromise: Promise<PdfJs> | null = null;
-function loadPdfJs(): Promise<PdfJs> {
+export function loadPdfJs(): Promise<PdfJs> {
   if (!pdfjsPromise) {
     pdfjsPromise = import("pdfjs-dist").then((m) => {
       m.GlobalWorkerOptions.workerSrc = "/vendor/pdf.worker.min.mjs";

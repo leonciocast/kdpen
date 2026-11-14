@@ -5,11 +5,12 @@
  */
 import { jsPDF } from "jspdf";
 import { FrontMatter, copyrightDetails, resolveNotice } from "./frontMatter";
-import { KDP_MIN_PAGES, PT, PageSpec, TrimKey, contentBox, makePageSpec } from "./kdp";
+import { PT, PageSpec, TrimKey, contentBox, makePageSpec } from "./kdp";
 import { FontData, familiesFor, registerFonts } from "./fonts";
 import { Box, Look, drawHeader, drawIcon, drawPageNumber, drawPattern, panel, paint, patternArea, poly, resolveLook } from "../design/paint";
 import { DEFAULT_DESIGN } from "../design/templates";
 import type { Design } from "../design/types";
+import { BookPageKind, PlanInput, Slot, TOC_LINES_PER_PAGE, coreKinds, pad } from "./arrange";
 
 export type { Box } from "../design/paint";
 export const SANS = "DejaVuSans";
@@ -89,9 +90,15 @@ export interface RenderBookOptions {
   volume?: { n: number; of: number };
   /** Progress callback, called after each page. */
   onPage?: (done: number, total: number) => void;
+  /**
+   * Custom page order (from the preview). Puzzle slots map, in order, to the
+   * content's puzzle pages; solution slots to its solutions pages. The caller
+   * must already have built `content` from the arranged items.
+   */
+  slots?: Slot[];
 }
 
-export type PageKind = "title" | "copyright" | "belongs" | "dedication" | "toc" | "intro" | "howto" | "content" | "notes" | "thanks" | "blank";
+export type PageKind = BookPageKind;
 
 export interface RenderedBook {
   pdf: jsPDF;
@@ -101,48 +108,17 @@ export interface RenderedBook {
   spec: PageSpec;
 }
 
-export const TOC_LINES_PER_PAGE = 26;
+export { TOC_LINES_PER_PAGE, tocEntryCount } from "./arrange";
+export type { PlanInput } from "./arrange";
 
 export function scaleFor(trim: TrimKey): number {
   return trim === "6x9" ? 0.78 : 1;
 }
 
-export interface PlanInput {
-  frontMatter: FrontMatter | null;
-  extras: BookExtras;
-  contentCount: number;
-  sectionCount: number;
-  hasHowTo: boolean;
-  padForKdp?: boolean;
-}
-
-export function tocEntryCount(p: PlanInput): number {
-  const e = p.extras;
-  return (e.intro.trim() ? 1 : 0) + (e.howTo && p.hasHowTo ? 1 : 0) + p.sectionCount + (e.notesPages > 0 ? 1 : 0);
-}
-
 /** The page order of a book. Pure, so it doubles as the page-count estimate. */
 export function planKinds(p: PlanInput): PageKind[] {
-  const e = p.extras;
-  const kinds: PageKind[] = [];
-  if (p.frontMatter) kinds.push("title", "copyright");
-  if (e.belongsTo) kinds.push("belongs");
-  if (p.frontMatter?.dedication.trim()) kinds.push("dedication");
-  if (e.toc) for (let i = 0; i < Math.max(1, Math.ceil(tocEntryCount(p) / TOC_LINES_PER_PAGE)); i++) kinds.push("toc");
-  if (e.intro.trim()) kinds.push("intro");
-  if (e.howTo && p.hasHowTo) kinds.push("howto");
-  for (let i = 0; i < p.contentCount; i++) kinds.push("content");
-  for (let i = 0; i < Math.max(0, Math.floor(e.notesPages)); i++) kinds.push("notes");
-  const tail: PageKind[] = e.thankYou ? ["thanks"] : [];
-  const total = kinds.length + tail.length;
   // No throw here: estimates may exceed the KDP limit (the page spec enforces it when building).
-  const target = p.padForKdp === false ? total + (total % 2) : Math.max(KDP_MIN_PAGES, total + (total % 2));
-  const fillKind: PageKind = e.padWithNotes ? "notes" : "blank";
-  const pad = target - total;
-  if (fillKind === "notes") for (let i = 0; i < pad; i++) kinds.push("notes");
-  kinds.push(...tail);
-  if (fillKind === "blank") for (let i = 0; i < pad; i++) kinds.push("blank");
-  return kinds;
+  return pad(coreKinds(p).map((kind) => ({ item: null, kind })), p.extras, p.padForKdp).map((x) => x.kind);
 }
 
 export function centered(pdf: jsPDF, text: string, cx: number, y: number) {
@@ -412,7 +388,26 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
   const design = opts.design ?? DEFAULT_DESIGN;
   const look = resolveLook(design);
   const plan: PlanInput = { frontMatter: opts.frontMatter, extras: opts.extras, contentCount: c.pages.length, sectionCount: c.sections.length, hasHowTo: !!c.howTo, padForKdp: opts.padForKdp };
-  const kinds = planKinds(plan);
+  // One path for both the default and an arranged order: a list of page kinds
+  // plus, for content pages, which content page they print.
+  let core: { item: number | null; kind: PageKind }[];
+  if (opts.slots) {
+    const puzzles = opts.slots.filter((x) => x.kind === "puzzle").length;
+    const sols = opts.slots.filter((x) => x.kind === "solution").length;
+    if (puzzles !== c.solutionsIndex || sols !== c.pages.length - c.solutionsIndex) throw new Error("The page arrangement doesn't match the book; reopen the preview.");
+    let p = 0;
+    let q = 0;
+    core = opts.slots.map((x) => (x.kind === "puzzle" ? { item: p++, kind: "content" } : x.kind === "solution" ? { item: c.solutionsIndex + q++, kind: "content" } : { item: null, kind: x.kind }));
+  } else {
+    let k = 0;
+    core = coreKinds(plan).map((kind) => ({ item: kind === "content" ? k++ : null, kind }));
+  }
+  const pages = pad(core.map((x) => ({ item: x.item ?? -1, kind: x.kind })), opts.extras, opts.padForKdp);
+  const kinds = pages.map((x) => x.kind);
+  const contentAt: number[] = []; // content page index -> 1-based page number
+  pages.forEach((x, i) => {
+    if (x.kind === "content" && x.item !== null && x.item >= 0) contentAt[x.item] = i + 1;
+  });
   const spec = makePageSpec(opts.trim, kinds.length, opts.bleed);
   const W = spec.pageWidth * PT;
   const H = spec.pageHeight * PT;
@@ -423,14 +418,13 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
   pdf.setProperties({ title: fm?.title || "Puzzle Book", author: fm?.author || "", subject: fm?.subtitle || "", creator: "Puzzle Generator" });
 
   // Page numbers for the table of contents.
-  const firstContent = kinds.indexOf("content") + 1;
   const pageOf = (kind: PageKind) => kinds.indexOf(kind) + 1;
   const toc: { title: string; page: number }[] = [];
-  if (opts.extras.intro.trim()) toc.push({ title: "Introduction", page: pageOf("intro") });
+  if (opts.extras.intro.trim() && kinds.includes("intro")) toc.push({ title: "Introduction", page: pageOf("intro") });
   if (kinds.includes("howto")) toc.push({ title: "How to Play", page: pageOf("howto") });
-  c.sections.forEach((sct) => toc.push({ title: sct.title, page: firstContent + sct.index }));
+  c.sections.forEach((sct) => toc.push({ title: sct.title, page: contentAt[sct.index] }));
   if (opts.extras.notesPages > 0 && kinds.includes("notes")) toc.push({ title: "Notes", page: pageOf("notes") });
-  const solutionsPage = firstContent + c.solutionsIndex;
+  const solutionsPage = contentAt[c.solutionsIndex];
 
   const s = scaleFor(opts.trim);
   const area = patternArea(W, H, opts.bleed);
@@ -446,11 +440,11 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
   const stamp = () => {
     (pdf as any).advancedAPI((p: any) => p.doFormObject("pg-pattern", p.unitMatrix));
   };
-  let contentIndex = 0;
   let tocIndex = 0;
   const numbered = new Set<PageKind>(["toc", "intro", "howto", "content", "notes"]);
   const patterned = new Set<PageKind>(["belongs", "toc", "intro", "howto", "content", "notes", "thanks"]);
-  kinds.forEach((kind, i) => {
+  const tocPages = kinds.filter((k) => k === "toc").length;
+  pages.forEach(({ kind, item }, i) => {
     const page = i + 1;
     if (i > 0) pdf.addPage([W, H], "portrait");
     const ctx: PageContext = { pdf, box: contentBox(spec, page), page, spec, s, pageW: W, pageH: H, look, solutionsPage };
@@ -469,7 +463,8 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
         if (fm) drawDedicationPage(ctx, fm);
         break;
       case "toc":
-        drawTocPage(ctx, toc.slice(tocIndex * TOC_LINES_PER_PAGE, (tocIndex + 1) * TOC_LINES_PER_PAGE), tocIndex === 0);
+        // The last contents page takes any overflow (only if the user removed a contents page).
+        drawTocPage(ctx, toc.slice(tocIndex * TOC_LINES_PER_PAGE, tocIndex === tocPages - 1 ? undefined : (tocIndex + 1) * TOC_LINES_PER_PAGE), tocIndex === 0);
         tocIndex++;
         break;
       case "intro":
@@ -479,7 +474,7 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
         c.howTo?.(ctx);
         break;
       case "content":
-        c.pages[contentIndex++](ctx);
+        if (item !== null && item >= 0) c.pages[item](ctx);
         break;
       case "notes":
         drawNotesPage(ctx);

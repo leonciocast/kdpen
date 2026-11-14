@@ -91,6 +91,7 @@ await next(); // -> export: size
 await shot(page, "10_ws_export");
 await next(); // title
 await next(); // extras
+await next(); // preview
 await next(); // create
 await exportBook("ws_small_book.pdf");
 
@@ -143,6 +144,7 @@ await next(); // -> happy?
 await page.click('[data-testid="design-keep"]'); // -> export
 await next();
 await next();
+await next(); // -> preview
 await next(); // -> create
 await pause(500);
 log.push("10k book stats: " + (await page.locator('[data-testid="page-estimate"]').innerText()));
@@ -182,6 +184,7 @@ await next();
 await page.click('[data-testid="design-keep"]');
 await next();
 await next();
+await next(); // preview
 await next();
 await exportBook("crossword_book.pdf");
 
@@ -206,6 +209,7 @@ await page.selectOption('[data-testid="per-page"]', "4");
 await pause();
 await next();
 await next();
+await next(); // -> preview
 await next(); // -> create
 log.push("sudoku stats: " + (await page.locator('[data-testid="page-estimate"]').innerText()));
 await shot(page, "21_sd_export");

@@ -60,14 +60,19 @@ async function sharedDesignExport(prefix, n) {
   await next();
   await shot(`${prefix}_${n + 1}c_export_extras`);
   await page.click('[data-testid="wizard-skip"]');
-  await expectQ("create", `${prefix}: skip extras → create`);
-  await shot(`${prefix}_${n + 1}d_export_create`);
+  await expectQ("preview", `${prefix}: skip extras → preview & arrange`);
+  await page.waitForSelector('[data-testid="book-preview"][data-ready="1"]', { timeout: 60000 });
+  await pause(800);
+  await shot(`${prefix}_${n + 1}d_export_preview`);
+  await next();
+  await expectQ("create", `${prefix}: preview → create`);
+  await shot(`${prefix}_${n + 1}e_export_create`);
   const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 120000 }), page.click('[data-testid="download-pdf"]')]);
   await dl.path();
   await pause(500);
-  await shot(`${prefix}_${n + 1}e_export_done`);
+  await shot(`${prefix}_${n + 1}f_export_done`);
   // Back from export's first question lands on design's last question.
-  for (let i = 0; i < 4; i++) await back();
+  for (let i = 0; i < 5; i++) await back();
   await expectQ("customize", `${prefix}: back from export → design customize`);
 }
 
