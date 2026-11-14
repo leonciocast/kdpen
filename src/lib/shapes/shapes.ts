@@ -49,7 +49,6 @@ export type ShapeKey =
   | "hippo"
   | "rhino"
   | "bear"
-  | "panda"
   | "koala"
   | "cat"
   | "lion"
@@ -75,7 +74,6 @@ export type ShapeKey =
   | "penguin"
   | "flamingo"
   | "parrot"
-  | "peacock"
   | "bat"
   | "fish"
   | "whale"
@@ -485,11 +483,11 @@ export function suggestShapeForTheme(theme: string | undefined, allowed?: ShapeK
 /**
  * Shapes that make good crosswords. Measured over the standard 12-word fruit
  * set (4 seeds): triangle, diamond, star, tree, pentagon, tall rectangle,
- * rabbit, mouse, dolphin and seal lost too many words, so they are not offered.
+ * and any animal that drops more than one word, so they are not offered.
  */
 export const CROSSWORD_SHAPES: ShapeKey[] = [
   "square", "rounded", "landscape", "circle", "oval", "octagon", "hexagon", "heart", "egg", "apple", "pumpkin", "house", "cloud",
-  ...ANIMAL_KEYS.filter((k) => !(["horse", "fox", "raccoon", "bat", "seahorse", "snake", "scorpion"] as ShapeKey[]).includes(k)),
+  ...ANIMAL_KEYS.filter((k) => !(["monkey"] as ShapeKey[]).includes(k)),
 ];
 
 /** Shapes used when "mix shapes" is on (basics plus a rotation of favourite animals). */
@@ -539,7 +537,7 @@ export function shapeStartSize(shape: ShapeKey | undefined, base: number, longes
  * Animals whose silhouette would dwarf the grid (giraffe, flamingo, antlers, etc.)
  * are left out so the page stays print-friendly; the rest place the 9×9 in the body.
  */
-const SUDOKU_SKIP: ShapeKey[] = ["deer", "moose", "llama", "giraffe", "flamingo", "peacock", "bat", "longneck", "ostrich"];
+const SUDOKU_SKIP: ShapeKey[] = [];
 export const SUDOKU_SHAPES: ShapeKey[] = ["square", "rounded", "circle", "octagon", "hexagon", ...ANIMAL_KEYS.filter((k) => !SUDOKU_SKIP.includes(k))];
 
 /**
