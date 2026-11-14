@@ -44,7 +44,7 @@ export function parseWords(
   tokens: string[],
   existing: string[],
   maxLength: number,
-  maxWords = MAX_WORDS
+  maxWords: number = MAX_WORDS
 ): ParseResult {
   const res: ParseResult = { added: [], errors: [], skipped: [], rejected: [], limitReached: false };
   const seen = new Set(existing.map(gridForm));
