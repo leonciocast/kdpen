@@ -156,7 +156,8 @@ async function run(browser, spec, idx) {
     await back();
     // A choice-card question has no Next: picking the kept answer again moves on.
     if (await has(NEXT_BTN)) await next();
-    else await click('.pg-choice-card[aria-checked="true"]', 600);
+    else if (await has('.pg-choice-card[aria-checked="true"]')) await click('.pg-choice-card[aria-checked="true"]', 600);
+    else if (await has(tid("design-keep"))) await click("design-keep", 600); // action cards, nothing to keep
     if ((await q()) !== k) problems.push(`flow: back/next from "${k}" landed on "${await q()}"`);
   };
   const step = (s) => log.push(s);
