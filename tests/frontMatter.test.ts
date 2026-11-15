@@ -16,6 +16,9 @@ describe("front matter", () => {
   it("lists only the filled-in details", () => {
     expect(copyrightDetails({ ...DEFAULT_FRONT_MATTER, isbn: "", website: "" })).toEqual(["First Edition", "Published by Your Imprint"]);
     expect(copyrightDetails({ ...DEFAULT_FRONT_MATTER, edition: "", imprint: "", isbn: "9781234567897", website: "example.com" })).toEqual(["ISBN 9781234567897", "example.com"]);
+    // No imprint: the author publishes, and a placeholder author is never printed as the publisher.
+    expect(copyrightDetails({ ...DEFAULT_FRONT_MATTER, author: "SmartCast LLC", imprint: "" })).toEqual(["First Edition", "Published by SmartCast LLC"]);
+    expect(copyrightDetails({ ...DEFAULT_FRONT_MATTER, author: "SmartCast LLC", imprint: "  " })).toEqual(["First Edition", "Published by SmartCast LLC"]);
   });
   it("checks ISBN shape loosely", () => {
     expect(isbnLooksValid("")).toBe(true);

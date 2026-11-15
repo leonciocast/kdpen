@@ -49,7 +49,10 @@ export function copyrightDetails(fm: FrontMatter): string[] {
   const out: string[] = [];
   if (fm.edition.trim()) out.push(fm.edition.trim());
   if (fm.isbn.trim()) out.push(`ISBN ${fm.isbn.trim()}`);
-  if (fm.imprint.trim()) out.push(`Published by ${fm.imprint.trim()}`);
+  // No imprint means you publish under your own name, so the author is the publisher (never a placeholder).
+  const author = fm.author.trim();
+  const publisher = fm.imprint.trim() || (author !== DEFAULT_FRONT_MATTER.author ? author : "");
+  if (publisher) out.push(`Published by ${publisher}`);
   if (fm.website.trim()) out.push(fm.website.trim());
   return out;
 }
