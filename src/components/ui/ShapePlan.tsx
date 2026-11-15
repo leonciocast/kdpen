@@ -35,7 +35,7 @@ export function planSummary(design: Design, tool: ToolKind, count: number): stri
   if (mode === "manual") return `Page by page (${Object.keys(design.shape.pins ?? {}).filter((i) => Number(i) < count).length} of ${count} picked)`;
   const pool = planPool(design.shape, allowed).length;
   if (mode === "surprise") return `Surprise mix · ${pool} ${noun}s`;
-  return `Random from ${planCats(design.shape).length ? catNames(design.shape) : "no categories"} · ${pool} ${noun}s`;
+  return `Random from ${planCats(design.shape).length && pool ? catNames(design.shape) : "no categories"} · ${pool} ${noun}s`;
 }
 
 function catNames(shape: Design["shape"]): string {
@@ -182,10 +182,11 @@ export function Lineup({ tool, design, targets, focus, onSelect, pins, labels }:
 export function CategoryChooser({ tool, design, set }: { tool: ToolKind; design: Design; set: Setter }) {
   const allowed = shapesFor(tool);
   const counts = leafCounts(allowed);
-  const cats = planCats(design.shape);
+  // Only categories this tool has shapes in (a mystery plan saved with "hollow" or a farm group keeps nothing from it).
+  const cats = planCats(design.shape).filter((id) => counts[id] > 0);
   const toggle = (ids: string[], on: boolean) =>
     set((d) => {
-      const cur = new Set(planCats(d.shape));
+      const cur = new Set(planCats(d.shape).filter((id) => counts[id] > 0));
       ids.forEach((id) => (on ? cur.add(id) : cur.delete(id)));
       d.shape.mix = "pick";
       d.shape.cats = PLAN_LEAVES.map((l) => l.id).filter((id) => cur.has(id));

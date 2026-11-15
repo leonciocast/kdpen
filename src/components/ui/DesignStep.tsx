@@ -271,9 +271,10 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
       <div className="row g-4">
         <div className="col-lg-7">
           <ShapePlanPanel tool={tool} design={design} set={set} list={planList} themes={themes} focus={focus} setFocus={setFocus} />
-          {(tool === "word-search" || tool === "mystery") && (
+          {(tool === "word-search" || (tool === "mystery" && design.grid.cells !== "tiles")) && (
             <div className="mt-3">
-              <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Artist (smooth)", stepped: "Stepped cell outline", snug: "Snug (hugs letters)", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => { d.shape.outline = v; if (v === "stepped") d.shape.shade = false; })} />
+              {/* Mystery case pages never use the artist curve (letters must sit inside the line), so it isn't offered there. */}
+              <Seg label="Shape outline" value={tool === "mystery" && design.shape.outline === "smooth" ? "snug" : design.shape.outline} options={tool === "mystery" ? DESIGN_OPTIONS.OUTLINES.filter((o) => o !== "smooth") : DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Artist (smooth)", stepped: "Stepped cell outline", snug: "Snug (hugs letters)", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => { d.shape.outline = v; if (v === "stepped") d.shape.shade = false; })} />
               {design.shape.outline === "stepped" && (
                 <div className="pg-outline-colors mt-2" data-testid="outline-colors">
                   <span className="form-label small mb-0">Outline colour</span>

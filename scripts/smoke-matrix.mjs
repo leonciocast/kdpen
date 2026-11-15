@@ -249,8 +249,17 @@ async function run(browser, spec, idx) {
     }
     if (spec.tool === "mystery") {
       const shapes = await page.$$eval('[data-testid^="lineup-"][data-shape]', (els) => els.map((e) => e.dataset.shape)).catch(() => []);
-      const bad = shapes.filter((k) => /^(letter[CFIJKLPSTVXYZ]|digit[1234 78]|checkers|islands9|zigzag|wave|blockx|snowflake)$/.test(k));
-      if (bad.length) problems.push(`mystery lineup offers shapes that can't hold a case: ${[...new Set(bad)].join(", ")}`);
+      // Mystery only uses compact, solid shapes (no letters but H, no digits, no long or leggy animals, no frames or clusters).
+      const bad = shapes.filter((k) => /^(letter[A-GI-Z]|digit\d|checkers|islands\d|corners|boxframe|windowframe|zigzag|wave|blockx|snowflake|goat|flamingo|rooster|horse|airplane|crown|guitar|giraffe|dragon|cat|dog|bear|squirrel|car|pig|mouse|bee|elephant|lion|owl|fox|whale|dolphin|fish)$/.test(k));
+      if (bad.length) problems.push(`mystery lineup offers shapes that aren't compact: ${[...new Set(bad)].join(", ")}`);
+      if (process.env.SHOT_DIR) {
+        await page.screenshot({ path: `${process.env.SHOT_DIR}/mystery-plan-${idx}.png`, fullPage: true }).catch(() => {});
+        if (await has(tid("lineup-0"))) {
+          await click("lineup-0", 500);
+          await page.screenshot({ path: `${process.env.SHOT_DIR}/mystery-picker-${idx}.png`, fullPage: true }).catch(() => {});
+          if (await has(tid("override-close"))) await click("override-close");
+        }
+      }
     }
   }
 
@@ -276,7 +285,7 @@ async function run(browser, spec, idx) {
           await pause(400);
           const c = await page.$(tid(`shape-${spec.oneShape}`));
           if (c) await c.click(), await pause(500);
-          else if (spec.tool === "mystery" && /^letter[CFIJKLPSTVXYZ]$/.test(spec.oneShape)) step("thin letter not offered for mystery (expected)");
+          else if (spec.tool === "mystery" && /^letter[A-GI-Z]$/.test(spec.oneShape)) step("letter not offered for mystery (expected: compact shapes only)");
           else problems.push(`shape ${spec.oneShape} not offered`);
           await page.fill(tid("shape-search"), "");
         } else await pickIn("shape-picker", pick(["category", "search", "recent"], r)).catch(() => {});
