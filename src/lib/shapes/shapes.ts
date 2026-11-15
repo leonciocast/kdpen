@@ -938,15 +938,36 @@ const letteredCache = new Map<string, Pt[][]>();
  */
 export type OutlineStyle = "smooth" | "snug" | "stepped" | "blocky";
 
-/** Inset of a stepped cell-edge stroke, in cells, so letters never touch the line. */
-export const STEPPED_INSET = 0.12;
+/**
+ * Outset of a stepped cell-edge stroke, in cells. The path sits just outside
+ * the lettered cells (and on the hole side of a hole) so a thin stroke never
+ * runs through the glyphs. 0.05 outside the cell edge leaves about 0.25 cell
+ * of clearance around a typical 0.6-cell letter.
+ */
+export const STEPPED_OUTSET = 0.05;
 
-/** Exact cell-edge loops, inset slightly so a thin stroke stays off the letters. */
-export function steppedOutlines(mask: Mask, inset = STEPPED_INSET): Pt[][] {
-  return maskLoops(mask)
-    .map((L) => offsetPoly(L, -inset))
-    .map((L) => dropClose(L))
-    .filter((L) => L.length >= 4);
+/**
+ * Exact cell-edge loops, outset by unioning a slightly expanded square around
+ * every lettered cell. A vertex offset of the raw loops would cut into a
+ * neighbour at diagonal pinches (the stairs of an N, a sunburst ray, etc.).
+ */
+export function steppedOutlines(mask: Mask, outset = STEPPED_OUTSET): Pt[][] {
+  const parts: [number, number][][][][] = [];
+  for (let r = 0; r < mask.length; r++)
+    for (let c = 0; c < mask.length; c++) {
+      if (!mask[r][c]) continue;
+      const x0 = c - outset;
+      const y0 = r - outset;
+      const x1 = c + 1 + outset;
+      const y1 = r + 1 + outset;
+      parts.push([[[[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]]]]);
+    }
+  if (!parts.length) return [];
+  try {
+    return multiToRings(unionAll(parts)).map((L) => dropClose(L)).filter((L) => L.length >= 4);
+  } catch {
+    return maskLoops(mask).map((L) => dropClose(offsetPoly(L, outset))).filter((L) => L.length >= 4);
+  }
 }
 
 export function letteredOutlines(key: ShapeKey | undefined, size: number, style: OutlineStyle = "smooth"): Pt[][] {

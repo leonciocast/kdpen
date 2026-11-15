@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANIMAL_GROUPS, ANIMAL_KEYS, ARTIST_MARGIN, CATEGORIES, CELL_DILATE, CROSSWORD_SHAPES, SHAPES, animalGroupOf, shapeCategory, shapesInCategory, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, maskLoops, shapeInfo, shapeMask, shapeOutline, steppedOutlines, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
+import { ANIMAL_GROUPS, ANIMAL_KEYS, ARTIST_MARGIN, CATEGORIES, CELL_DILATE, CROSSWORD_SHAPES, SHAPES, animalGroupOf, isSteppedShape, shapeCategory, shapesInCategory, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, maskLoops, shapeInfo, shapeMask, shapeOutline, steppedOutlines, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
 import { ALL_DIRECTIONS, checkPlacement, findOccurrences, gridForm, makePlacement, mulberry32, placementCells, Placement } from "../src/lib/wordsearch/engine";
 import { resolveFixed, resolveFreeEnd, snapStart, validDirectionsFrom, validStartCells } from "../src/lib/wordsearch/snap";
 import { WS_DIFFICULTIES, suggestGridSize } from "../src/lib/wordsearch/difficulty";
@@ -379,9 +379,61 @@ describe("shape masks", () => {
       }
       const outer = rings.filter((r) => Math.abs(area(r)) > 0.5);
       expect(outer.length, `${key} outer rings`).toBeGreaterThanOrEqual(minIslands);
-      // Inset rings sit on the lettered side of the cell edge.
+      // Outset rings sit just outside the lettered cells (and on the hole side).
       const raw = maskLoops(m);
       expect(raw.length, `${key} raw loops`).toBeGreaterThanOrEqual(rings.length);
+    }
+  });
+
+
+  it("keeps every stepped, cluster and letter glyph at least 0.2 cell from the stroke", () => {
+    const distSeg = (px: number, py: number, ax: number, ay: number, bx: number, by: number) => {
+      const dx = bx - ax;
+      const dy = by - ay;
+      const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
+      return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+    };
+    const distBox = (cx: number, cy: number, half: number, rings: [number, number][][]) => {
+      let best = Infinity;
+      const pts: [number, number][] = [];
+      const steps = 8;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        pts.push([cx - half + 2 * half * t, cy - half], [cx - half + 2 * half * t, cy + half], [cx - half, cy - half + 2 * half * t], [cx + half, cy - half + 2 * half * t]);
+      }
+      for (const [x, y] of pts) {
+        for (const ring of rings) {
+          for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+            best = Math.min(best, distSeg(x, y, ring[j][0], ring[j][1], ring[i][0], ring[i][1]));
+          }
+        }
+      }
+      return best;
+    };
+    // Typical word-search letters are 0.6 of a cell; a 0.04-em baseline shift is applied when they are drawn.
+    const letterFrac = 0.6;
+    const half = letterFrac / 2;
+    const keys = SHAPES.filter((s) => isSteppedShape(s.key)).map((s) => s.key);
+    expect(keys.length).toBeGreaterThan(20);
+    for (const k of keys) {
+      const n = Math.max(shapeInfo(k).minSize ?? 24, 24);
+      const m = shapeMask(k, n)!;
+      const rings = letteredOutlines(k, n, "stepped");
+      expect(rings[0]?.length, k).toBeGreaterThanOrEqual(4);
+      let used = 0;
+      let closest = Infinity;
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          if (!m[r][c]) continue;
+          used++;
+          const cx = c + 0.5;
+          const cy = r + 0.5 + 0.04 * letterFrac;
+          const d = distBox(cx, cy, half, rings);
+          if (d < closest) closest = d;
+          expect(d, `${k} glyph at ${r},${c} is ${d.toFixed(3)} cells from the stroke`).toBeGreaterThanOrEqual(0.2);
+        }
+      expect(used, k).toBeGreaterThan(0);
+      expect(closest, `${k} closest glyph`).toBeGreaterThanOrEqual(0.2);
     }
   });
 
