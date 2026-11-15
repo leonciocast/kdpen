@@ -2,10 +2,12 @@
  * Puzzle grid shapes. Every shape is a polygon in a unit box; a puzzle of
  * size N gets a boolean mask of the N×N cells that the shape covers
  * (including partially covered cells, cleaned so thin tips and stray cells
- * disappear). Word-search pages draw the shaded outline from those lettered
- * cells so grey fill and letters always match. Geometric shapes still keep a
- * small inset so letters sit inside a decorative frame. Pure (no DOM): shared
- * by the engine, the PDF renderer, the UI and tests.
+ * disappear). Word-search pages draw a smooth silhouette: the artist curve
+ * unioned with a round dilation of the lettered cells (so every letter sits
+ * inside the stroke) and clipped to a slightly larger dilation (so grey never
+ * extends more than about half a cell past a letter). Geometric shapes still
+ * keep a small inset so letters sit inside a decorative frame. Pure (no DOM):
+ * shared by the engine, the PDF renderer, the UI and tests.
  */
 
 import polygonClipping from "polygon-clipping";
@@ -275,8 +277,19 @@ const INSET = 0.5 + OUTLINE_PAD;
 /** Animals: include a cell when this fraction of it sits inside the silhouette. */
 const COVERAGE = 0.2;
 const COVERAGE_SAMPLES = 5;
-/** Lettered cells are dilated by this many cells (round joins) before clipping the SVG silhouette. */
-export const CELL_DILATE = 0.55;
+/** Outer cap: no shade farther than this from a lettered cell (round joins). */
+export const CELL_DILATE = 0.6;
+/** Extra clearance, in cells, between a letter's glyph box and the stroke's inner edge. */
+export const GLYPH_MARGIN = 0.15;
+/** Maximum letter size as a fraction of a cell (`wsLetterSize` cap / 7pt floor). */
+export const GLYPH_FRAC = 0.82;
+/**
+ * Half-side of the rounded box wrapped around each letter so the glyph, a
+ * {@link GLYPH_MARGIN} gap, and half of a default 1.2pt stroke (over a
+ * conservative 7pt cell) sit inside the outline path. A little extra keeps
+ * box corners strictly inside the polygon.
+ */
+export const GLYPH_WRAP_HALF = GLYPH_FRAC / 2 + GLYPH_MARGIN + 1.2 / 2 / 7 + 0.02;
 
 // ---------------------------------------------------------------- geometry
 
@@ -561,16 +574,6 @@ function closeRing(pts: Pt[]): Pt[] {
   return [...p, [p[0][0], p[0][1]] as Pt];
 }
 
-function lineIntersect(p: Pt, p2: Pt, q: Pt, q2: Pt): Pt | null {
-  const rx = p2[0] - p[0];
-  const ry = p2[1] - p[1];
-  const sx = q2[0] - q[0];
-  const sy = q2[1] - q[1];
-  const den = rx * sy - ry * sx;
-  if (Math.abs(den) < 1e-12) return null;
-  const t = ((q[0] - p[0]) * sy - (q[1] - p[1]) * sx) / den;
-  return [p[0] + t * rx, p[1] + t * ry];
-}
 
 /**
  * Offset a loop away from the used cells (visual left) by `r`, with round
@@ -617,12 +620,10 @@ function offsetRound(pts: Pt[], r: number, arcPts = 12): Pt[] {
       const bOff1: Pt = [b[0] + n1[0] * r, b[1] + n1[1] * r];
       const bOff2: Pt = [b[0] + n2[0] * r, b[1] + n2[1] * r];
       const cOff: Pt = [c[0] + n2[0] * r, c[1] + n2[1] * r];
-      const hit = lineIntersect(aOff, bOff1, bOff2, cOff);
-      if (hit && Math.hypot(hit[0] - b[0], hit[1] - b[1]) <= r * 4) out.push(hit);
-      else {
-        out.push(bOff1);
-        out.push(bOff2);
-      }
+      // Bevel concave corners so an offset never spikes past r (a long miter
+      // would let empty grey leak more than half a cell from a letter).
+      out.push(bOff1);
+      out.push(bOff2);
     }
   }
   return dropClose(out);
@@ -637,19 +638,173 @@ function ringsToMulti(rings: Pt[][]): [number, number][][][] {
 }
 
 function multiToRings(multi: [number, number][][][]): Pt[][] {
-  const rings = multi.flat().map((r) => dropClose(r)).filter((r) => r.length >= 3 && Math.abs(signedArea(r)) > 1e-4);
+  const rings = multi.flat().map((r) => dropClose(r)).filter((r) => r.length >= 3 && Math.abs(signedArea(r)) > 0.2);
   rings.sort((a, b) => Math.abs(signedArea(b)) - Math.abs(signedArea(a)));
   return rings;
+}
+
+
+
+
+/** Push the artist curve out just enough that every letter glyph box sits inside
+ * it, with a smooth bump around each overflowing corner so the silhouette
+ * keeps its shape instead of ballooning or turning into cell stairs. */
+function inflateToGlyphs(sil: Pt[], mask: Mask): Pt[] {
+  const p = dropClose(sil);
+  const n = p.length;
+  if (n < 3) return p;
+  const half = GLYPH_WRAP_HALF;
+  const dy = 0.04 * GLYPH_FRAC;
+  const outside: Pt[] = [];
+  for (let r = 0; r < mask.length; r++)
+    for (let c = 0; c < mask.length; c++) {
+      if (!mask[r][c]) continue;
+      const cx = c + 0.5;
+      const cy = r + 0.5 + dy;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]] as const) {
+        const q: Pt = [cx + sx * half, cy + sy * half];
+        if (!inside(p, q[0], q[1])) outside.push(q);
+      }
+    }
+  if (!outside.length) return p;
+
+  const edgeLen: number[] = [];
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    const L = Math.hypot(p[(i + 1) % n][0] - p[i][0], p[(i + 1) % n][1] - p[i][1]);
+    edgeLen.push(L);
+    total += L;
+  }
+  const arc: number[] = [0];
+  for (let i = 0; i < n - 1; i++) arc.push(arc[i] + edgeLen[i]);
+  const pathDist = (s1: number, s2: number) => {
+    const d = Math.abs(s1 - s2);
+    return Math.min(d, total - d);
+  };
+  const closest = (c: Pt) => {
+    let bestD = Infinity;
+    let bestS = 0;
+    let acc = 0;
+    for (let i = 0; i < n; i++) {
+      const a = p[i];
+      const b = p[(i + 1) % n];
+      const vx = b[0] - a[0];
+      const vy = b[1] - a[1];
+      const len2 = vx * vx + vy * vy || 1e-12;
+      const t = Math.max(0, Math.min(1, ((c[0] - a[0]) * vx + (c[1] - a[1]) * vy) / len2));
+      const d = Math.hypot(c[0] - (a[0] + t * vx), c[1] - (a[1] + t * vy));
+      if (d < bestD) {
+        bestD = d;
+        bestS = acc + t * edgeLen[i];
+      }
+      acc += edgeLen[i];
+    }
+    return { d: bestD, s: bestS };
+  };
+
+  const left = (a: Pt, b: Pt): Pt => {
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const l = Math.hypot(dx, dy) || 1;
+    return [dy / l, -dx / l];
+  };
+  const normals: Pt[] = p.map((_, i) => {
+    const n1 = left(p[(i - 1 + n) % n], p[i]);
+    const n2 = left(p[i], p[(i + 1) % n]);
+    let mx = n1[0] + n2[0];
+    let my = n1[1] + n2[1];
+    const l = Math.hypot(mx, my) || 1;
+    return [mx / l, my / l];
+  });
+
+  const d = Array(n).fill(0);
+  const sigma = 1.4;
+  for (const c of outside) {
+    const hit = closest(c);
+    const height = hit.d + 0.08;
+    for (let i = 0; i < n; i++) {
+      const s = pathDist(arc[i], hit.s);
+      const w = Math.exp(-0.5 * (s / sigma) ** 2);
+      if (w < 0.02) continue;
+      d[i] = Math.max(d[i], height * w);
+    }
+  }
+  return p.map((q, i) => [q[0] + d[i] * normals[i][0], q[1] + d[i] * normals[i][1]] as Pt);
+}
+
+/** Axis-aligned box centred at (cx, cy), clockwise in y-down coordinates. */
+function glyphBox(cx: number, cy: number, half: number): Pt[] {
+  return closeRing([
+    [cx + half, cy - half],
+    [cx + half, cy + half],
+    [cx - half, cy + half],
+    [cx - half, cy - half],
+  ]);
+}
+
+function unionAll(geoms: [number, number][][][][]): [number, number][][][] {
+  const parts = geoms.filter((g) => g.length);
+  if (!parts.length) return [];
+  if (parts.length === 1) return parts[0];
+  const mid = Math.ceil(parts.length / 2);
+  return polygonClipping.union(unionAll(parts.slice(0, mid)), unionAll(parts.slice(mid)));
+}
+
+
+
+/** Drop sliver holes and pull any vertex farther than {@link CELL_DILATE} back
+ * toward the nearest lettered cell so the half-cell test always holds. */
+function sanitizeRings(rings: Pt[][], mask: Mask): Pt[][] {
+  const n = mask.length;
+  const kept: Pt[][] = [];
+  for (const L of rings) {
+    const a = signedArea(L);
+    if (Math.abs(a) < 0.2) continue;
+    if (a <= 0) {
+      let swallows = false;
+      for (let r = 0; r < n && !swallows; r++)
+        for (let c = 0; c < n && !swallows; c++)
+          if (mask[r][c] && inside(L, c + 0.5, r + 0.5)) swallows = true;
+      if (swallows) continue;
+    }
+    kept.push(L);
+  }
+  const src = kept.length ? kept : rings;
+  const rmax = CELL_DILATE;
+  return src.map((L) => {
+    if (signedArea(L) <= 0) return L;
+    return L.map((p) => {
+      let best = Infinity;
+      let qx = p[0];
+      let qy = p[1];
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          if (!mask[r][c]) continue;
+          const x = p[0] < c ? c : p[0] > c + 1 ? c + 1 : p[0];
+          const y = p[1] < r ? r : p[1] > r + 1 ? r + 1 : p[1];
+          const d = Math.hypot(p[0] - x, p[1] - y);
+          if (d < best) {
+            best = d;
+            qx = x;
+            qy = y;
+          }
+        }
+      if (!isFinite(best) || best <= rmax + 1e-9) return p;
+      const t = rmax / best;
+      return [qx + (p[0] - qx) * t, qy + (p[1] - qy) * t] as Pt;
+    });
+  });
 }
 
 const letteredCache = new Map<string, Pt[][]>();
 
 /**
- * Word-search shade/outline: the professional silhouette curve clipped to the
- * lettered cells dilated by {@link CELL_DILATE} with round joins. Where the
- * body is full of letters the original curve shows; unlettered tips are
- * trimmed smoothly just past the last letters. `style: "blocky"` keeps the
- * cell-hugging staircase as an optional look.
+ * Word-search shade/outline. For animals the default ("smooth") inflates the
+ * artist curve just enough that every letter's glyph box sits inside the
+ * stroke, then clips to a round dilation of the lettered cells so unlettered
+ * tips are trimmed and grey never sits more than about half a cell from a
+ * letter. Geometric shapes stay silhouette ∩ cap. `style: "blocky"` keeps
+ * the cell-hugging staircase.
  */
 export type OutlineStyle = "smooth" | "blocky";
 
@@ -661,14 +816,53 @@ export function letteredOutlines(key: ShapeKey | undefined, size: number, style:
   const hit = letteredCache.get(id);
   if (hit) return hit;
   const sil = ringsToMulti([shapeOutline(key, size)]);
-  const dil = ringsToMulti(maskLoops(mask).map((L) => offsetRound(L, CELL_DILATE)));
+  const loops = maskLoops(mask);
+  const cap = ringsToMulti(loops.map((L) => offsetRound(L, CELL_DILATE)));
   let rings: Pt[][] = [];
   try {
-    if (sil.length && dil.length) rings = multiToRings(polygonClipping.intersection(sil, dil));
+    if (shapeInfo(key).group === "animals") {
+      if (sil.length && cap.length) {
+        const base = shapeOutline(key, size);
+        const inflated = inflateToGlyphs(subdivide(base, 0.4), mask);
+        let grown = sil;
+        try { grown = polygonClipping.union(sil, ringsToMulti([inflated])); } catch { grown = sil; }
+        // Any glyph box still outside the inflated curve gets a local cap so
+        // letters never cross the stroke; along a well-inflated edge this is empty
+        // and the artist curve shows.
+        const leftover: [number, number][][][][] = [];
+        const half = GLYPH_WRAP_HALF;
+        const dy = 0.04 * GLYPH_FRAC;
+        const grownRings = multiToRings(grown);
+        const inGrown = (x: number, y: number) => {
+          let hit = false;
+          for (const ring of grownRings) if (inside(ring, x, y)) hit = !hit;
+          return hit;
+        };
+        const boxIn = (cx: number, cy: number) =>
+          [[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]].every(([sx, sy]) =>
+            inGrown(cx + sx * half, cy + sy * half),
+          );
+        for (let r = 0; r < mask.length; r++)
+          for (let c = 0; c < mask.length; c++) {
+            if (!mask[r][c]) continue;
+            const cx = c + 0.5;
+            const cy = r + 0.5 + dy;
+            if (!boxIn(cx, cy)) leftover.push([[glyphBox(cx, cy, half)]]);
+          }
+        if (leftover.length) {
+          try { grown = polygonClipping.union(grown, unionAll(leftover)); } catch { /* keep grown */ }
+        }
+        const padded = ringsToMulti(multiToRings(grown).map((L) => (signedArea(L) > 0 ? offsetRound(L, 0.06) : L)));
+        rings = multiToRings(polygonClipping.intersection(padded.length ? padded : grown, cap));
+      }
+    } else if (sil.length && cap.length) {
+      rings = multiToRings(polygonClipping.intersection(sil, cap));
+    }
   } catch {
     rings = [];
   }
-  if (!rings.length) rings = maskOutlines(mask, CELL_DILATE);
+  if (!rings.length) rings = maskLoops(mask).map((L) => offsetRound(L, CELL_DILATE)).filter((L) => L.length >= 3);
+  if (rings.length) rings = sanitizeRings(rings, mask);
   letteredCache.set(id, rings);
   return rings;
 }
