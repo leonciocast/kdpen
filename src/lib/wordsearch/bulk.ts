@@ -43,9 +43,17 @@ export function balancedChunks<T>(items: T[], per: number): T[][] {
 export function splitIntoPuzzles(entries: WordEntry[], opts: SplitOptions): PuzzleSpec[] {
   const per = Math.max(1, Math.min(LIMITS.maxWordsPerPuzzle, opts.wordsPerPuzzle));
   const groups = new Map<string, string[]>();
+  const seen = new Map<string, Set<string>>();
   for (const e of entries) {
     const key = opts.groupByTheme ? (e.theme ?? "").trim() : "";
-    if (!groups.has(key)) groups.set(key, []);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      seen.set(key, new Set());
+    }
+    // The same word may be in two themes; inside one puzzle group it only goes in once.
+    const form = gridForm(e.word);
+    if (seen.get(key)!.has(form)) continue;
+    seen.get(key)!.add(form);
     groups.get(key)!.push(e.word);
   }
   const specs: PuzzleSpec[] = [];

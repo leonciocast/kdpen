@@ -3,9 +3,11 @@ import { tidyHandlers } from "@/components/ui/tidyText";
 import { tidyLines, tidySpaces } from "@/lib/text";
 import { plural } from "@/lib/plural";
 import React, { useMemo, useRef, useState } from "react";
-import { BsArrowRepeat, BsDownload, BsKeyboard, BsLightningCharge, BsListUl, BsMagic, BsPlusLg, BsPuzzle, BsSearch, BsTrash, BsUpload } from "react-icons/bs";
+import { DraftTheme, PasteBox, PasteReview, draftsFrom, pasteTotals, totalsLine } from "@/components/ui/SmartPaste";
+import { PASTE_EXAMPLE_CLUES, parsePasted } from "@/lib/paste/parse";
+import { BsClipboardCheck, BsArrowRepeat, BsDownload, BsKeyboard, BsLightningCharge, BsListUl, BsMagic, BsPlusLg, BsPuzzle, BsSearch, BsTrash, BsUpload } from "react-icons/bs";
 import { Panel } from "@/components/ui/Panel";
-import { ChoiceCards, Question, QuestionFlow } from "@/components/ui/Flow";
+import { ChoiceCards, FINISH, Question, QuestionFlow } from "@/components/ui/Flow";
 import { useStages } from "@/components/ui/useStages";
 import { toast } from "react-toastify";
 import PageHeader from "@/components/ui/PageHeader";
@@ -17,7 +19,7 @@ import { useDesign } from "@/components/ui/useDesign";
 import Callout from "@/components/ui/Callout";
 import CsvDrop, { downloadText } from "@/components/ui/CsvDrop";
 import { Stepper } from "@/components/ui/Wizard";
-import { CROSSWORD_MAX_LETTERS, CROSSWORD_MAX_WORDS, ClueEntry, Crossword, generateCrossword, parseClueLine, validateEntries } from "@/lib/crossword/engine";
+import { CROSSWORD_MAX_LETTERS, CROSSWORD_MAX_WORDS, ClueEntry, Crossword, cwLetters, generateCrossword, parseClueLine, validateEntries } from "@/lib/crossword/engine";
 import { buildCrosswordBook, CrosswordItem } from "@/lib/crossword/pdf";
 import { balancedChunks } from "@/lib/wordsearch/bulk";
 import { mulberry32, randomSeed } from "@/lib/wordsearch/engine";
@@ -104,8 +106,10 @@ export default function CrossWordGenerator() {
   const { step, goTo, flow: stage } = useStages(STEPS.length);
   const [builtSig, setBuiltSig] = useState("");
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<"type" | "upload">("type");
-  const [picked, setPicked] = useState<"type" | "upload" | null>(null);
+  const [mode, setMode] = useState<"paste" | "type" | "upload">("paste");
+  const [picked, setPicked] = useState<"paste" | "type" | "upload" | null>(null);
+  const [pasted, setPasted] = useState("");
+  const [drafts, setDrafts] = useState<DraftTheme[]>([]);
   const [entries, setEntries] = useState<ClueEntry[]>([]);
   const [perPuzzle, setPerPuzzle] = useState(12);
   const [puzzles, setPuzzles] = useState<CwPuzzle[]>([]);
@@ -130,6 +134,34 @@ export default function CrossWordGenerator() {
     }
     return res;
   };
+
+  /** Pasted themes → the clue list. A word may be in two themes; repeats inside a theme are skipped. */
+  const addPasted = (themes: DraftTheme[]): number => {
+    const key = (theme: string, answer: string) => `${theme.toLowerCase()}\u0001${cwLetters(answer)}`;
+    const seen = new Set(entries.map((e) => key(e.theme ?? "", e.answer)));
+    const out: ClueEntry[] = [];
+    let skipped = 0;
+    for (const t of themes) {
+      const theme = tidySpaces(t.name);
+      for (const it of t.items) {
+        const k = key(theme, it.word);
+        if (seen.has(k)) {
+          skipped++;
+          continue;
+        }
+        if (entries.length + out.length >= CROSSWORD_MAX_WORDS) break;
+        seen.add(k);
+        out.push(theme ? { answer: it.word, clue: it.clue ?? "", theme } : { answer: it.word, clue: it.clue ?? "" });
+      }
+    }
+    if (skipped) toast.info(`${plural(skipped, "clue")} already in your list.`);
+    if (out.length) {
+      setEntries((prev) => [...prev, ...out]);
+      toast.success(`Added ${plural(out.length, "clue")} in ${plural(themes.filter((t) => t.items.length).length, "theme")}.`);
+    }
+    return out.length;
+  };
+  const pasteSum = pasteTotals(drafts, perPuzzle);
 
   /** Adds the typed lines; returns how many were added. */
   const handleAdd = (): number => {
@@ -278,8 +310,10 @@ export default function CrossWordGenerator() {
               setMode(v);
               stage(0).setSub(v);
             }}
+            cols={3}
             options={[
-              { value: "type", title: "Type my clues", text: "Type each word with its clue, one per line. Best for most books.", icon: <BsKeyboard />, testId: "choose-type", badge: "Recommended", cta: "Type my clues" },
+              { value: "paste", title: "Paste a list. I'll find the themes", text: "Paste WORD - clue lines in any format, with theme names above them. Each theme becomes its own crosswords.", icon: <BsClipboardCheck />, testId: "choose-paste", badge: "Recommended", cta: "Paste my list" },
+              { value: "type", title: "Type my clues", text: "Type each word with its clue, one per line, all in one list.", icon: <BsKeyboard />, testId: "choose-type", cta: "Type my clues" },
               { value: "upload", title: "Upload a file", text: "Already have a list? Import a CSV with words, clues and optional themes.", icon: <BsUpload />, testId: "choose-upload", cta: "Upload a file" },
             ]}
           />
@@ -310,7 +344,59 @@ export default function CrossWordGenerator() {
         </>
       ),
     },
-    ...(mode === "type"
+    ...(mode === "paste"
+      ? [
+          {
+            key: "paste",
+            wide: true,
+            title: "Paste your words and clues",
+            lead: (
+              <>
+                One per line, like <b>LION - King of the jungle</b> or <b>LION: King of the jungle</b>. Put each theme name above its clues; numbers, bullets, tabs and CSV all work.
+              </>
+            ),
+            canNext: pasted.trim().length > 0,
+            blockedHint: "Paste your list, or press Paste example",
+            nextLabel: "Find my themes",
+            nextTestId: "paste-next",
+            onNext: () => {
+              const res = parsePasted(pasted, { clues: true, maxLetters: CROSSWORD_MAX_LETTERS });
+              if (!res.themes.some((t) => t.items.length)) {
+                toast.error("We couldn't find any words with clues. Write each line as WORD - clue.");
+                return false;
+              }
+              setDrafts(draftsFrom(res));
+              return "review";
+            },
+            body: <PasteBox value={pasted} onChange={setPasted} clues example={PASTE_EXAMPLE_CLUES} maxLetters={CROSSWORD_MAX_LETTERS} />,
+          } as Question,
+          {
+            key: "review",
+            wide: true,
+            title: "Check your themes",
+            lead: "Rename a theme, click a clue to fix it, or press × to remove it. Each theme becomes its own titled crosswords.",
+            canNext: pasteSum.words > 0 && drafts.every((t) => !t.items.length || t.name.trim()),
+            blockedHint: pasteSum.words ? "Give every theme a name" : "There are no clues left",
+            hint: totalsLine(pasteSum, "crossword", "clue"),
+            nextLabel: `Add ${plural(pasteSum.words, "clue")}`,
+            nextTestId: "paste-apply",
+            enter: false,
+            onNext: () => (addPasted(drafts) || entries.length ? FINISH : false),
+            body: (
+              <PasteReview
+                themes={drafts}
+                setThemes={setDrafts}
+                clues
+                wordsPerPuzzle={perPuzzle}
+                longAt={12}
+                longNote={(n, c) => `${c === 1 ? "A long answer is" : "Long answers are"} harder to connect; that crossword will be at least ${n} squares wide.`}
+                maxLetters={CROSSWORD_MAX_LETTERS}
+                puzzleNoun="crossword"
+              />
+            ),
+          } as Question,
+        ]
+      : mode === "type"
       ? [
           {
             key: "type",
@@ -417,7 +503,7 @@ export default function CrossWordGenerator() {
               </span>
               <h4>Your list is empty</h4>
               <p>
-                Press <b>Add more</b> to type or upload your words and clues.
+                Press <b>Add more</b> to paste, type or upload your words and clues.
               </p>
             </div>
           ) : (
@@ -432,14 +518,14 @@ export default function CrossWordGenerator() {
                       )}
                       <div className="pg-list pg-list-tall">
                         {filtered.slice(0, SHOW).map((e) => (
-                          <div className="pg-list-row" key={e.answer}>
+                          <div className="pg-list-row" key={`${e.i}:${e.answer}`}>
                             <span className="pg-num">{e.i + 1}</span>
                             <span className="fw-semibold text-nowrap" style={{ minWidth: "6rem" }}>
                               {e.answer}
                             </span>
-                            <input className="form-control form-control-sm" aria-label={`Clue for ${e.answer}`} value={e.clue} onChange={(ev) => setEntries((prev) => prev.map((x) => (x.answer === e.answer ? { ...x, clue: ev.target.value } : x)))} />
+                            <input className="form-control form-control-sm" aria-label={`Clue for ${e.answer}`} value={e.clue} onChange={(ev) => setEntries((prev) => prev.map((x, j) => (j === e.i ? { ...x, clue: ev.target.value } : x)))} />
                             {e.theme && <span className="pg-badge neutral text-truncate" style={{ maxWidth: 110 }}>{e.theme}</span>}
-                            <button type="button" className="btn btn-ghost btn-icon" aria-label={`Remove ${e.answer}`} onClick={() => setEntries((prev) => prev.filter((x) => x.answer !== e.answer))}>
+                            <button type="button" className="btn btn-ghost btn-icon" aria-label={`Remove ${e.answer}`} onClick={() => setEntries((prev) => prev.filter((_, j) => j !== e.i))}>
                               <BsTrash />
                             </button>
                           </div>

@@ -279,7 +279,7 @@ export default function WordSearch() {
       <Stepper steps={STEPS} current={step} maxReachable={maxReachable} onSelect={goTo} />
       <div className="pg-card pg-wizard-card">
         <>
-          {step === 0 && <StepWords entries={entries} setEntries={setEntries} flow={flow(0)} />}
+          {step === 0 && <StepWords entries={entries} setEntries={setEntries} flow={flow(0)} wordsPerPuzzle={settings.wordsPerPuzzle} fixedGrid={settings.sizeMode === "auto" ? undefined : settings.gridSize} />}
           {step === 1 && <StepSettings settings={settings} setSettings={setSettings} specs={specs} wordCount={entries.length} themeCount={themeCount} flow={flow(1)} />}
           {step === 2 && <StepPlace puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} autoDirs={dirs} stale={stale} create={create} finishAll={finishAll} running={running} flow={flow(2)} />}
           {step === 3 && (

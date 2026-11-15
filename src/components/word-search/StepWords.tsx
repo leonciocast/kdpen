@@ -1,6 +1,8 @@
 "use client";
 import React, { useMemo, useState } from "react";
-import { BsDownload, BsKeyboard, BsListUl, BsMagic, BsPlusLg, BsSearch, BsTrash, BsUpload } from "react-icons/bs";
+import { BsClipboardCheck, BsDownload, BsKeyboard, BsListUl, BsMagic, BsPlusLg, BsSearch, BsTrash, BsUpload } from "react-icons/bs";
+import { DraftTheme, PasteBox, PasteReview, draftsFrom, pasteTotals, totalsLine } from "@/components/ui/SmartPaste";
+import { PASTE_EXAMPLE, lettersOf, parsePasted } from "@/lib/paste/parse";
 import { Panel } from "@/components/ui/Panel";
 import { ChoiceCards, FINISH, FlowCtl, Question, QuestionFlow } from "@/components/ui/Flow";
 import { toast } from "react-toastify";
@@ -16,16 +18,55 @@ interface Props {
   entries: WordEntry[];
   setEntries: React.Dispatch<React.SetStateAction<WordEntry[]>>;
   flow: FlowCtl;
+  /** Words per puzzle (puzzle settings), so the paste review can count puzzles. */
+  wordsPerPuzzle?: number;
+  /** Fixed grid size from the settings, or undefined for automatic sizes. */
+  fixedGrid?: number;
 }
+
+type Mode = "paste" | "type" | "upload";
 
 const SHOW = 200;
 
-export default function StepWords({ entries, setEntries, flow }: Props) {
+export default function StepWords({ entries, setEntries, flow, wordsPerPuzzle = 20, fixedGrid }: Props) {
   const [input, setInput] = useState("");
   const [theme, setTheme] = useState("");
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState<"type" | "upload">(flow.sub === "upload" ? "upload" : "type");
-  const [picked, setPicked] = useState<"type" | "upload" | null>(null);
+  const [mode, setMode] = useState<Mode>(flow.sub === "upload" ? "upload" : flow.sub === "type" || flow.sub === "theme" ? "type" : "paste");
+  const [picked, setPicked] = useState<Mode | null>(null);
+  const [pasted, setPasted] = useState("");
+  const [drafts, setDrafts] = useState<DraftTheme[]>([]);
+  const longAt = fixedGrid ?? 10;
+  const longNote = (n: number, count: number) =>
+    fixedGrid ? `${count === 1 ? "It's" : "They're"} longer than your ${fixedGrid}×${fixedGrid} grid, so that puzzle's grid grows to ${n}×${n}.` : `${count === 1 ? "It makes" : "They make"} that puzzle's grid at least ${n}×${n}. Shorter words keep grids small.`;
+  const totals = pasteTotals(drafts, wordsPerPuzzle);
+
+  /** Pasted themes → the word list. The same word may sit in two themes; repeats within a theme are skipped. */
+  const addThemed = (themes: DraftTheme[]) => {
+    const seen = new Set(entries.map((e) => `${(e.theme ?? "").toLowerCase()}\u0001${lettersOf(e.word)}`));
+    const out: WordEntry[] = [];
+    let skipped = 0;
+    for (const t of themes) {
+      const name = tidySpaces(t.name);
+      for (const it of t.items) {
+        const key = `${name.toLowerCase()}\u0001${lettersOf(it.word)}`;
+        if (seen.has(key)) {
+          skipped++;
+          continue;
+        }
+        if (entries.length + out.length >= LIMITS.maxWords) break;
+        seen.add(key);
+        out.push(name ? { word: it.word, theme: name } : { word: it.word });
+      }
+    }
+    if (entries.length + out.length >= LIMITS.maxWords) toast.error(`You've reached the limit of ${LIMITS.maxWords.toLocaleString()} words.`);
+    if (skipped) toast.info(`${skipped.toLocaleString()} ${skipped === 1 ? "word was" : "words were"} already in your list.`);
+    if (out.length) {
+      setEntries((prev) => [...prev, ...out]);
+      toast.success(`Added ${out.length.toLocaleString()} words in ${themes.filter((t) => t.items.length).length} ${themes.length === 1 ? "theme" : "themes"}.`);
+    }
+    return out.length;
+  };
 
   const addEntries = (list: CsvEntry[], source: "typed" | "csv") => {
     const t0 = performance.now();
@@ -104,9 +145,11 @@ export default function StepWords({ entries, setEntries, flow }: Props) {
             setMode(v);
             flow.setSub(v);
           }}
+          cols={3}
           options={[
-            { value: "type", title: "Type my words", text: "Type or paste your words and phrases, one per line. Best for most books.", icon: <BsKeyboard />, testId: "choose-type", badge: "Recommended", cta: "Type my words" },
-            { value: "upload", title: "Upload a file", text: "Already have a list? Import a CSV or TXT file with up to 20,000 words.", icon: <BsUpload />, testId: "choose-upload", cta: "Upload a file" },
+            { value: "paste", title: "Paste a list. I'll find the themes", text: "Paste words in any format, with theme names above them. Each theme becomes its own titled puzzles.", icon: <BsClipboardCheck />, testId: "choose-paste", badge: "Recommended", cta: "Paste my list" },
+            { value: "type", title: "One theme for everything", text: "Type or paste words, one per line, and give them all one theme name (or none).", icon: <BsKeyboard />, testId: "choose-type", cta: "Type my words" },
+            { value: "upload", title: "Upload a CSV file", text: "A spreadsheet with words and an optional theme column. Up to 20,000 words.", icon: <BsUpload />, testId: "choose-upload", cta: "Upload a file" },
           ]}
         />
         <div className="pg-q-note">
@@ -135,6 +178,46 @@ export default function StepWords({ entries, setEntries, flow }: Props) {
         </div>
       </>
     ),
+  };
+
+  const paste: Question = {
+    key: "paste",
+    wide: true,
+    title: "Paste your word list",
+    lead: "Any format works: numbered or bulleted lists, commas, tabs, a spreadsheet or a CSV. Put each theme name above its words and we'll sort everything out.",
+    canNext: pasted.trim().length > 0,
+    blockedHint: "Paste your list, or press Paste example",
+    nextLabel: "Find my themes",
+    nextTestId: "paste-next",
+    onNext: () => {
+      const res = parsePasted(pasted, { maxLetters: LIMITS.maxGridSize });
+      const found = res.themes.reduce((n, t) => n + t.items.length, 0);
+      if (!found) {
+        toast.error("We couldn't find any words in that text. Put one word or phrase per line.");
+        return false;
+      }
+      setDrafts(draftsFrom(res));
+      return "review";
+    },
+    body: <PasteBox value={pasted} onChange={setPasted} example={PASTE_EXAMPLE} maxLetters={LIMITS.maxGridSize} />,
+  };
+
+  const review: Question = {
+    key: "review",
+    wide: true,
+    title: "Check your themes",
+    lead: "Rename a theme, click a word to fix it, or press × to remove it. Each theme becomes its own titled puzzles.",
+    canNext: totals.words > 0 && drafts.every((t) => !t.items.length || t.name.trim()),
+    blockedHint: totals.words ? "Give every theme a name" : "There are no words left",
+    hint: totalsLine(totals),
+    nextLabel: `Add ${totals.words.toLocaleString()} words`,
+    nextTestId: "paste-apply",
+    enter: false,
+    onNext: () => {
+      if (!addThemed(drafts) && !entries.length) return false;
+      return FINISH;
+    },
+    body: <PasteReview themes={drafts} setThemes={setDrafts} wordsPerPuzzle={wordsPerPuzzle} longAt={longAt} longNote={longNote} maxLetters={LIMITS.maxGridSize} />,
   };
 
   const type: Question = {
@@ -251,7 +334,7 @@ export default function StepWords({ entries, setEntries, flow }: Props) {
             </span>
             <h4>Your list is empty</h4>
             <p>
-              Press <b>Add more words</b> to type or upload your words.
+              Press <b>Add more words</b> to paste, type or upload your words.
             </p>
           </div>
         ) : (
@@ -266,7 +349,7 @@ export default function StepWords({ entries, setEntries, flow }: Props) {
             )}
             <div className="pg-list pg-list-tall" data-testid="word-list">
               {filtered.slice(0, SHOW).map((e) => (
-                <div className="pg-list-row" key={e.word}>
+                <div className="pg-list-row" key={`${e.i}:${e.word}`}>
                   <span className="pg-num">{e.i + 1}</span>
                   <span className="flex-grow-1 fw-semibold">
                     {e.word}
@@ -280,7 +363,7 @@ export default function StepWords({ entries, setEntries, flow }: Props) {
                   <span className="small text-muted" title="Letters in the grid">
                     {gridForm(e.word).length}
                   </span>
-                  <button type="button" className="btn btn-ghost btn-icon" aria-label={`Remove ${e.word}`} onClick={() => setEntries((prev) => prev.filter((x) => x.word !== e.word))}>
+                  <button type="button" className="btn btn-ghost btn-icon" aria-label={`Remove ${e.word}`} onClick={() => setEntries((prev) => prev.filter((_, j) => j !== e.i))}>
                     <BsTrash />
                   </button>
                 </div>
@@ -297,6 +380,6 @@ export default function StepWords({ entries, setEntries, flow }: Props) {
     ),
   };
 
-  const questions = [how, ...(mode === "type" ? [type, themeQ] : [upload]), list];
+  const questions = [how, ...(mode === "paste" ? [paste, review] : mode === "type" ? [type, themeQ] : [upload]), list];
   return <QuestionFlow questions={questions} flow={flow} />;
 }
