@@ -166,11 +166,28 @@ describe("casebook design", () => {
   });
 });
 
+describe("case keys read the way the reader counts", () => {
+  test("a two-word job counts the whole job, not its last word", async () => {
+    const { chooseKey, keyInstruction, keySourceText } = await import("../src/lib/mystery/model");
+    const culprit = { name: "Lavinia Thorne", role: "Spa founder", traits: ["hums"] };
+    // The bug: "letter 3 of the culprit's job" was read from "founder" (U), not "Spa founder" (A).
+    const p = chooseKey("P", 5, { culprit, title: "Q" }, 1)!;
+    expect(p).toMatchObject({ source: "role", position: 2 });
+    expect(p.spaced).toBeUndefined();
+    expect(keyInstruction(p)).toBe("Letter 2 of the culprit's job");
+    const u = chooseKey("U", 5, { culprit, title: "Q" }, 1)!;
+    expect(u).toMatchObject({ source: "role", position: 6, spaced: true });
+    expect(keyInstruction(u)).toBe("Letter 6 of the culprit's job, skipping spaces");
+    const c = { key: u, culprit, title: "Q" } as unknown as Parameters<typeof keySourceText>[0];
+    expect(keySourceText(c)[u.position - 1]).toBe("U");
+  });
+});
+
 describe("shapes for mystery cases", () => {
   test("only shapes that hold a case are offered", async () => {
     const { MYSTERY_SHAPES } = await import("../src/lib/shapes/shapes");
-    for (const k of ["letterL", "letterT", "digit1", "checkers", "islands9", "zigzag", "longneck"]) expect(MYSTERY_SHAPES).not.toContain(k);
-    for (const k of ["heart", "pear", "letterB", "letterE", "dragon", "bee"]) expect(MYSTERY_SHAPES).toContain(k);
+    for (const k of ["letterL", "letterT", "digit1", "checkers", "islands9", "zigzag", "longneck", "goat", "flamingo", "rooster", "crown", "airplane", "dragon", "letterB"]) expect(MYSTERY_SHAPES).not.toContain(k);
+    for (const k of ["heart", "pear", "letterE", "bear", "pig", "bee"]) expect(MYSTERY_SHAPES).toContain(k);
   });
   test("a shape that can't hold the evidence falls back to a square grid instead of failing", () => {
     // The original bug: Surprise me gave case 7 a thin shape, the whole build threw and an error toast appeared.

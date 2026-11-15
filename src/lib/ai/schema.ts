@@ -39,6 +39,8 @@ export const AiPerson = z.object({
 export const AiOutline = z.object({
   title: z.string().trim().min(3).max(70),
   intro: z.string().trim().min(10).max(500),
+  /** The one name of the main location, used word for word everywhere. */
+  place: z.string().trim().max(60).optional(),
   cast: z.array(AiPerson).min(3).max(30),
   mastermind: name,
   finalAnswer: z.string().trim().max(40),

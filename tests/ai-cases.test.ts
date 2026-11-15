@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
 import type { ConverseCommandOutput } from "@aws-sdk/client-bedrock-runtime";
 import { AiError, bedrockLlm, extractToolInput, type ConverseSender } from "../src/lib/ai/bedrock";
-import { checkAiCase, checkOutline, unsuitable } from "../src/lib/ai/check";
+import { checkAiCase, checkBook, checkOutline, clueOverlap, strayPlaces, unsuitable } from "../src/lib/ai/check";
 import { generateAiBook, regenerateCase, type AiProgress } from "../src/lib/ai/generate";
-import { flavorFor, outlinePrompt } from "../src/lib/ai/prompts";
+import { casesPrompt, flavorFor, outlinePrompt } from "../src/lib/ai/prompts";
 import { mockLlm } from "../src/lib/ai/mock";
 import { GenerateRequest, toolSchema, AiOutline } from "../src/lib/ai/schema";
 import { generateMystery } from "../src/lib/mystery/model";
@@ -131,6 +131,45 @@ describe("local checks and repairs", () => {
     const o = { title: "T", intro: "An intro that is long enough.", cast: cast.map((p) => ({ ...p, traits: p.traits.slice(0, 3) })), mastermind: "Vera Lark", finalAnswer: "THE MASTERMIND IS VERA LARK", finaleQuestion: "Who did it?", epilogue: "It was Vera all along, of course.", cases: Array.from({ length: 6 }, (_, i) => ({ title: `Case ${i + 1}`, culprit: cast[0].name, premise: "Something odd." })) };
     const r = checkOutline(o, 6, true);
     expect(r.outline.finalAnswer.replace(/ /g, "").length).toBeLessThanOrEqual(6);
+  });
+});
+
+describe("book-wide checks (found in a real 24-case book)", () => {
+  const cast = TEMPLATE_CAST;
+  const st = DEFAULT_MYSTERY_SETTINGS;
+  const base = { index: 4, title: "The Stolen Spoon", story: "The silver spoon vanished from the dining room during supper.", words: ["SPOON", "TABLE", "CANDLE", "NAPKIN", "PLATE", "GOBLET", "SALT", "PEPPER", "LADLE", "TRAY", "CLOTH", "VASE"], missing: { word: "SILVER", clue: "What the spoon was made of" }, suspects: [cast[0].name, cast[1].name, cast[2].name], culprit: cast[0].name, lead: "" };
+  const spec = (word: string, clue: string) => ({ title: "t", story: "s", words: [], suspects: [], missing: { word, clue } });
+  test("a missing word used twice, or a clue copied, is sent back for the later case", () => {
+    const p = checkBook([spec("BUTTON", "Small and round, it fell off a coat"), spec("PARASOL", "A lacy shade for sunny days"), spec("BUTTON", "Sewn on a cuff"), spec("LADDER", "Something tall with rungs"), spec("RIBBON", "A lacy umbrella for sunny days")]);
+    expect([...p.keys()]).toEqual([3, 5]);
+    expect(p.get(3)!.join(" ")).toMatch(/BUTTON is already the missing word of case 1/);
+    expect(p.get(5)!.join(" ")).toMatch(/almost like case 2/);
+    expect(clueOverlap("Something with rungs", "A small brass key")).toBe(0);
+  });
+  test("a case at a batch boundary always gets a lead, and the prompt names the next case", () => {
+    const r = checkAiCase(base, cast, st, 11, 1, { nextTitle: "The Fog on the Pier" });
+    expect(r.spec.lead).toMatch(/The Fog on the Pier/);
+    const last = checkAiCase(base, cast, st, 11, 1, { last: true });
+    expect(last.spec.lead).toMatch(/Case Board/);
+    const o = AiOutline.parse({ title: "The Test", intro: "An intro that is long enough.", place: "Heron Lake Spa", cast: cast.map((p) => ({ ...p, traits: p.traits.slice(0, 3) })), mastermind: cast[0].name, finalAnswer: "", finaleQuestion: "Who did it?", epilogue: "It was them all along.", cases: Array.from({ length: 8 }, (_, i) => ({ title: `Case title ${i + 1}`, culprit: cast[0].name, premise: "Something odd." })) });
+    const prompt = casesPrompt(req({ caseCount: 8 }), o, 1, 4);
+    expect(prompt).toMatch(/Next comes case 5, "Case title 5"/);
+    expect(prompt).toMatch(/Place: Heron Lake Spa/);
+    expect(casesPrompt(req({ caseCount: 8 }), o, 5, 8)).not.toMatch(/Next comes/);
+  });
+  test("one place name: the title and intro can't disagree", () => {
+    expect(strayPlaces("The Lantern Baths of Saltwater Lake", "Heron Lake Spa")).toEqual(["Saltwater Lake"]);
+    expect(strayPlaces("Steam rose over Heron Lake at dawn in the Grand Hall.", "Heron Lake Spa")).toEqual([]);
+    const o = { title: "The Lantern Baths of Saltwater Lake", intro: "Guests at Heron Lake Spa whisper about the lanterns.", cast: cast.map((p) => ({ ...p, traits: p.traits.slice(0, 3) })), mastermind: cast[0].name, finalAnswer: "", finaleQuestion: "Who did it?", epilogue: "It was them all along.", cases: [{ title: "One", culprit: cast[0].name, premise: "Odd." }] };
+    expect(checkOutline(o, 1, false).problems.join(" ")).toMatch(/one name/);
+    expect(checkOutline({ ...o, place: "Heron Lake Spa" }, 1, false).problems.join(" ")).toMatch(/Saltwater Lake/);
+    expect(checkOutline({ ...o, title: "The Lantern Baths of Heron Lake Spa", place: "Heron Lake Spa" }, 1, false).problems).toEqual([]);
+    expect(checkAiCase({ ...base, story: "The spoon vanished at Saltwater Lake during supper." }, cast, st, 11, 1, { place: "Heron Lake Spa" }).problems.join(" ")).toMatch(/Heron Lake Spa/);
+  });
+  test("a missing word that a culprit trait already names is rewritten", () => {
+    const who = cast[0];
+    const r = checkAiCase({ ...base, missing: { word: who.traits[0].toUpperCase().replace(/[^A-Z ]/g, "").split(" ").filter((w) => w.length > 3).pop()!, clue: "x marks it" } }, cast, st, 11);
+    expect(r.problems.join(" ")).toMatch(/gives it away/);
   });
 });
 

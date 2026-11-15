@@ -74,8 +74,10 @@ export interface CaseKey {
   box: number;
   letter: string;
   source: KeySource;
-  /** 1-based letter position in the source. */
+  /** 1-based letter position in the source (spaces skipped). */
   position: number;
+  /** The position is past the source's first word, so the instruction says "skipping spaces". */
+  spaced?: boolean;
 }
 
 /** A case ready to print (after the grid is built and checked). */

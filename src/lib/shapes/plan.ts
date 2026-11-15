@@ -14,7 +14,7 @@
  * neighbouring puzzles never share a shape when the pool has more than one.
  * Pins override any mode except "one" and never move when the plan is reshuffled.
  */
-import { ANIMAL_GROUPS, CATEGORIES, SHAPE_KEYS, ShapeKey, ShapeMix, animalGroupOf, shapeCategory, suggestShapeForTheme, suggestShapesForTheme } from "./shapes";
+import { ANIMAL_GROUPS, CATEGORIES, MYSTERY_SHAPES, SHAPE_KEYS, ShapeKey, ShapeMix, animalGroupOf, shapeCategory, suggestShapeForTheme, suggestShapesForTheme } from "./shapes";
 import type { AnimalGroup, ShapeCategory } from "./catalog";
 
 export type PlanMode = "one" | "surprise" | "pick" | "manual";
@@ -142,9 +142,29 @@ function bagDrawer(pool: ShapeKey[], rand: () => number) {
   };
 }
 
+/**
+ * A shape the tool can't use (an old saved plan or a pin made before the tool's list
+ * changed). Murder mystery swaps it for a compact one of the same category (picked steadily
+ * from the key, so an old shape always gets the same stand-in), else square. Other tools
+ * keep their old behaviour: the shape falls back to square and a stale pin is ignored.
+ */
+export function substituteShape(k: ShapeKey, allowed?: ShapeKey[]): ShapeKey {
+  if (!allowed || allowed.includes(k)) return k;
+  if (allowed !== MYSTERY_SHAPES) return allowed.includes("square") ? "square" : allowed[0] ?? "square";
+  const same = allowed.filter((a) => a !== "square" && shapeCategory(a) === shapeCategory(k));
+  if (same.length) {
+    let h = 0;
+    for (const ch of k) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return same[h % same.length];
+  }
+  return allowed.includes("square") ? "square" : allowed[0] ?? "square";
+}
+
 const pinOf = (choice: ShapeChoice, i: number, allowed?: ShapeKey[]): ShapeKey | undefined => {
   const k = choice.pins?.[String(i)];
-  return k && (!allowed || allowed.includes(k)) && SHAPE_KEYS.includes(k) ? k : undefined;
+  if (!k || !SHAPE_KEYS.includes(k)) return undefined;
+  if (allowed && !allowed.includes(k) && allowed !== MYSTERY_SHAPES) return undefined;
+  return substituteShape(k, allowed);
 };
 
 /**
@@ -152,7 +172,7 @@ const pinOf = (choice: ShapeChoice, i: number, allowed?: ShapeKey[]): ShapeKey |
  * `list` is the book's puzzles (only `theme` is read); `allowed` the shapes the tool can use.
  */
 export function shapeTargetsFor(choice: ShapeChoice, list: { theme?: string }[], allowed?: ShapeKey[]): ShapeKey[] {
-  const fallback: ShapeKey = allowed && !allowed.includes(choice.kind) ? (allowed.includes("square") ? "square" : allowed[0] ?? "square") : choice.kind;
+  const fallback: ShapeKey = substituteShape(choice.kind, allowed);
   const mode = planMode(choice.mix);
   if (mode === "one") return list.map(() => fallback);
   if (mode === "manual") return list.map((_, i) => pinOf(choice, i, allowed) ?? fallback);

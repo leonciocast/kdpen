@@ -52,16 +52,27 @@ const ink = (pdf: jsPDF, c: RGB) => pdf.setTextColor(c[0], c[1], c[2]);
 const small = (v: number, s: number) => Math.max(6.2, v * s);
 void mix;
 
-/** Answer grids: a thin outline instead of tiles, so the loops read clearly. */
+/**
+ * Answer grids: plain cells and a thin outline that follows the cell edges exactly
+ * ("stepped"), so every loop sits inside the shape and nothing reads as a stray letter.
+ */
 export function answerLook(look: Look): Look {
   const l = caseLook(look);
-  if (look.design.grid.cells !== "tiles") return l;
-  return { ...l, soft: look.design.color.grayscale ? l.soft : [238, 234, 228], design: { ...l.design, grid: { ...l.design.grid, cells: "plain", border: l.design.grid.border === "none" ? "rounded" : l.design.grid.border, frame: 0.6 } } };
+  const shape = { ...l.design.shape, outline: "stepped" as const };
+  if (look.design.grid.cells !== "tiles") return { ...l, design: { ...l.design, shape } };
+  return { ...l, soft: look.design.color.grayscale ? l.soft : [238, 234, 228], design: { ...l.design, shape, grid: { ...l.design.grid, cells: "plain", border: l.design.grid.border === "none" ? "rounded" : l.design.grid.border, frame: 0.6 } } };
 }
 
-/** On case pages with soft tiles, the tiles draw the shape: no stepped or smooth outline on top. */
+/**
+ * Case pages. With soft tiles the tiles draw the shape (no outline on top). Other cell
+ * styles keep their outline, but the artist curve ("smooth") is swapped for "snug", which
+ * always wraps every letter: a case's letters must never sit outside the shape's line.
+ */
 export function caseLook(look: Look): Look {
-  if (look.design.grid.cells !== "tiles") return look;
+  if (look.design.grid.cells !== "tiles") {
+    if (look.design.shape.outline !== "smooth") return look;
+    return { ...look, design: { ...look.design, shape: { ...look.design.shape, outline: "snug" } } };
+  }
   return { ...look, design: { ...look.design, shape: { ...look.design.shape, mix: "one", outline: "smooth", shade: false } } };
 }
 
@@ -358,9 +369,16 @@ function casePage(c: MysteryCase, style: CaseStyle, headerText: string): PageRen
           ink(pdf, INK);
           pdf.text(`Case Board · box ${c.key.box}`, rx + kb + 7 * s, ry + 10 * s, { baseline: "middle" });
           pdf.setFont(SERIF, "normal");
-          pdf.setFontSize(8.2 * s);
           ink(pdf, BODY);
-          pdf.text((pdf.splitTextToSize(keyInstruction(c.key), inner - kb - 7 * s) as string[])[0], rx + kb + 7 * s, ry + 19.5 * s, { baseline: "middle" });
+          // Never clip the instruction: shrink a little, then wrap onto a second line.
+          const said = keyInstruction(c.key);
+          const room = inner - kb - 7 * s;
+          let fs = 8.2 * s;
+          pdf.setFontSize(fs);
+          while (pdf.getTextWidth(said) > room && fs > small(7, s)) pdf.setFontSize((fs -= 0.2 * s));
+          const lines = pdf.splitTextToSize(said, room) as string[];
+          if (lines.length === 1) pdf.text(said, rx + kb + 7 * s, ry + 19.5 * s, { baseline: "middle" });
+          else lines.slice(0, 2).forEach((l, i) => pdf.text(l, rx + kb + 7 * s, ry + 17 * s + i * fs * 1.1, { baseline: "middle" }));
         }
         ry += 4 * s + kb;
       }
@@ -848,6 +866,7 @@ export function mysteryContent(items: MysteryItem[], answersPerPage: number, sty
     pages,
     sections,
     solutionsIndex,
+    howToTitle: "How to Solve",
     howTo: mysteryHowTo({ missing: cases.some((c) => c.missing), message: cases.some((c) => c.message), board: items.some((i) => i.kind === "board"), checkbox: design.list.checkbox }),
     titleDetail: `${cases.length} Murder Mystery Case${cases.length === 1 ? "" : "s"}`,
   };

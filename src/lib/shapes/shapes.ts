@@ -1342,20 +1342,18 @@ const CROSSWORD_SKIP = new Set<ShapeKey>([
 export const CROSSWORD_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !CROSSWORD_SKIP.has(k) && !shapeInfo(k).islands);
 
 /**
- * Shapes that hold a murder-mystery case (about 14 evidence words, a missing word and a
- * leftover message that must come out exactly). Measured over the starter and templated
- * cases at easy and hard (anything that needed a square fallback more than once): thin
- * letters and digits, island patterns, the zigzag and the animals that need very large
- * grids to fit the evidence are not offered. Any case that still doesn't fit its shape
- * falls back to a square grid with a note.
+ * Shapes that hold a murder-mystery case: only compact, solid shapes (see compact.ts for
+ * the measured rule: one region, ≥ 50% of the bounding box filled, ≤ 12% thin cells,
+ * aspect ≤ 1.7, no real holes), and only ones that fit the starter and templated cases at
+ * easy and hard without a square fallback. Precomputed here; tests re-derive the list.
  */
-const MYSTERY_SKIP = new Set<ShapeKey>([
-  "zigzag", "wave", "checkers", "islands9", "blockx", "snowflake",
-  "unicorn", "monkey", "duck", "swan", "turkey", "parrot", "bat", "fish", "whale", "dolphin", "shark", "lobster", "trex", "longneck", "scorpion", "fox", "pelican", "moose", "ostrich",
-  "letterC", "letterF", "letterK", "letterI", "letterJ", "letterL", "letterP", "letterS", "letterT", "letterV", "letterX", "letterY", "letterZ",
-  "digit1", "digit2", "digit3", "digit4", "digit7", "digit8",
+const MYSTERY_COMPACT = new Set<ShapeKey>([
+  "square", "rounded", "landscape", "portrait", "circle", "oval", "triangle", "diamond", "pentagon", "hexagon", "octagon", "star", "cross", "heart", "egg",
+  "pumpkin", "tree", "house", "apple", "cloud", "pig", "sheep", "bear", "squirrel", "mouse", "turtle", "bee", "ladybug", "arch", "ubend", "bowl", "stairs",
+  "pyramid", "stepdiamond", "stepcircle", "blockcross", "bolt", "blockheart", "blockhouse", "windowframe", "letterE", "letterH", "letterM", "letterU", "letterW",
+  "digit5", "pear", "icecream", "cupcake", "pizza", "cherry", "raindrop", "leaf", "gift", "car", "bulb",
 ]);
-export const MYSTERY_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !MYSTERY_SKIP.has(k));
+export const MYSTERY_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => MYSTERY_COMPACT.has(k));
 
 /** Shapes used when "mix shapes" is on (basics plus a rotation of favourite animals). */
 export const MIX_SET: ShapeKey[] = ["circle", "heart", "star", "hexagon", "diamond", "cloud", "octagon", "egg", "apple", "rounded", "elephant", "dolphin", "cat", "owl", "fish", "butterfly", "dog", "penguin", "rabbit", "whale"];

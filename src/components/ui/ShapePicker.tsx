@@ -390,7 +390,7 @@ export function ShapePicker({
       {q && !visibleCats.length && <p className="small text-muted mb-0">No shapes match “{query}”.</p>}
       {tool === "mystery" && (
         <p className="pg-shape-note" data-testid="shape-mystery-note">
-          Only shapes that fit a whole case are shown. Thin letters and numbers, island patterns and a few long animals can’t hold the evidence and an exact hidden message.
+          Cases use compact, solid shapes so every clue and the hidden message read cleanly.
         </p>
       )}
     </div>

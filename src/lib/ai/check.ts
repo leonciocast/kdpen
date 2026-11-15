@@ -36,8 +36,43 @@ export interface CaseCheck {
   problems: string[];
 }
 
+/** Where a case sits in the book (for its lead and the place name). */
+export interface CaseContext {
+  /** The book's one place name. */
+  place?: string;
+  /** Title of the next case (none for the last case). */
+  nextTitle?: string;
+  last?: boolean;
+}
+
+// Geographic names only (a lake, a bay, a village…), not rooms like "the Grand Hall".
+const PLACE_NOUN = "Lake|Loch|Bay|Island|Isle|Harbor|Harbour|Valley|Village|Springs|Falls|Cove|Point|Marsh|Creek|River|Town|City|Moor|Fen|Sound|Peninsula|Heights";
+const PLACE_RE = new RegExp(`\\b((?:[A-Z][a-z'’]+ ){1,2}(?:${PLACE_NOUN}))\\b`, "g");
+const CAP = /^(The|A|An|At|In|On|Of|By|And|To|From|Under|Over|Beyond)\s+/;
+/** Named places in a text, like "Heron Lake" or "Saltwater Lake". */
+export function placeNames(text: string): string[] {
+  return [...new Set([...text.matchAll(PLACE_RE)].map((m) => m[1].replace(CAP, "").trim()))].filter((p) => p.split(" ").length >= 2);
+}
+/** Places a text names that the book's place name (or the extra text) doesn't. */
+export function strayPlaces(text: string, place: string, also = ""): string[] {
+  const known = `${place} ${also}`.toLowerCase();
+  return placeNames(text).filter((p) => {
+    const words = p.toLowerCase().split(" ");
+    // Same proper name with a different place noun ("Heron Lake" vs "Heron Lake Spa") is fine.
+    return !known.includes(p.toLowerCase()) && !known.includes(words[0]);
+  });
+}
+
+const wordsOf = (t: string) => t.toLowerCase().replace(/[^a-z ]/g, " ").split(/\s+/).filter(Boolean);
+const singular = (w: string) => w.replace(/(ies)$/, "y").replace(/(es|s)$/, "");
+/** The trait that gives the missing word away (it names the same thing), if any. */
+export function traitNaming(word: string, traits: string[]): string | undefined {
+  const w = singular(word.toLowerCase());
+  return traits.find((t) => wordsOf(t).some((x) => singular(x) === w));
+}
+
 /** Repair what can be repaired locally; report the rest. */
-export function checkAiCase(c: AiCase, cast: Person[], st: MysterySettings, maxWord: number, seed = 1): CaseCheck {
+export function checkAiCase(c: AiCase, cast: Person[], st: MysterySettings, maxWord: number, seed = 1, ctx: CaseContext = {}): CaseCheck {
   const repairs: string[] = [];
   const problems: string[] = [];
   const bad = [c.title, c.story, c.lead, c.missing.clue, ...c.words, c.missing.word].map(unsuitable).find(Boolean);
@@ -85,6 +120,22 @@ export function checkAiCase(c: AiCase, cast: Person[], st: MysterySettings, maxW
     const people = sus.map((n) => findPerson(cast, n)).filter((p): p is Person => !!p);
     if (!uniqueTraits(culprit, people).length) problems.push(`${culprit.name} shares every trait with another suspect, so the hidden message can't point to one person. Choose suspects so the culprit has a trait the other two don't.`);
   }
+  if (culprit && missingWord && st.missingEvidence) {
+    const t = traitNaming(missingWord, culprit.traits);
+    if (t) problems.push(`The missing evidence ${missingWord} is also in ${culprit.name}'s trait “${t}”, which gives it away; pick a different missing word.`);
+  }
+  if (ctx.place) {
+    const stray = strayPlaces(`${c.story} ${c.lead ?? ""}`, ctx.place);
+    if (stray.length) problems.push(`Call the place “${ctx.place}” as in the rest of the book, not “${stray[0]}”.`);
+  }
+  let lead = c.lead?.trim() || "";
+  if (!lead && ctx.nextTitle) {
+    lead = `The trail leads on to “${ctx.nextTitle}”.`;
+    repairs.push("added a lead to the next case");
+  } else if (!lead && ctx.last && st.storyline) {
+    lead = "Every key is in your notes now. Take them to the Case Board.";
+    repairs.push("added a lead to the Case Board");
+  }
   const spec: CaseSpec = {
     title: c.title.trim(),
     story: c.story.trim(),
@@ -92,7 +143,7 @@ export function checkAiCase(c: AiCase, cast: Person[], st: MysterySettings, maxW
     missing: missingWord ? { word: missingWord, clue: c.missing.clue.trim() } : undefined,
     suspects: sus.slice(0, 3),
     culprit: culprit?.name,
-    lead: c.lead?.trim() || undefined,
+    lead: lead || undefined,
   };
   // Finally, the engine must build it as a square case.
   if (!problems.length) {
@@ -119,6 +170,15 @@ export function checkOutline(o: AiOutline, caseCount: number, storyline: boolean
   const bad = [o.title, o.intro, o.epilogue, o.finaleQuestion, ...cast.flatMap((p) => [p.name, p.role, ...p.traits]), ...o.cases.flatMap((c) => [c.title, c.premise])].map(unsuitable).find(Boolean);
   if (bad) problems.push(`The outline ${bad}.`);
   if (cast.length < 3) problems.push("The cast needs at least three people.");
+  if (o.place) {
+    const stray = strayPlaces(`${o.title} ${o.intro}`, o.place);
+    if (stray.length) problems.push(`The place is “${o.place}”; use that exact name in the title and intro instead of “${stray[0]}”.`);
+  } else {
+    const inTitle = placeNames(o.title);
+    const inIntro = placeNames(o.intro);
+    if (inTitle.length && inIntro.length && inTitle.every((p) => strayPlaces(p, inIntro.join(" ")).length))
+      problems.push(`The title names “${inTitle[0]}” but the intro names “${inIntro[0]}”; give the place one name (and set "place").`);
+  }
   if (o.cases.length < caseCount) problems.push(`The outline lists ${o.cases.length} cases; it must list exactly ${caseCount}.`);
   let finalAnswer = letters(o.finalAnswer) ? o.finalAnswer.toUpperCase().replace(/[^A-Z ]/g, "").replace(/\s+/g, " ").trim() : "";
   if (storyline && letters(finalAnswer).length > caseCount) {
@@ -129,4 +189,38 @@ export function checkOutline(o: AiOutline, caseCount: number, storyline: boolean
     finalAnswer = fit;
   }
   return { outline: { ...o, cast, cases: o.cases.slice(0, caseCount), finalAnswer }, repairs, problems };
+}
+
+const STOP = new Set("a an the of for to in on at by with and or from its it is this that your you one some something used when what".split(" "));
+const clueWords = (t: string) => new Set(wordsOf(t).map(singular).filter((w) => w.length > 2 && !STOP.has(w)));
+/** Share of content words two clues have in common (0..1). */
+export function clueOverlap(a: string, b: string): number {
+  const x = clueWords(a), y = clueWords(b);
+  if (!x.size || !y.size) return 0;
+  let common = 0;
+  for (const w of x) if (y.has(w)) common++;
+  return common / Math.min(x.size, y.size);
+}
+
+/**
+ * Checks across the whole book (cases are written in parallel batches, so these can only
+ * be seen afterwards): every missing word is different, and no two clues are near copies.
+ * Problems go to the later case, naming what's already taken.
+ */
+export function checkBook(specs: (CaseSpec | null)[]): Map<number, string[]> {
+  const out = new Map<number, string[]>();
+  const add = (i: number, p: string) => out.set(i + 1, [...(out.get(i + 1) ?? []), p]);
+  const taken = specs.map((s) => s?.missing?.word).filter((w): w is string => !!w);
+  specs.forEach((s, i) => {
+    if (!s?.missing) return;
+    const m = s.missing;
+    const j = specs.findIndex((o, k) => k < i && o?.missing && singular(o.missing.word.toLowerCase()) === singular(m.word.toLowerCase()));
+    if (j >= 0) {
+      add(i, `The missing evidence ${m.word} is already the missing word of case ${j + 1}; every case needs its own (already used: ${[...new Set(taken)].join(", ")}).`);
+      return;
+    }
+    const k = specs.findIndex((o, q) => q < i && o?.missing && clueOverlap(o.missing.clue, m.clue) >= 0.6);
+    if (k >= 0) add(i, `The clue “${m.clue}” reads almost like case ${k + 1}'s clue; word it differently.`);
+  });
+  return out;
 }

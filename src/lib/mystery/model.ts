@@ -68,26 +68,38 @@ export const KEY_SOURCE_TEXT: Record<KeySource, string> = {
 
 const alpha = (s: string) => messageLetters(s);
 
-/** Texts a key letter can come from, best first. */
-export function keySources(c: { culprit?: Person; missing?: string; title: string }): [KeySource, string][] {
+/**
+ * Texts a key letter can come from, best first, with the letter count of each text's first
+ * word. A text is read whole, spaces skipped (the job "Spa founder" is SPAFOUNDER), the
+ * same way the reader sees it on the suspect card.
+ */
+export function keySources(c: { culprit?: Person; missing?: string; title: string }): [KeySource, string, number][] {
   const [first, ...rest] = (c.culprit?.name ?? "").split(/\s+/);
-  const sources: [KeySource, string][] = [];
-  if (c.culprit) sources.push(["first", alpha(first)], ["last", alpha(rest.join(""))]);
-  if (c.missing) sources.push(["missing", alpha(c.missing)]);
-  if (c.culprit) sources.push(["role", alpha(c.culprit.role.split(/\s+/).pop() ?? "")]);
-  sources.push(["title", alpha(c.title)]);
+  const src = (k: KeySource, raw: string): [KeySource, string, number] => [k, alpha(raw), alpha(raw.trim().split(/[\s-]+/)[0] ?? "").length];
+  const sources: [KeySource, string, number][] = [];
+  if (c.culprit) sources.push(src("first", first), src("last", rest.join(" ")));
+  if (c.missing) sources.push(src("missing", c.missing));
+  if (c.culprit) sources.push(src("role", c.culprit.role));
+  sources.push(src("title", c.title));
   return sources;
 }
 
-/** Which letter of what goes into a Case Board box (the letter must equal `target`). */
+/**
+ * Which letter of what goes into a Case Board box (the letter must equal `target`).
+ * A position inside the first word reads the same whether or not the reader counts spaces,
+ * so those come first; a later position is marked `spaced` and says "skipping spaces".
+ */
 export function chooseKey(target: string, box: number, c: { culprit?: Person; missing?: string; title: string }, seed: number): CaseKey | undefined {
   const sources = keySources(c);
   const rng = mulberry32(seed);
-  for (const [source, text] of sources) {
-    const at: number[] = [];
-    for (let i = 0; i < text.length; i++) if (text[i] === target) at.push(i);
-    if (at.length) return { box, letter: target, source, position: at[Math.floor(rng() * at.length)] + 1 };
-  }
+  for (const pass of [0, 1])
+    for (const [source, text, firstLen] of sources) {
+      const at: number[] = [];
+      for (let i = 0; i < text.length; i++) if (text[i] === target && (pass === 1 || i < firstLen)) at.push(i);
+      if (!at.length) continue;
+      const i = at[Math.floor(rng() * at.length)];
+      return { box, letter: target, source, position: i + 1, ...(i >= firstLen ? { spaced: true } : {}) };
+    }
   return undefined;
 }
 
@@ -332,11 +344,11 @@ export function keySourceText(c: MysteryCase): string {
     case "first":
       return alpha(first);
     case "last":
-      return alpha(rest.join(""));
+      return alpha(rest.join(" "));
     case "missing":
       return alpha(c.missing?.word ?? "");
     case "role":
-      return alpha(c.culprit?.role.split(/\s+/).pop() ?? "");
+      return alpha(c.culprit?.role ?? "");
     default:
       return alpha(c.title);
   }
@@ -344,7 +356,7 @@ export function keySourceText(c: MysteryCase): string {
 
 /** "Box 7 ← letter 2 of the culprit's first name". */
 export function keyInstruction(k: CaseKey): string {
-  return `Letter ${k.position} of ${KEY_SOURCE_TEXT[k.source]}`;
+  return `Letter ${k.position} of ${KEY_SOURCE_TEXT[k.source]}${k.spaced ? ", skipping spaces" : ""}`;
 }
 
 export const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;

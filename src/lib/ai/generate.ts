@@ -6,7 +6,7 @@
 import type { z } from "zod";
 import type { CaseBook, CaseSpec, MysterySettings } from "../mystery/types";
 import { AiError, type Llm, type ToolResult, type Usage } from "./bedrock";
-import { checkAiCase, checkOutline } from "./check";
+import { checkAiCase, checkBook, checkOutline, type CaseContext } from "./check";
 import { casesPrompt, outlinePrompt, SYSTEM } from "./prompts";
 import { AiCase, AiOutline, toolSchema, type GenerateRequest } from "./schema";
 
@@ -118,6 +118,14 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
   const done = new Set<number>();
   const titles = outline.cases.map((c) => c.title);
   const tell = (phase: AiProgress["phase"], message: string) => progress({ phase, done: done.size, total: N, message, title: outline!.title, titles, written: [...done].sort((a, b) => a - b) });
+  const ctxOf = (i: number): CaseContext => ({ place: outline!.place, nextTitle: outline!.cases[i]?.title, last: i === N });
+  // Cross-case checks (unique missing words, clues not copied) once every batch is in.
+  const bookCheck = () => {
+    for (const [i, p] of checkBook(specs)) {
+      problems.set(i, [...(problems.get(i) ?? []), ...p]);
+      done.delete(i);
+    }
+  };
   const writeRange = async (idxs: number[], fb?: Map<number, string[]>) => {
     const from = idxs[0];
     const to = idxs[idxs.length - 1];
@@ -142,7 +150,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
         problems.set(i, [`Case ${i} was missing or didn't match the schema; include it with every field.`]);
         continue;
       }
-      const chk = checkAiCase({ ...c, index: i }, cast, st, req.maxWord, 20261115 + (i - 1) * 101);
+      const chk = checkAiCase({ ...c, index: i }, cast, st, req.maxWord, 20261115 + (i - 1) * 101, ctxOf(i));
       specs[i - 1] = chk.spec;
       const was = fb?.get(i);
       caseNotes[i - 1] = [...(was?.length && !chk.problems.length ? [`rewritten once to fix: ${was.join(" ").replace(/\.$/, "")}`] : []), ...chk.repairs];
@@ -158,6 +166,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
   for (let a = 1; a <= N; a += size) chunks.push(Array.from({ length: Math.min(size, N - a + 1) }, (_, k) => a + k));
   tell("cases", `Writing case 1 of ${N}…`);
   await pool(chunks, opts.concurrency ?? 6, (c) => writeRange(c));
+  bookCheck();
 
   for (let round = 0; round < (opts.maxRounds ?? 2) && problems.size; round++) {
     const failing = [...problems.keys()].sort((a, b) => a - b);
@@ -171,6 +180,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
       else groups.push([i]);
     }
     await pool(groups, opts.concurrency ?? 6, (g) => writeRange(g, fb));
+    bookCheck();
   }
   // Whatever still fails: keep it if it builds (with a note), otherwise leave it out.
   const kept: CaseSpec[] = [];
@@ -216,7 +226,7 @@ export async function regenerateCase(req: GenerateRequest, outline: AiOutline, i
       fb = new Map([[index, [`Your answer didn't match the schema (${issues(p.error)}).`]]]);
       continue;
     }
-    const chk = checkAiCase({ ...p.data, index }, cast, settingsOf(req), req.maxWord, 20261115 + (index - 1) * 101);
+    const chk = checkAiCase({ ...p.data, index }, cast, settingsOf(req), req.maxWord, 20261115 + (index - 1) * 101, { place: outline.place, nextTitle: outline.cases[index]?.title, last: index === outline.cases.length });
     if (!chk.problems.length) return { spec: chk.spec, notes: chk.repairs, usage };
     fb = new Map([[index, chk.problems]]);
   }

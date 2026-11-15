@@ -74,6 +74,8 @@ export interface BookContent {
   /** Index of the first solutions page in `pages`. */
   solutionsIndex: number;
   howTo?: PageRenderer;
+  /** Contents entry for the how-to page (default "How to Play"). */
+  howToTitle?: string;
   /** Short line on the title page, e.g. "100 Word Search Puzzles". */
   titleDetail: string;
 }
@@ -421,7 +423,7 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
   const pageOf = (kind: PageKind) => kinds.indexOf(kind) + 1;
   const toc: { title: string; page: number }[] = [];
   if (opts.extras.intro.trim() && kinds.includes("intro")) toc.push({ title: "Introduction", page: pageOf("intro") });
-  if (kinds.includes("howto")) toc.push({ title: "How to Play", page: pageOf("howto") });
+  if (kinds.includes("howto")) toc.push({ title: c.howToTitle ?? "How to Play", page: pageOf("howto") });
   c.sections.forEach((sct) => toc.push({ title: sct.title, page: contentAt[sct.index] }));
   if (opts.extras.notesPages > 0 && kinds.includes("notes")) toc.push({ title: "Notes", page: pageOf("notes") });
   const solutionsPage = contentAt[c.solutionsIndex];
