@@ -235,7 +235,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
           <ShapePicker tool={tool} design={design} themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { ...d.shape, kind, mix, shade: shade ?? d.shape.shade }))} />
           {tool === "word-search" && (
             <div className="mt-3">
-              <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Smooth", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => (d.shape.outline = v))} />
+              <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Artist (smooth)", snug: "Snug (hugs letters)", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => (d.shape.outline = v))} />
             </div>
           )}
           {shapeStatus && <div className="pg-shape-status small" aria-live="polite">{shapeStatus}</div>}

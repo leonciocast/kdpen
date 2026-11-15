@@ -1,12 +1,12 @@
 /**
  * Puzzle grid shapes. Every shape is a polygon in a unit box; a puzzle of
- * size N gets a boolean mask of the N×N cells that the shape covers
- * (including partially covered cells, cleaned so thin tips and stray cells
- * disappear). Word-search pages draw a smooth silhouette: the artist curve
- * unioned with a round dilation of the lettered cells (so every letter sits
- * inside the stroke) and clipped to a slightly larger dilation (so grey never
- * extends more than about half a cell past a letter). Geometric shapes still
- * keep a small inset so letters sit inside a decorative frame. Pure (no DOM):
+ * size N gets a boolean mask of the N×N cells that the shape covers.
+ * Animal cells get a letter only when the glyph box plus a small margin sits
+ * fully inside the silhouette; thin tips may stay empty grey. Word-search
+ * pages default to the exact artist curve ("smooth"), with optional "snug"
+ * (inflate/clip so the outline hugs letters and trims empty tips) and
+ * "blocky" (cell-hugging pixel outline) styles. Geometric shapes keep a
+ * small inset so letters sit inside a decorative frame. Pure (no DOM):
  * shared by the engine, the PDF renderer, the UI and tests.
  */
 
@@ -279,8 +279,17 @@ const COVERAGE = 0.2;
 const COVERAGE_SAMPLES = 5;
 /** Outer cap: no shade farther than this from a lettered cell (round joins). */
 export const CELL_DILATE = 0.6;
-/** Extra clearance, in cells, between a letter's glyph box and the stroke's inner edge. */
+/** Extra clearance, in cells, between a letter's glyph box and the stroke's inner edge (snug style). */
 export const GLYPH_MARGIN = 0.15;
+/** Artist style: clearance, in cells, between a letter's glyph box and the silhouette curve. */
+export const ARTIST_MARGIN = 0.1;
+/**
+ * Half-side of the glyph box used to decide whether an animal cell can hold a
+ * letter inside the artist curve. On tight 8.5x11 pages the 7pt floor can
+ * make a letter about 0.7 of a cell; this half includes that size plus
+ * {@link ARTIST_MARGIN}.
+ */
+export const ARTIST_GLYPH_HALF = 0.7 / 2 + ARTIST_MARGIN;
 /** Maximum letter size as a fraction of a cell (`wsLetterSize` cap / 7pt floor). */
 export const GLYPH_FRAC = 0.82;
 /**
@@ -799,20 +808,22 @@ function sanitizeRings(rings: Pt[][], mask: Mask): Pt[][] {
 const letteredCache = new Map<string, Pt[][]>();
 
 /**
- * Word-search shade/outline. For animals the default ("smooth") inflates the
- * artist curve just enough that every letter's glyph box sits inside the
- * stroke, then clips to a round dilation of the lettered cells so unlettered
- * tips are trimmed and grey never sits more than about half a cell from a
- * letter. Geometric shapes stay silhouette ∩ cap. `style: "blocky"` keeps
- * the cell-hugging staircase.
+ * Word-search shade/outline styles.
+ * - "smooth" (default, shown as "Artist (smooth)"): the professional SVG
+ *   silhouette exactly as drawn, with no inflation and no clipping.
+ * - "snug": inflate the curve just enough that every letter sits inside the
+ *   stroke, then clip to a round dilation of the lettered cells so empty
+ *   tips are trimmed and the outline hugs the letters.
+ * - "blocky": the cell-hugging pixel staircase.
  */
-export type OutlineStyle = "smooth" | "blocky";
+export type OutlineStyle = "smooth" | "snug" | "blocky";
 
 export function letteredOutlines(key: ShapeKey | undefined, size: number, style: OutlineStyle = "smooth"): Pt[][] {
   const mask = shapeMask(key, size);
   if (!mask) return [];
   if (style === "blocky") return maskOutlines(mask, CELL_DILATE);
-  const id = `${key}:${size}:smooth`;
+  if (style === "smooth") return [shapeOutline(key, size)];
+  const id = `${key}:${size}:snug`;
   const hit = letteredCache.get(id);
   if (hit) return hit;
   const sil = ringsToMulti([shapeOutline(key, size)]);
@@ -963,20 +974,31 @@ export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null 
   const animal = shapeInfo(key).group === "animals";
   const cover = animal ? coverageGrid(pts, size) : null;
   const inCenter = (r: number, c: number) => inside(pts, c + 0.5, r + 0.5);
+  const glyphFits = (r: number, c: number) => {
+    const half = ARTIST_GLYPH_HALF;
+    const cx = c + 0.5;
+    const cy = r + 0.5 + 0.04 * 0.7;
+    return ([[-1, -1], [1, -1], [1, 1], [-1, 1], [-1, 0], [1, 0], [0, -1], [0, 1]] as [number, number][])
+      .every(([sx, sy]) => inside(pts, cx + sx * half, cy + sy * half));
+  };
   const m: Mask = Array.from({ length: size }, (_, r) =>
     Array.from({ length: size }, (_, c) => {
-      if (animal) return cover![r][c] >= COVERAGE && inCenter(r, c);
+      if (animal) return glyphFits(r, c);
       return inCenter(r, c) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6;
     }),
   );
   const open = animal ? 1 : 3;
   if (animal) {
-    const closed = erode(dilate(m));
+    // Keep the 20% coverage + thickening path as a fallback only for cells
+    // that also pass the glyph test (it never adds overflowing letters).
+    const seed: Mask = Array.from({ length: size }, (_, r) =>
+      Array.from({ length: size }, (_, c) => cover![r][c] >= COVERAGE && inCenter(r, c)),
+    );
+    const closed = erode(dilate(seed));
     for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) {
-      // Morphological close can spill a cell just outside the silhouette; keep letters inside the curve.
-      m[r][c] = closed[r][c] && inCenter(r, c);
+      if (closed[r][c] && glyphFits(r, c)) m[r][c] = true;
     }
-    thickenThin(m, (r, c) => cover![r]?.[c] ?? 0, inCenter);
+    thickenThin(m, (r, c) => cover![r]?.[c] ?? 0, (r, c) => glyphFits(r, c));
   }
   const out = clean(m, open);
   cache.set(id, out);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANIMAL_KEYS, CELL_DILATE, CROSSWORD_SHAPES, GLYPH_FRAC, GLYPH_MARGIN, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
+import { ANIMAL_KEYS, ARTIST_MARGIN, CELL_DILATE, CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
 import { ALL_DIRECTIONS, checkPlacement, findOccurrences, gridForm, makePlacement, mulberry32, placementCells, Placement } from "../src/lib/wordsearch/engine";
 import { resolveFixed, resolveFreeEnd, snapStart, validDirectionsFrom, validStartCells } from "../src/lib/wordsearch/snap";
 import { WS_DIFFICULTIES, suggestGridSize } from "../src/lib/wordsearch/difficulty";
@@ -50,7 +50,7 @@ describe("shape masks", () => {
     for (const k of SHAPED) {
       const min = shapeInfo(k).minSize ?? 10;
       const sizes = [10, 15, 20, 28, 40].filter((n) => n >= min);
-      if (!sizes.includes(min) && min <= 48) sizes.unshift(min);
+      if (!sizes.includes(min) && min <= LIMITS.maxShapeGridSize) sizes.unshift(min);
       for (const n of sizes) {
         const m = shapeMask(k, n)!;
         const cells = maskCells(m, n);
@@ -99,7 +99,7 @@ describe("shape masks", () => {
       }
     }
   });
-  it("the shaded outline covers every lettered cell and stays close to them", () => {
+  it("artist outlines are the exact silhouette and contain every letter", () => {
     const ringIn = (pts: [number, number][], x: number, y: number) => {
       let hit = false;
       for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
@@ -110,77 +110,6 @@ describe("shape masks", () => {
       return hit;
     };
     const pointIn = (rings: [number, number][][], x: number, y: number) => rings.reduce((hit, ring) => hit !== ringIn(ring, x, y), false);
-    const nearCell = (m: boolean[][], x: number, y: number, max: number) => {
-      const n = m.length;
-      const r0 = Math.max(0, Math.floor(y) - 2);
-      const r1 = Math.min(n - 1, Math.ceil(y) + 2);
-      const c0 = Math.max(0, Math.floor(x) - 2);
-      const c1 = Math.min(n - 1, Math.ceil(x) + 2);
-      for (let r = r0; r <= r1; r++)
-        for (let c = c0; c <= c1; c++) {
-          if (!m[r][c]) continue;
-          // Distance to the cell square [c,c+1]×[r,r+1] (0 if inside the square).
-          const dx = x < c ? c - x : x > c + 1 ? x - (c + 1) : 0;
-          const dy = y < r ? r - y : y > r + 1 ? y - (r + 1) : 0;
-          if (Math.hypot(dx, dy) <= max) return true;
-        }
-      return false;
-    };
-    for (const k of SHAPED) {
-      const n = Math.max(shapeInfo(k).minSize ?? 16, 16);
-      const m = shapeMask(k, n)!;
-      const rings = letteredOutlines(k, n);
-      expect(rings[0]?.length, k).toBeGreaterThanOrEqual(4);
-      for (let r = 0; r < n; r++)
-        for (let c = 0; c < n; c++) {
-          if (!m[r][c]) continue;
-          expect(pointIn(rings, c + 0.5, r + 0.5), `${k} letter at ${r},${c} outside the shade`).toBe(true);
-        }
-      // No grey farther than about half a cell from a lettered square.
-      // The outer cap is CELL_DILATE; a little slack allows rounding at notches.
-      const limit = CELL_DILATE + 0.12;
-      for (const [x, y] of rings.flat()) expect(nearCell(m, x, y, limit), `${k} outline at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
-      // Sample the interior of the shade on a half-cell grid.
-      const xs = rings.flatMap((ring) => ring.map((p) => p[0]));
-      const ys = rings.flatMap((ring) => ring.map((p) => p[1]));
-      const x0 = Math.min(...xs);
-      const y0 = Math.min(...ys);
-      const x1 = Math.max(...xs);
-      const y1 = Math.max(...ys);
-      for (let y = y0 + 0.25; y < y1; y += 0.5)
-        for (let x = x0 + 0.25; x < x1; x += 0.5) {
-          if (!pointIn(rings, x, y)) continue;
-          expect(nearCell(m, x, y, limit), `${k} empty shade at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
-        }
-    }
-  });
-
-  it("keeps every animal letter's glyph box inside the outline, with a margin, on 8.5x11 and 6x9", () => {
-    const ringIn = (pts: [number, number][], x: number, y: number) => {
-      let hit = false;
-      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
-        const [xi, yi] = pts[i];
-        const [xj, yj] = pts[j];
-        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
-      }
-      return hit;
-    };
-    const pointIn = (rings: [number, number][][], x: number, y: number) => rings.reduce((hit, ring) => hit !== ringIn(ring, x, y), false);
-    const nearCell = (m: boolean[][], x: number, y: number, max: number) => {
-      const n = m.length;
-      const r0 = Math.max(0, Math.floor(y) - 2);
-      const r1 = Math.min(n - 1, Math.ceil(y) + 2);
-      const c0 = Math.max(0, Math.floor(x) - 2);
-      const c1 = Math.min(n - 1, Math.ceil(x) + 2);
-      for (let r = r0; r <= r1; r++)
-        for (let c = c0; c <= c1; c++) {
-          if (!m[r][c]) continue;
-          const dx = x < c ? c - x : x > c + 1 ? x - (c + 1) : 0;
-          const dy = y < r ? r - y : y > r + 1 ? y - (r + 1) : 0;
-          if (Math.hypot(dx, dy) <= max) return true;
-        }
-      return false;
-    };
     const edgeDist = (rings: [number, number][][], x: number, y: number) => {
       let best = Infinity;
       for (const pts of rings) {
@@ -195,22 +124,127 @@ describe("shape masks", () => {
       }
       return best;
     };
-    // Typical letters are 0.6 of a cell; the 7pt floor can reach ~0.7 on tight 8.5x11
-    // animals. Add the 0.15 margin and half of a 1.2pt stroke over an 8pt cell.
-    const half = 0.7 / 2 + GLYPH_MARGIN + 1.2 / 2 / 8;
-    // Outline vertices may sit a little past the 0.6 cap at rounded/beveled joins.
+    const half = 0.7 / 2 + ARTIST_MARGIN;
+    for (const k of SHAPED) {
+      const n = Math.max(shapeInfo(k).minSize ?? 16, 16);
+      const sil = shapeOutline(k, n);
+      const rings = letteredOutlines(k, n, "smooth");
+      expect(rings).toHaveLength(1);
+      expect(rings[0], k).toEqual(sil);
+      const m = shapeMask(k, n)!;
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          if (!m[r][c]) continue;
+          expect(pointIn(rings, c + 0.5, r + 0.5), `${k} letter at ${r},${c} outside the artist curve`).toBe(true);
+          if (shapeInfo(k).group !== "animals") continue;
+          const cx = c + 0.5;
+          const cy = r + 0.5 + 0.04 * 0.7;
+          for (const [x, y] of [
+            [cx - half, cy - half],
+            [cx + half, cy - half],
+            [cx + half, cy + half],
+            [cx - half, cy + half],
+            [cx, cy - half],
+            [cx, cy + half],
+            [cx - half, cy],
+            [cx + half, cy],
+          ] as [number, number][]) {
+            const ok = pointIn(rings, x, y) || edgeDist(rings, x, y) < 1e-6;
+            expect(ok, `${k} ${n} glyph at ${r},${c} (${x.toFixed(2)},${y.toFixed(2)}) crosses the artist outline`).toBe(true);
+          }
+        }
+    }
+  });
+
+  it("snug outlines hug letters and stay close to them", () => {
+    const ringIn = (pts: [number, number][], x: number, y: number) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i];
+        const [xj, yj] = pts[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+      }
+      return hit;
+    };
+    const pointIn = (rings: [number, number][][], x: number, y: number) => rings.reduce((hit, ring) => hit !== ringIn(ring, x, y), false);
+    const nearCell = (m: boolean[][], x: number, y: number, max: number) => {
+      const n = m.length;
+      const r0 = Math.max(0, Math.floor(y) - 2);
+      const r1 = Math.min(n - 1, Math.ceil(y) + 2);
+      const c0 = Math.max(0, Math.floor(x) - 2);
+      const c1 = Math.min(n - 1, Math.ceil(x) + 2);
+      for (let r = r0; r <= r1; r++)
+        for (let c = c0; c <= c1; c++) {
+          if (!m[r][c]) continue;
+          const dx = x < c ? c - x : x > c + 1 ? x - (c + 1) : 0;
+          const dy = y < r ? r - y : y > r + 1 ? y - (r + 1) : 0;
+          if (Math.hypot(dx, dy) <= max) return true;
+        }
+      return false;
+    };
     const limit = CELL_DILATE + 0.12;
+    for (const k of SHAPED) {
+      const n = Math.max(shapeInfo(k).minSize ?? 16, 16);
+      const m = shapeMask(k, n)!;
+      const rings = letteredOutlines(k, n, "snug");
+      expect(rings[0]?.length, k).toBeGreaterThanOrEqual(4);
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          if (!m[r][c]) continue;
+          expect(pointIn(rings, c + 0.5, r + 0.5), `${k} letter at ${r},${c} outside the snug shade`).toBe(true);
+        }
+      for (const [x, y] of rings.flat()) expect(nearCell(m, x, y, limit), `${k} snug outline at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
+      const xs = rings.flatMap((ring) => ring.map((p) => p[0]));
+      const ys = rings.flatMap((ring) => ring.map((p) => p[1]));
+      const x0 = Math.min(...xs);
+      const y0 = Math.min(...ys);
+      const x1 = Math.max(...xs);
+      const y1 = Math.max(...ys);
+      for (let y = y0 + 0.25; y < y1; y += 0.5)
+        for (let x = x0 + 0.25; x < x1; x += 0.5) {
+          if (!pointIn(rings, x, y)) continue;
+          expect(nearCell(m, x, y, limit), `${k} snug empty shade at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
+        }
+    }
+  }, 60_000);
+
+  it("keeps every animal letter's glyph box inside the artist outline, with a margin, on 8.5x11 and 6x9", () => {
+    const ringIn = (pts: [number, number][], x: number, y: number) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const [xi, yi] = pts[i];
+        const [xj, yj] = pts[j];
+        if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+      }
+      return hit;
+    };
+    const pointIn = (rings: [number, number][][], x: number, y: number) => rings.reduce((hit, ring) => hit !== ringIn(ring, x, y), false);
+    const edgeDist = (rings: [number, number][][], x: number, y: number) => {
+      let best = Infinity;
+      for (const pts of rings) {
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const [ax, ay] = pts[j];
+          const [bx, by] = pts[i];
+          const dx = bx - ax;
+          const dy = by - ay;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / (dx * dx + dy * dy || 1)));
+          best = Math.min(best, Math.hypot(x - (ax + t * dx), y - (ay + t * dy)));
+        }
+      }
+      return best;
+    };
+    const half = 0.7 / 2 + ARTIST_MARGIN;
     for (const trim of ["8.5x11", "6x9"] as const) {
       for (const k of ANIMAL_KEYS) {
         const n = shapeInfo(k).minSize ?? 24;
         const m = shapeMask(k, n)!;
-        const rings = letteredOutlines(k, n);
-        expect(rings[0]?.length, `${k} ${trim}`).toBeGreaterThanOrEqual(4);
+        const rings = letteredOutlines(k, n, "smooth");
+        expect(rings[0], `${k} ${trim}`).toEqual(shapeOutline(k, n));
         for (let r = 0; r < n; r++)
           for (let c = 0; c < n; c++) {
             if (!m[r][c]) continue;
             const cx = c + 0.5;
-            const cy = r + 0.5 + 0.04 * GLYPH_FRAC; // matches the slight baseline nudge in the PDF
+            const cy = r + 0.5 + 0.04 * 0.7;
             const box: [number, number][] = [
               [cx - half, cy - half],
               [cx + half, cy - half],
@@ -222,25 +256,13 @@ describe("shape masks", () => {
               [cx + half, cy],
             ];
             for (const [x, y] of box) {
-              const ok = pointIn(rings, x, y) || edgeDist(rings, x, y) < 0.05;
+              const ok = pointIn(rings, x, y) || edgeDist(rings, x, y) < 1e-6;
               expect(ok, `${k} ${trim} ${n} glyph at ${r},${c} (${x.toFixed(2)},${y.toFixed(2)}) crosses the outline`).toBe(true);
             }
           }
-        for (const [x, y] of rings.flat()) expect(nearCell(m, x, y, limit), `${k} ${trim} outline at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
-        const xs = rings.flatMap((ring) => ring.map((p) => p[0]));
-        const ys = rings.flatMap((ring) => ring.map((p) => p[1]));
-        const x0 = Math.min(...xs);
-        const y0 = Math.min(...ys);
-        const x1 = Math.max(...xs);
-        const y1 = Math.max(...ys);
-        for (let y = y0 + 0.25; y < y1; y += 0.5)
-          for (let x = x0 + 0.25; x < x1; x += 0.5) {
-            if (!pointIn(rings, x, y)) continue;
-            expect(nearCell(m, x, y, limit), `${k} ${trim} empty shade at ${x.toFixed(2)},${y.toFixed(2)}`).toBe(true);
-          }
       }
     }
-  }, 60_000);
+  });
 
   it("mixes shapes per puzzle or per theme", () => {
     expect(shapeFor({ kind: "heart", mix: "one" }, 5)).toBe("heart");
@@ -423,6 +445,7 @@ describe("shaped crosswords and sudoku frames", () => {
     expect(sanitizeDesign({ shape: { kind: "heart", mix: "each" } }).shape).toEqual({ kind: "heart", mix: "each", shade: false, outline: "smooth" });
     expect(sanitizeDesign({ shape: { kind: "elephant", mix: "animals", shade: true } }).shape).toEqual({ kind: "elephant", mix: "animals", shade: true, outline: "smooth" });
     expect(sanitizeDesign({ shape: { kind: "deer", mix: "one", outline: "blocky" } }).shape.outline).toBe("blocky");
+    expect(sanitizeDesign({ shape: { kind: "deer", mix: "one", outline: "snug" } }).shape.outline).toBe("snug");
   });
 });
 

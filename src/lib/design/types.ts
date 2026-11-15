@@ -60,7 +60,7 @@ export interface Design {
     mix: ShapeMix;
     /** Light shaded silhouette behind the letters (the grey fill of a shaped word search). */
     shade: boolean;
-    /** Smooth = the professional silhouette clipped to the letters; blocky = a cell-hugging pixel outline. */
+    /** smooth = the exact artist silhouette; snug = outline hugs letters; blocky = a cell-hugging pixel outline. */
     outline: OutlineStyle;
   };
   color: {

@@ -17,7 +17,7 @@ const LINES: LineStyle[] = ["solid", "dashed", "dotted"];
 const CELLS: CellStyle[] = ["plain", "boxed", "rounded", "circles"];
 const LIST_BOXES: ListBox[] = ["none", "solid", "rounded", "dashed", "double"];
 const MIXES: ShapeMix[] = ["one", "each", "theme", "animals"];
-const OUTLINES: OutlineStyle[] = ["smooth", "blocky"];
+const OUTLINES: OutlineStyle[] = ["smooth", "snug", "blocky"];
 
 export const DESIGN_OPTIONS = { HEADERS, BADGES, ICONS, PATTERNS, BORDERS, SHADES, NUMBERS, SORTS, LINES, CELLS, LIST_BOXES, MIXES, OUTLINES };
 

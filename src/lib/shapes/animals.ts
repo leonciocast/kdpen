@@ -38,7 +38,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "elephant",
     label: "Elephant",
-    minSize: 42,
+    minSize: 52,
     aliases: ["elephants", "pachyderm", "pachyderms"],
     focus: [180.00, 168.49, 820.00, 767.54],
     source: {
@@ -53,7 +53,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "deer",
     label: "Deer",
-    minSize: 42,
+    minSize: 50,
     aliases: ["buck", "bucks", "doe", "does", "stag", "stags"],
     focus: [155.28, 180.00, 707.36, 820.00],
     source: {
@@ -68,7 +68,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "moose",
     label: "Moose",
-    minSize: 42,
+    minSize: 52,
     aliases: ["elk", "elks"],
     focus: [180.00, 120.21, 820.00, 547.61],
     source: {
@@ -83,7 +83,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "horse",
     label: "Horse",
-    minSize: 40,
+    minSize: 52,
     aliases: ["horses", "mare", "ponies", "pony", "stallion"],
     focus: [180.00, 155.61, 820.00, 708.89],
     source: {
@@ -98,7 +98,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "unicorn",
     label: "Unicorn",
-    minSize: 40,
+    minSize: 52,
     aliases: ["unicorns"],
     focus: [180.00, 126.54, 820.00, 576.47],
     source: {
@@ -113,7 +113,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "zebra",
     label: "Zebra",
-    minSize: 40,
+    minSize: 52,
     aliases: ["zebras"],
     focus: [180.00, 127.71, 820.00, 581.78],
     source: {
@@ -128,7 +128,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "donkey",
     label: "Donkey",
-    minSize: 40,
+    minSize: 52,
     aliases: ["burro", "burros", "donkeys", "mule", "mules"],
     focus: [180.00, 161.03, 820.00, 733.56],
     source: {
@@ -143,7 +143,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "cow",
     label: "Cow",
-    minSize: 38,
+    minSize: 52,
     aliases: ["cattle", "cows"],
     focus: [180.00, 114.14, 820.00, 519.95],
     source: {
@@ -158,7 +158,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "bull",
     label: "Bull",
-    minSize: 40,
+    minSize: 52,
     aliases: ["bulls", "steer", "steers"],
     focus: [180.00, 101.20, 820.00, 461.04],
     source: {
@@ -173,7 +173,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "pig",
     label: "Pig",
-    minSize: 36,
+    minSize: 52,
     aliases: ["boar", "boars", "hog", "hogs", "piglet", "piglets", "pigs"],
     focus: [180.00, 130.80, 820.00, 595.89],
     source: {
@@ -188,7 +188,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "sheep",
     label: "Sheep",
-    minSize: 36,
+    minSize: 51,
     aliases: ["ewe", "ewes", "lamb", "lambs", "ram", "rams"],
     focus: [180.00, 137.44, 820.00, 626.10],
     source: {
@@ -203,7 +203,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "goat",
     label: "Goat",
-    minSize: 38,
+    minSize: 50,
     aliases: ["billy", "goats", "kid", "kids"],
     focus: [179.29, 180.00, 816.77, 820.00],
     source: {
@@ -218,7 +218,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "llama",
     label: "Llama",
-    minSize: 40,
+    minSize: 50,
     aliases: ["alpaca", "alpacas", "llamas"],
     focus: [151.11, 180.00, 688.39, 820.00],
     source: {
@@ -233,7 +233,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "camel",
     label: "Camel",
-    minSize: 40,
+    minSize: 52,
     aliases: ["camels", "dromedaries", "dromedary"],
     focus: [180.00, 140.07, 820.00, 638.10],
     source: {
@@ -248,7 +248,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "giraffe",
     label: "Giraffe",
-    minSize: 46,
+    minSize: 50,
     aliases: ["giraffes"],
     focus: [156.28, 180.00, 711.92, 820.00],
     source: {
@@ -263,7 +263,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "hippo",
     label: "Hippo",
-    minSize: 36,
+    minSize: 51,
     aliases: ["hippopotamus", "hippos"],
     focus: [180.00, 98.04, 820.00, 446.64],
     source: {
@@ -278,7 +278,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "rhino",
     label: "Rhino",
-    minSize: 38,
+    minSize: 52,
     aliases: ["rhinoceros", "rhinos"],
     focus: [180.00, 106.73, 820.00, 486.24],
     source: {
@@ -293,7 +293,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "bear",
     label: "Bear",
-    minSize: 36,
+    minSize: 51,
     aliases: ["bears", "cub", "cubs"],
     focus: [180.00, 131.56, 820.00, 599.34],
     source: {
@@ -308,7 +308,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "koala",
     label: "Koala",
-    minSize: 36,
+    minSize: 50,
     aliases: ["koalas"],
     focus: [158.49, 180.00, 722.00, 820.00],
     source: {
@@ -323,7 +323,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "cat",
     label: "Cat",
-    minSize: 34,
+    minSize: 50,
     aliases: ["cats", "kitten", "kittens", "kitty"],
     focus: [162.61, 180.00, 740.80, 820.00],
     source: {
@@ -338,7 +338,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "lion",
     label: "Lion",
-    minSize: 38,
+    minSize: 51,
     aliases: ["lioness", "lionesses", "lions"],
     focus: [180.00, 136.30, 820.00, 620.91],
     source: {
@@ -353,7 +353,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "dog",
     label: "Dog",
-    minSize: 36,
+    minSize: 51,
     aliases: ["dogs", "hound", "hounds", "puppies", "puppy"],
     focus: [180.00, 154.74, 820.00, 704.95],
     source: {
@@ -368,7 +368,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "wolf",
     label: "Wolf",
-    minSize: 38,
+    minSize: 52,
     aliases: ["wolves"],
     focus: [180.00, 110.47, 820.00, 503.25],
     source: {
@@ -383,7 +383,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "fox",
     label: "Fox",
-    minSize: 38,
+    minSize: 52,
     aliases: ["foxes"],
     focus: [180.00, 100.77, 820.00, 459.04],
     source: {
@@ -398,7 +398,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "rabbit",
     label: "Rabbit",
-    minSize: 36,
+    minSize: 50,
     aliases: ["bunnies", "bunny", "hare", "hares", "rabbits"],
     focus: [158.18, 180.00, 720.62, 820.00],
     source: {
@@ -413,7 +413,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "squirrel",
     label: "Squirrel",
-    minSize: 36,
+    minSize: 51,
     aliases: ["squirrels"],
     focus: [180.00, 150.64, 820.00, 686.27],
     source: {
@@ -428,7 +428,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "mouse",
     label: "Mouse",
-    minSize: 34,
+    minSize: 52,
     aliases: ["mice"],
     focus: [180.00, 96.60, 820.00, 440.05],
     source: {
@@ -443,7 +443,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "hedgehog",
     label: "Hedgehog",
-    minSize: 34,
+    minSize: 52,
     aliases: ["hedgehogs"],
     focus: [180.00, 110.92, 820.00, 505.29],
     source: {
@@ -458,7 +458,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "raccoon",
     label: "Raccoon",
-    minSize: 36,
+    minSize: 51,
     aliases: ["raccoons"],
     focus: [180.00, 140.43, 820.00, 639.74],
     source: {
@@ -473,7 +473,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "otter",
     label: "Otter",
-    minSize: 36,
+    minSize: 51,
     aliases: ["otters"],
     focus: [180.00, 122.02, 820.00, 555.86],
     source: {
@@ -488,7 +488,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "monkey",
     label: "Monkey",
-    minSize: 36,
+    minSize: 52,
     aliases: ["ape", "apes", "monkeys"],
     focus: [180.00, 95.55, 820.00, 435.28],
     source: {
@@ -503,7 +503,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "kangaroo",
     label: "Kangaroo",
-    minSize: 40,
+    minSize: 50,
     aliases: ["joey", "joeys", "kangaroos", "roo", "roos"],
     focus: [159.39, 180.00, 726.10, 820.00],
     source: {
@@ -518,7 +518,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "owl",
     label: "Owl",
-    minSize: 34,
+    minSize: 50,
     aliases: ["owls"],
     focus: [94.97, 180.00, 432.66, 820.00],
     source: {
@@ -533,7 +533,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "eagle",
     label: "Eagle",
-    minSize: 40,
+    minSize: 50,
     aliases: ["eagles", "hawk", "hawks", "raptor", "raptors"],
     focus: [152.29, 180.00, 693.79, 820.00],
     source: {
@@ -548,7 +548,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "duck",
     label: "Duck",
-    minSize: 36,
+    minSize: 52,
     aliases: ["ducks"],
     focus: [180.00, 59.74, 820.00, 272.15],
     source: {
@@ -563,7 +563,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "swan",
     label: "Swan",
-    minSize: 36,
+    minSize: 52,
     aliases: ["swans"],
     focus: [180.00, 107.48, 820.00, 489.62],
     source: {
@@ -578,7 +578,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "goose",
     label: "Goose",
-    minSize: 36,
+    minSize: 50,
     aliases: ["geese"],
     focus: [168.06, 180.00, 765.59, 820.00],
     source: {
@@ -593,7 +593,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "chicken",
     label: "Chicken",
-    minSize: 34,
+    minSize: 50,
     aliases: ["chickens", "hen", "hens"],
     focus: [128.60, 180.00, 585.82, 820.00],
     source: {
@@ -608,7 +608,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "rooster",
     label: "Rooster",
-    minSize: 36,
+    minSize: 50,
     aliases: ["cockerel", "cockerels", "roosters"],
     focus: [163.72, 180.00, 745.82, 820.00],
     source: {
@@ -623,7 +623,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "turkey",
     label: "Turkey",
-    minSize: 36,
+    minSize: 51,
     aliases: ["turkeys"],
     focus: [180.00, 103.32, 820.00, 470.68],
     source: {
@@ -638,7 +638,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "penguin",
     label: "Penguin",
-    minSize: 34,
+    minSize: 50,
     aliases: ["penguins"],
     focus: [125.15, 180.00, 570.14, 820.00],
     source: {
@@ -653,7 +653,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "flamingo",
     label: "Flamingo",
-    minSize: 48,
+    minSize: 50,
     aliases: ["flamingos"],
     focus: [143.78, 180.00, 654.99, 820.00],
     source: {
@@ -668,7 +668,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "parrot",
     label: "Parrot",
-    minSize: 36,
+    minSize: 51,
     aliases: ["macaw", "macaws", "parrots"],
     focus: [89.16, 180.00, 406.20, 820.00],
     source: {
@@ -683,7 +683,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "bat",
     label: "Bat",
-    minSize: 36,
+    minSize: 52,
     aliases: ["bats"],
     focus: [180.00, 82.49, 820.00, 375.81],
     source: {
@@ -698,7 +698,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "fish",
     label: "Fish",
-    minSize: 34,
+    minSize: 52,
     aliases: ["fishes"],
     focus: [180.00, 72.85, 820.00, 331.86],
     source: {
@@ -713,7 +713,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "whale",
     label: "Whale",
-    minSize: 36,
+    minSize: 52,
     aliases: ["whales"],
     focus: [180.00, 52.85, 820.00, 240.78],
     source: {
@@ -728,7 +728,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "dolphin",
     label: "Dolphin",
-    minSize: 36,
+    minSize: 51,
     aliases: ["dolphins", "porpoise", "porpoises"],
     focus: [180.00, 62.77, 820.00, 285.97],
     source: {
@@ -743,7 +743,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "shark",
     label: "Shark",
-    minSize: 36,
+    minSize: 51,
     aliases: ["sharks"],
     focus: [180.00, 102.40, 820.00, 466.49],
     source: {
@@ -758,7 +758,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "seahorse",
     label: "Seahorse",
-    minSize: 36,
+    minSize: 50,
     aliases: ["sea horse", "sea horses", "seahorses"],
     focus: [133.58, 180.00, 608.51, 820.00],
     source: {
@@ -773,7 +773,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "octopus",
     label: "Octopus",
-    minSize: 36,
+    minSize: 51,
     aliases: ["octopi", "octopuses"],
     focus: [180.00, 165.39, 820.00, 753.45],
     source: {
@@ -788,7 +788,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "crab",
     label: "Crab",
-    minSize: 34,
+    minSize: 51,
     aliases: ["crabs"],
     focus: [180.00, 121.21, 820.00, 552.20],
     source: {
@@ -803,7 +803,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "lobster",
     label: "Lobster",
-    minSize: 36,
+    minSize: 50,
     aliases: ["lobsters"],
     focus: [78.20, 180.00, 356.23, 820.00],
     source: {
@@ -818,7 +818,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "turtle",
     label: "Turtle",
-    minSize: 34,
+    minSize: 51,
     aliases: ["tortoise", "tortoises", "turtles"],
     focus: [180.00, 116.64, 820.00, 531.37],
     source: {
@@ -833,7 +833,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "frog",
     label: "Frog",
-    minSize: 34,
+    minSize: 51,
     aliases: ["frogs", "toad", "toads"],
     focus: [180.00, 139.72, 820.00, 636.49],
     source: {
@@ -848,7 +848,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "crocodile",
     label: "Crocodile",
-    minSize: 40,
+    minSize: 51,
     aliases: ["alligator", "alligators", "croc", "crocodiles", "crocs"],
     focus: [180.00, 119.22, 820.00, 543.09],
     source: {
@@ -863,7 +863,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "snail",
     label: "Snail",
-    minSize: 32,
+    minSize: 51,
     aliases: ["snails"],
     focus: [180.00, 85.68, 820.00, 390.34],
     source: {
@@ -878,7 +878,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "butterfly",
     label: "Butterfly",
-    minSize: 36,
+    minSize: 51,
     aliases: ["butterflies"],
     focus: [180.00, 128.41, 820.00, 584.96],
     source: {
@@ -893,7 +893,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "bee",
     label: "Bee",
-    minSize: 34,
+    minSize: 51,
     aliases: ["bees", "bumblebee", "bumblebees"],
     focus: [180.00, 141.90, 820.00, 646.43],
     source: {
@@ -908,7 +908,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "ladybug",
     label: "Ladybug",
-    minSize: 32,
+    minSize: 51,
     aliases: ["lady beetle", "ladybird", "ladybirds", "ladybugs"],
     focus: [180.00, 127.86, 820.00, 582.45],
     source: {
@@ -923,7 +923,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "trex",
     label: "T-Rex",
-    minSize: 42,
+    minSize: 52,
     aliases: ["dinosaur", "dinosaurs", "t rex", "t-rex", "tyrannosaurus"],
     focus: [180.00, 92.73, 820.00, 422.42],
     source: {
@@ -938,7 +938,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "longneck",
     label: "Longneck",
-    minSize: 46,
+    minSize: 50,
     aliases: ["apatosaurus", "brontosaurus", "diplodocus", "sauropod", "sauropods"],
     focus: [157.68, 180.00, 718.31, 820.00],
     source: {
@@ -953,7 +953,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "dragon",
     label: "Dragon",
-    minSize: 40,
+    minSize: 50,
     aliases: ["dragons"],
     focus: [176.38, 180.00, 803.53, 820.00],
     source: {
@@ -968,7 +968,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "seal",
     label: "Seal",
-    minSize: 36,
+    minSize: 51,
     aliases: ["sea lion", "sea lions", "seals"],
     focus: [180.00, 138.44, 820.00, 630.66],
     source: {
@@ -983,7 +983,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "ostrich",
     label: "Ostrich",
-    minSize: 46,
+    minSize: 50,
     aliases: ["ostriches"],
     focus: [157.26, 180.00, 716.42, 820.00],
     source: {
@@ -998,7 +998,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "pelican",
     label: "Pelican",
-    minSize: 36,
+    minSize: 50,
     aliases: ["pelicans"],
     focus: [152.88, 180.00, 696.43, 820.00],
     source: {
@@ -1013,7 +1013,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "snake",
     label: "Snake",
-    minSize: 36,
+    minSize: 51,
     aliases: ["serpent", "serpents", "snakes"],
     focus: [180.00, 130.06, 820.00, 592.51],
     source: {
@@ -1028,7 +1028,7 @@ export const ANIMALS: AnimalDef[] = [
   {
     key: "scorpion",
     label: "Scorpion",
-    minSize: 36,
+    minSize: 52,
     aliases: ["scorpions"],
     focus: [180.00, 124.74, 820.00, 568.25],
     source: {
