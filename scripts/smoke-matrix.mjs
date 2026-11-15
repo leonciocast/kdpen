@@ -459,8 +459,8 @@ async function run(browser, spec, idx) {
     problems.push(`flow: ${String(e.message ?? e).split("\n")[0]} (at ${await q()})`);
     await page.screenshot({ path: `${OUT}/${idx}_${spec.tool}_fail.png`, fullPage: true }).catch(() => {});
   }
-  await pause(500);
-  await ctx.close();
+  await pause(500).catch(() => {});
+  await ctx.close().catch(() => {});
   return { spec, problems, secs: (Date.now() - t0) / 1000, log };
 }
 
@@ -468,28 +468,37 @@ async function run(browser, spec, idx) {
 const runs = [...(ONLY_FUZZ ? [] : MATRIX)];
 for (const tool of TOOLS) for (let i = 1; i <= FUZZ; i++) runs.push(fuzzRun(tool, i));
 console.log(`${runs.length} runs (${ONLY_FUZZ ? 0 : MATRIX.length} matrix + ${FUZZ * TOOLS.length} fuzz), ${WORKERS} workers`);
-const browser = await chromium.launch();
+let browser = await chromium.launch();
+// A crashed browser (box hiccup) is a harness problem, not an app one: relaunch and retry that run once.
+const browserCrashed = (res) => res.problems.some((p) => /has been closed|Browser closed|Target crashed/.test(p));
+const FROM = Number(arg("from", 0));
 const results = [];
-let cursor = 0;
+let cursor = FROM;
 await Promise.all(
   Array.from({ length: WORKERS }, async () => {
     while (cursor < runs.length) {
       const idx = cursor++;
-      const res = await run(browser, runs[idx], idx);
+      let res = await run(browser, runs[idx], idx).catch((e) => ({ spec: runs[idx], problems: [`harness: ${e.message}`], secs: 0, log: [] }));
+      if (browserCrashed(res) || /harness/.test(res.problems[0] ?? "")) {
+        if (!browser.isConnected()) browser = await chromium.launch();
+        console.log(`  … retrying [${idx}] after a browser crash`);
+        res = await run(browser, runs[idx], idx).catch((e) => ({ spec: runs[idx], problems: [`harness: ${e.message}`], secs: 0, log: [] }));
+      }
       results[idx] = res;
       console.log(`${res.problems.length ? "✗" : "✓"} [${idx}] ${res.spec.name.slice(0, 150)} (${res.secs.toFixed(0)}s)${res.problems.length ? "\n    " + [...new Set(res.problems)].slice(0, 6).join("\n    ") : ""}`);
     }
   }),
 );
 await browser.close();
-const failed = results.filter((x) => x.problems.length);
+const done = results.filter(Boolean);
+const failed = done.filter((x) => x.problems.length);
 const byTool = {};
-for (const x of results) {
+for (const x of done) {
   const t = (byTool[x.spec.tool] ??= { runs: 0, ok: 0 });
   t.runs++;
   if (!x.problems.length) t.ok++;
 }
 console.log("\nSUMMARY " + Object.entries(byTool).map(([t, v]) => `${t} ${v.ok}/${v.runs}`).join(" · "));
 console.log(failed.length ? `${failed.length} runs failed` : "All runs passed with no errors.");
-fs.writeFileSync(`${OUT}/results.json`, JSON.stringify(results.map(({ spec: { r, ...s }, ...x }) => ({ spec: s, ...x })), null, 1));
+fs.writeFileSync(`${OUT}/results.json`, JSON.stringify(done.map(({ spec: { r, ...s }, ...x }) => ({ spec: s, ...x })), null, 1));
 process.exit(failed.length ? 1 : 0);
