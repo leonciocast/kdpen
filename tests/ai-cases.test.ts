@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type { ConverseCommandOutput } from "@aws-sdk/client-bedrock-runtime";
 import { AiError, bedrockLlm, extractToolInput, type ConverseSender } from "../src/lib/ai/bedrock";
-import { checkAiCase, checkBook, checkOutline, clueOverlap, strayPlaces, unsuitable } from "../src/lib/ai/check";
+import { checkAiCase, checkBook, checkOutline, clueOverlap, leadMismatch, oddTrait, placeNames, pointsAtOther, strayPlaces, unsuitable } from "../src/lib/ai/check";
 import { generateAiBook, regenerateCase, type AiProgress } from "../src/lib/ai/generate";
 import { casesPrompt, flavorFor, outlinePrompt } from "../src/lib/ai/prompts";
 import { mockLlm } from "../src/lib/ai/mock";
@@ -213,3 +213,57 @@ describe("whole book with a mocked model", () => {
     expect(n).toBe(3);
   });
 });
+
+describe("story checks (found in a real 24-case harbour book)", () => {
+  const P = (name: string, traits: string[]) => ({ name, role: "Villager", traits });
+  const odette = P("Odette Marsh", ["wears a navy cap", "carries a brass whistle"]);
+  const cornelis = P("Cornelis Bright", ["wears a monocle", "has a bow tie"]);
+  const felix = P("Felix Harrow", ["has a white mustache", "has a deep voice"]);
+  const tobias = P("Tobias Reed", ["has a limp", "smokes no pipe, only chews"]);
+  const cast = [odette, cornelis, felix, tobias];
+  test("an invented town in a case title is a second place name", () => {
+    expect(placeNames("Lost Letters of Lindenquay")).toEqual(["Lindenquay"]);
+    expect(strayPlaces("Lost Letters of Lindenquay", "Vennmark Harbour")).toEqual(["Lindenquay"]);
+    expect(strayPlaces("The Upside-Down Flags at Vennmark Harbour", "Vennmark Harbour")).toEqual([]);
+    const base = { index: 4, title: "Lost Letters of Lindenquay", story: "The mail satchel is emptied at Vennmark Harbour.", words: ["SEAL", "LETTER", "BRUSH", "EASEL", "FRAME", "STAMP", "PARCEL", "PALETTE", "SATCHEL", "ENVELOPE", "CANVAS", "POSTCARD"], missing: { word: "TURPENTINE", clue: "A sharp smell" }, suspects: [odette.name, cornelis.name, felix.name], culprit: felix.name, lead: "Next, the lanterns go dark." };
+    expect(checkAiCase(base, cast, DEFAULT_MYSTERY_SETTINGS, 11, 1, { place: "Vennmark Harbour" }).problems.join(" ")).toMatch(/not “Lindenquay”/);
+  });
+  test("a witness who sees another suspect's trait contradicts the case", () => {
+    const story = "The key has vanished. A witness saw someone with a monocle slipping away.";
+    expect(pointsAtOther(story, odette, [odette, cornelis, felix])).toEqual({ person: cornelis, thing: "monocle" });
+    expect(pointsAtOther(story, cornelis, [odette, cornelis, felix])).toBeUndefined();
+    // Naming a victim's belongings isn't a sighting.
+    expect(pointsAtOther("Odette's brass whistle is gone from its hook.", felix, [odette, felix, cornelis])).toBeUndefined();
+  });
+  test("a trait that says what someone doesn't do is sent back", () => {
+    expect(oddTrait("smokes no pipe, only chews")).toBe(true);
+    expect(oddTrait("wears yellow boots")).toBe(false);
+    const o = { title: "The Clockwork Ferry", intro: "In 1953 at Vennmark Harbour, things vanish.", place: "Vennmark Harbour", cast, mastermind: cornelis.name, finalAnswer: "", finaleQuestion: "Who?", epilogue: "Done.", cases: [{ title: "Lost Letters of Lindenquay", culprit: felix.name, premise: "Letters vanish." }] };
+    const problems = checkOutline(o, 1, false).problems.join(" ");
+    expect(problems).toMatch(/smokes no pipe/);
+    expect(problems).toMatch(/A case names “Lindenquay”/);
+  });
+  test("a lead that jumps ahead to a later case is caught, and the prompt names each next case", () => {
+    const c = (title: string, story: string, words: string[], lead = "") => ({ title, story, words, suspects: [odette.name, cornelis.name, felix.name], culprit: odette.name, lead });
+    const specs = [
+      c("The Vanishing Ribbon", "The winner's ribbon vanished from its table.", ["RIBBON", "TABLE", "CUSHION"], "Next, the captain's old compass is not where it should be, and Felix Harrow wants to know why."),
+      c("Footprints on the Pier", "Oily footprints cross the pier to an empty boathouse.", ["PIER", "BOATHOUSE", "PLANK"], "Follow the footprints to Hugo's shed."),
+      c("The Borrowed Oil", "Lantern oil is gone from Hugo's shed.", ["WICK", "CANDLE", "SHELF"], "Next, a captain loses his compass."),
+      c("Captain's Missing Compass", "Captain Felix Harrow finds a painted toy where his compass was.", ["COMPASS", "TOY", "LOCKER"]),
+    ];
+    expect(leadMismatch(specs, 0)).toBe(3);
+    expect(leadMismatch(specs, 1)).toBe(-1);
+    expect(leadMismatch(specs, 2)).toBe(-1);
+    expect(checkBook(specs, cast).get(1)!.join(" ")).toMatch(/describes case 4/);
+    const o = AiOutline.parse({ title: "The Test", intro: "An intro that is long enough.", place: "Vennmark Harbour", cast: TEMPLATE_CAST.map((p) => ({ ...p, traits: p.traits.slice(0, 3) })), mastermind: TEMPLATE_CAST[0].name, finalAnswer: "", finaleQuestion: "Who did it?", epilogue: "It was them all along.", cases: Array.from({ length: 8 }, (_, i) => ({ title: `Case title ${i + 1}`, culprit: TEMPLATE_CAST[0].name, premise: "Something odd." })) });
+    expect(casesPrompt(req({ caseCount: 8 }), o, 1, 4)).toMatch(/Its lead points to case 2, "Case title 2"/);
+  });
+  test("a lead that has the next case's wrong suspect seen is caught", () => {
+    const specs = [
+      { title: "Captain's Compass", story: "A compass is swapped for a toy.", words: ["COMPASS"], suspects: [odette.name, felix.name, tobias.name], culprit: tobias.name, lead: "Next, a key goes missing, and a monocle was seen nearby." },
+      { title: "The Clock Tower Key", story: "The tower key has vanished.", words: ["KEY"], suspects: [odette.name, cornelis.name, felix.name], culprit: odette.name },
+    ];
+    expect(checkBook(specs, cast).get(1)!.join(" ")).toMatch(/points at Cornelis Bright/);
+  });
+});
+

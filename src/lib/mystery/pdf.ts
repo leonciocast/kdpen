@@ -868,13 +868,15 @@ export function mysteryContent(items: MysteryItem[], answersPerPage: number, sty
   for (let i = 0; i < items.length; i += answersPerPage) pages.push(answersPage(items.slice(i, i + answersPerPage), i === 0, answersPerPage));
   sections.push({ title: "Solutions", index: solutionsIndex });
   const cases = items.filter((i) => i.kind === "case").map((i) => (i as { case: MysteryCase }).case);
+  const board = items.find((i) => i.kind === "board") as BoardItem | undefined;
   return {
     pages,
     sections,
     solutionsIndex,
     howToTitle: "How to Solve",
     howTo: mysteryHowTo({ missing: cases.some((c) => c.missing), message: cases.some((c) => c.message), board: items.some((i) => i.kind === "board"), checkbox: design.list.checkbox, blanks: cases.some((c) => c.blanks.length > 0), someKeyed: cases.some((c) => !c.key) && cases.some((c) => c.key) }),
-    titleDetail: `${cases.length} Murder Mystery Case${cases.length === 1 ? "" : "s"}`,
+    // The story's own title when there is one; the cases are rarely murders, so don't promise one.
+    titleDetail: board?.title?.trim() || `${cases.length} Mystery Case${cases.length === 1 ? "" : "s"}`,
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generatePuzzle, allowedDirections, mulberry32 } from "../src/lib/wordsearch/engine";
-import { insideMargin, makePageSpec, marginsForPage, paddedPageCount, outsideMargin } from "../src/lib/print/kdp";
+import { insideMargin, makePageSpec, marginsForPage, paddedPageCount, outsideMargin, contentBox, PT } from "../src/lib/print/kdp";
+import { patternArea } from "../src/lib/design/paint";
 import { buildWordSearchBook, BookPuzzle } from "../src/lib/wordsearch/pdf";
 import { DEFAULT_FRONT_MATTER } from "../src/lib/print/frontMatter";
 import { planKinds, NO_EXTRAS, DEFAULT_EXTRAS } from "../src/lib/print/book";
@@ -89,3 +90,26 @@ describe("word search book PDF", () => {
     }
   });
 });
+
+describe("ink stays inside KDP's margins (no bleed)", () => {
+  it("strokes on the content box edge can't cross the gutter", () => {
+    const spec = makePageSpec("8.5x11", 42, false);
+    const odd = contentBox(spec, 7);
+    const even = contentBox(spec, 8);
+    // A 2pt stroke centred on the edge still clears 0.375" on the spine side.
+    expect(odd.x - 1).toBeGreaterThanOrEqual(0.375 * PT);
+    expect(8.5 * PT - (even.x + even.w) - 1).toBeGreaterThanOrEqual(0.375 * PT);
+  });
+  it("the background pattern keeps the full gutter on the spine side and 0.25\" elsewhere", () => {
+    const W = 8.5 * PT, H = 11 * PT;
+    const recto = patternArea(W, H, false, 0.375 * PT, "recto");
+    const verso = patternArea(W, H, false, 0.375 * PT, "verso");
+    expect(recto.x).toBeGreaterThan(0.375 * PT);
+    expect(W - (recto.x + recto.w)).toBeGreaterThan(0.25 * PT);
+    expect(W - (verso.x + verso.w)).toBeGreaterThan(0.375 * PT);
+    expect(verso.x).toBeGreaterThan(0.25 * PT);
+    expect(recto.y).toBeGreaterThan(0.25 * PT);
+    expect(patternArea(W, H, true)).toEqual({ x: 0, y: 0, w: W, h: H });
+  });
+});
+

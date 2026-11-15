@@ -190,12 +190,18 @@ function drawTitlePage(ctx: PageContext, fm: FrontMatter, detail: string, volume
   pdf.line(cx - 60 * s, y, cx - 8 * s, y);
   pdf.line(cx + 8 * s, y, cx + 60 * s, y);
   poly(pdf, [[cx, y - 4 * s], [cx + 4 * s, y], [cx, y + 4 * s], [cx - 4 * s, y]], "F");
-  if (detail) {
+  // "24 Detective Cases to Solve" already says how many; don't repeat it as "24 … Cases".
+  const count = detail.match(/^(\d+) /)?.[1];
+  if (detail && !(count && fm.subtitle.trim().startsWith(`${count} `))) {
     pdf.setFont(SANS, "normal");
-    pdf.setFontSize(11 * s);
+    const up = detail.toUpperCase();
+    let size = 11 * s;
+    pdf.setFontSize(size);
+    // A long story title shrinks to fit the line rather than running into the margins.
+    while (size > 7 * s && pdf.getTextWidth(up) + up.length * 1.2 * s > innerW) pdf.setFontSize((size -= 0.5));
     pdf.setTextColor(90, 90, 90);
     pdf.setCharSpace(1.2 * s);
-    centered(pdf, detail.toUpperCase(), cx, y + 26 * s);
+    centered(pdf, up, cx, y + 26 * s);
     pdf.setCharSpace(0);
   }
   if (look.design.header.icon !== "none") drawIcon(pdf, look.design.header.icon, cx, box.y + box.h * 0.66, 30 * s, look.accent);
@@ -429,18 +435,19 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
   const solutionsPage = contentAt[c.solutionsIndex];
 
   const s = scaleFor(opts.trim);
-  const area = patternArea(W, H, opts.bleed);
-  // The background pattern is drawn once as a PDF form object and reused on every page (tiny files).
+  // The background pattern is drawn once per page side as a PDF form object and reused (tiny files).
   const hasPattern = design.pattern.kind !== "none";
   if (hasPattern) {
-    (pdf as any).advancedAPI((p: any) => {
-      p.beginFormObject(0, 0, W, H, p.unitMatrix);
-      drawPattern(p, design.pattern.kind, area, look, 7);
-      p.endFormObject("pg-pattern");
+    (["recto", "verso"] as const).forEach((side) => {
+      (pdf as any).advancedAPI((p: any) => {
+        p.beginFormObject(0, 0, W, H, p.unitMatrix);
+        drawPattern(p, design.pattern.kind, patternArea(W, H, opts.bleed, spec.inside * PT, side), look, 7);
+        p.endFormObject(`pg-pattern-${side}`);
+      });
     });
   }
-  const stamp = () => {
-    (pdf as any).advancedAPI((p: any) => p.doFormObject("pg-pattern", p.unitMatrix));
+  const stamp = (page: number) => {
+    (pdf as any).advancedAPI((p: any) => p.doFormObject(`pg-pattern-${page % 2 === 1 ? "recto" : "verso"}`, p.unitMatrix));
   };
   let tocIndex = 0;
   const numbered = new Set<PageKind>(["toc", "intro", "howto", "content", "notes"]);
@@ -450,7 +457,7 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
     const page = i + 1;
     if (i > 0) pdf.addPage([W, H], "portrait");
     const ctx: PageContext = { pdf, box: contentBox(spec, page), page, spec, s, pageW: W, pageH: H, look, solutionsPage };
-    if (hasPattern && patterned.has(kind)) stamp();
+    if (hasPattern && patterned.has(kind)) stamp(page);
     switch (kind) {
       case "title":
         if (fm) drawTitlePage(ctx, fm, c.titleDetail, opts.volume);

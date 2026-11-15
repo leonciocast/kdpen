@@ -56,7 +56,8 @@ export function casesPrompt(r: GenerateRequest, o: AiOutline, from: number, to: 
     .map((c, k) => {
       const n = from + k;
       const fb = feedback?.get(n);
-      return `${n}. "${c.title}". Culprit: ${c.culprit}. ${c.premise}${fb?.length ? `\n   Your previous version of this case had problems, fix them: ${fb.join(" ")}` : ""}`;
+      const after = o.cases[n];
+      return `${n}. "${c.title}". Culprit: ${c.culprit}. ${c.premise}${after ? ` Its lead points to case ${n + 1}, "${after.title}".` : ""}${fb?.length ? `\n   Your previous version of this case had problems, fix them: ${fb.join(" ")}` : ""}`;
     })
     .join("\n");
   const next = to < o.cases.length ? o.cases[to] : undefined;
@@ -77,5 +78,5 @@ For each case give:
 - missing: one more evidence word (${MIN_WORD}-${r.maxWord} letters, not in the list and not inside any listed word) and a one-sentence clue that points to it without saying it. Every case in the book needs a different missing word and a clue worded its own way, and the missing word must not appear in the culprit's traits (the hidden message would give it away).
 - suspects: three different cast names, one of them the culprit; the culprit must have at least one trait that neither other suspect has.
 - culprit: the culprit's exact name.
-- lead: one sentence pointing to the next case, required for every case${to === o.cases.length ? " (for the last case, send the reader to the Case Board)" : ""}.`;
+- lead: one sentence pointing to the very next case (the one named after “Its lead points to”), never to a later one, and without hinting at a suspect; required for every case${to === o.cases.length ? " (for the last case, send the reader to the Case Board)" : ""}.`;
 }

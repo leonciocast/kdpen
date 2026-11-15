@@ -121,7 +121,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
   const ctxOf = (i: number): CaseContext => ({ place: outline!.place, nextTitle: outline!.cases[i]?.title, last: i === N });
   // Cross-case checks (unique missing words, clues not copied) once every batch is in.
   const bookCheck = () => {
-    for (const [i, p] of checkBook(specs)) {
+    for (const [i, p] of checkBook(specs, cast)) {
       problems.set(i, [...(problems.get(i) ?? []), ...p]);
       done.delete(i);
     }

@@ -91,13 +91,20 @@ export function marginsForPage(spec: PageSpec, page: number): { left: number; ri
   };
 }
 
+/**
+ * Points kept clear inside the left and right margins. Frames, cards and badges are stroked on the
+ * edge of the content box and half of each stroke lands outside it, so without this the ink would
+ * sit a hair past KDP's minimum gutter (0.375" for short books).
+ */
+export const STROKE_SAFETY_PT = 1.5;
+
 /** Content box in points, origin top-left (jsPDF convention). */
 export function contentBox(spec: PageSpec, page: number): { x: number; y: number; w: number; h: number } {
   const m = marginsForPage(spec, page);
   return {
-    x: m.left * PT,
+    x: m.left * PT + STROKE_SAFETY_PT,
     y: m.top * PT,
-    w: (spec.pageWidth - m.left - m.right) * PT,
+    w: (spec.pageWidth - m.left - m.right) * PT - 2 * STROKE_SAFETY_PT,
     h: (spec.pageHeight - m.top - m.bottom) * PT,
   };
 }

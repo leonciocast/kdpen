@@ -207,9 +207,19 @@ export function drawBadge(pdf: jsPDF, shape: BadgeShape, cx: number, cy: number,
 // ---------------------------------------------------------------- patterns
 
 /** Where a background pattern may print: the full page with bleed, else a safe inset. */
-export function patternArea(pageW: number, pageH: number, bleed: boolean): Box {
-  const inset = bleed ? 0 : 18;
-  return { x: inset, y: inset, w: pageW - inset * 2, h: pageH - inset * 2 };
+/**
+ * Where the background pattern may go. With bleed it runs to the page edge. Without bleed KDP
+ * wants everything inside the margins: at least 0.25" from the outside edges and the full gutter
+ * (`gutter`, in points) on the spine side, so the area depends on the page side.
+ */
+export function patternArea(pageW: number, pageH: number, bleed: boolean, gutter = 18, side: "recto" | "verso" = "recto"): Box {
+  if (bleed) return { x: 0, y: 0, w: pageW, h: pageH };
+  // 0.25" plus a dot's reach, so no mark touches the minimum.
+  const edge = 18 + 2;
+  const spine = Math.max(gutter, 18) + 2;
+  const left = side === "recto" ? spine : edge;
+  const right = side === "recto" ? edge : spine;
+  return { x: left, y: edge, w: pageW - left - right, h: pageH - edge * 2 };
 }
 
 /** Low-ink decorative background. Content panels are drawn on top in white. */
@@ -270,9 +280,11 @@ export function drawPattern(pdf: jsPDF, kind: PatternKey, area: Box, look: Look,
     }
     case "confetti": {
       const n = Math.round((w * h) / 5200);
+      // Marks reach up to 8pt from their centre; keep every one inside the area.
+      const m = 8.5;
       for (let i = 0; i < n; i++) {
-        const px = x + rng() * w;
-        const py = y + rng() * h;
+        const px = x + m + rng() * (w - 2 * m);
+        const py = y + m + rng() * (h - 2 * m);
         const s = 2 + rng() * 3;
         const t = rng();
         if (t < 0.35) pdf.circle(px, py, s * 0.6, "F");
@@ -287,9 +299,10 @@ export function drawPattern(pdf: jsPDF, kind: PatternKey, area: Box, look: Look,
     }
     case "snow": {
       const n = Math.round((w * h) / 9000);
+      const m = 12;
       for (let i = 0; i < n; i++) {
-        const px = x + rng() * w;
-        const py = y + rng() * h;
+        const px = x + m + rng() * (w - 2 * m);
+        const py = y + m + rng() * (h - 2 * m);
         if (rng() < 0.4) drawIcon(pdf, "snowflake", px, py, 6 + rng() * 6, c);
         else pdf.circle(px, py, 0.8 + rng() * 1.2, "F");
       }
@@ -380,12 +393,17 @@ export function drawHeader(pdf: jsPDF, box: Box, look: Look, info: HeaderInfo, s
     }
     case "ribbon": {
       const top = y + 4 * s;
+      // The tails' sharp corners would throw miter spikes past the margin: round the joins and inset by half the stroke.
+      const x = box.x + 0.7;
+      const w = box.w - 1.4;
+      pdf.setLineJoin("round");
       const tail = 14 * s;
       fill(pdf, look.soft);
       stroke(pdf, look.accent);
       pdf.setLineWidth(1.4);
       poly(pdf, [[x, top + 4 * s], [x + tail * 1.6, top + 4 * s], [x + tail * 1.6, top + H + 4 * s], [x, top + H + 4 * s], [x + tail * 0.7, top + H / 2 + 4 * s]], "FD");
       poly(pdf, [[x + w, top + 4 * s], [x + w - tail * 1.6, top + 4 * s], [x + w - tail * 1.6, top + H + 4 * s], [x + w, top + H + 4 * s], [x + w - tail * 0.7, top + H / 2 + 4 * s]], "FD");
+      pdf.setLineJoin("miter");
       fill(pdf, look.soft);
       pdf.roundedRect(x + tail, top, w - tail * 2, H, H * 0.35, H * 0.35, "FD");
       textColor(pdf, look.ink);
