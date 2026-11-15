@@ -7,7 +7,7 @@ import { jsPDF } from "jspdf";
 import { FrontMatter, copyrightDetails, resolveNotice } from "./frontMatter";
 import { PT, PageSpec, TrimKey, contentBox, makePageSpec } from "./kdp";
 import { FontData, familiesFor, registerFonts } from "./fonts";
-import { Box, Look, drawHeader, drawIcon, drawPageNumber, drawPattern, panel, paint, patternArea, poly, resolveLook } from "../design/paint";
+import { PRINT_MIN_LINE_PT, Box, Look, drawHeader, drawIcon, drawPageNumber, drawPattern, panel, paint, patternArea, poly, resolveLook } from "../design/paint";
 import { DEFAULT_DESIGN } from "../design/templates";
 import type { Design } from "../design/types";
 import { BookPageKind, PlanInput, Slot, TOC_LINES_PER_PAGE, coreKinds, pad } from "./arrange";
@@ -420,6 +420,9 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
   const W = spec.pageWidth * PT;
   const H = spec.pageHeight * PT;
   const pdf = new jsPDF({ unit: "pt", format: [W, H], orientation: "portrait", compress: true, putOnlyUsedFonts: true, floatPrecision: 2 });
+  // Every stroke at least KDP's 0.75 pt, whatever a layout asks for.
+  const setWidth = pdf.setLineWidth.bind(pdf);
+  pdf.setLineWidth = ((w: number) => setWidth(Math.max(w, PRINT_MIN_LINE_PT))) as typeof pdf.setLineWidth;
   registerFonts(pdf, familiesFor(design), opts.fonts);
   pdf.setFont(SANS, "normal");
   const fm = opts.frontMatter;
@@ -493,8 +496,8 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
         break;
     }
     pdf.setTextColor(0, 0, 0);
-    // Centred in the bottom margin, but never closer to the edge than KDP's minimum (0.25", or 0.375" with bleed).
-    const safe = (spec.bleed ? 0.375 : 0.25) * PT + 10.5 * s;
+    // Centred in the bottom margin, and at least 0.375" from the trim (KDP's minimum is 0.25" without bleed).
+    const safe = 0.375 * PT + 10.5 * s;
     if (numbered.has(kind)) drawPageNumber(pdf, design.pageNumber, page, ctx.box.x + ctx.box.w / 2, H - Math.max((spec.bottom * PT) / 2, safe), look, s);
     opts.onPage?.(page, kinds.length);
   });

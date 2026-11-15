@@ -386,7 +386,24 @@ function casePage(c: MysteryCase, style: CaseStyle, headerText: string): PageRen
     };
     const rightH = notes(false, 0, 0);
     const bottomH = Math.max(leftH, rightH);
-    const leadH = c.lead ? 24 * s : 0;
+    // The lead is never cut short: it shrinks a little to stay on one line, then wraps.
+    const leadFit = (() => {
+      if (!c.lead) return null;
+      pdf.setFont(SANS, "bold");
+      pdf.setFontSize(7.2 * s);
+      const kw = pdf.getTextWidth("NEXT LEAD") + 9 * 1.4 * s;
+      const room = box.w - kw - 14 * s;
+      pdf.setFont(SERIF, "normal");
+      for (const size of [8.8, 8.4, 8]) {
+        pdf.setFontSize(size * s);
+        const lines = pdf.splitTextToSize(c.lead, room) as string[];
+        if (lines.length === 1) return { kw, size: size * s, lines };
+      }
+      pdf.setFontSize(8.8 * s);
+      return { kw, size: 8.8 * s, lines: pdf.splitTextToSize(c.lead, room) as string[] };
+    })();
+    const leadExtra = leadFit ? (leadFit.lines.length - 1) * leadFit.size * 1.3 : 0;
+    const leadH = c.lead ? 24 * s + leadExtra : 0;
     const bottomY = box.y + box.h - bottomH - leadH;
 
     // ---- the puzzle: centered in the space that's left, tiles in an even rhythm
@@ -417,24 +434,23 @@ function casePage(c: MysteryCase, style: CaseStyle, headerText: string): PageRen
     notes(true, right.x + pad, right.y);
 
     // ---- next lead: a refined footer line
-    if (c.lead) {
+    if (c.lead && leadFit) {
       const fy = box.y + box.h - 4 * s;
+      const { kw, size, lines } = leadFit;
+      const lh = size * 1.3;
+      const top = fy - leadExtra;
       paint.stroke(pdf, rule(look));
       pdf.setLineWidth(0.6);
-      pdf.line(box.x, fy - 14 * s, box.x + box.w, fy - 14 * s);
-      pdf.setFont(SANS, "bold");
-      pdf.setFontSize(7.2 * s);
-      const kw = pdf.getTextWidth("NEXT LEAD") + 9 * 1.4 * s;
+      pdf.line(box.x, top - 14 * s, box.x + box.w, top - 14 * s);
       pdf.setFont(SERIF, "normal");
-      pdf.setFontSize(8.8 * s);
-      const t = (pdf.splitTextToSize(c.lead, box.w - kw - 14 * s) as string[])[0];
-      const tw = pdf.getTextWidth(t);
+      pdf.setFontSize(size);
+      const tw = Math.max(...lines.map((l) => pdf.getTextWidth(l)));
       const x0 = box.x + (box.w - kw - 10 * s - tw) / 2;
-      label(pdf, "NEXT LEAD", x0, fy - 2.6 * s, look, s);
+      label(pdf, "NEXT LEAD", x0, top - 2.6 * s, look, s);
       pdf.setFont(SERIF, "normal");
-      pdf.setFontSize(8.8 * s);
+      pdf.setFontSize(size);
       ink(pdf, BODY);
-      pdf.text(t, x0 + kw + 10 * s, fy);
+      lines.forEach((l, i) => pdf.text(l, x0 + kw + 10 * s, top + i * lh));
     }
     pdf.setTextColor(0, 0, 0);
   };

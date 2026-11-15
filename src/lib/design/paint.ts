@@ -47,8 +47,32 @@ export function resolveLook(design: Design): Look {
   };
 }
 
-const fill = (pdf: jsPDF, c: RGB) => pdf.setFillColor(c[0], c[1], c[2]);
-const stroke = (pdf: jsPDF, c: RGB) => pdf.setDrawColor(c[0], c[1], c[2]);
+/**
+ * Print floors (KDP): a tint lighter than 10% may not print, and a thin line needs enough ink.
+ * Light fills are darkened to 12% black, strokes to 30% black (decorative pattern marks only to
+ * 12%, so they stay quiet). White stays white. Hue is kept for colour books.
+ */
+export const PRINT_FILL_INK = 0.12;
+export const PRINT_LINE_INK = 0.3;
+/** Thinnest line KDP prints reliably. renderBook applies it to every stroke. */
+export const PRINT_MIN_LINE_PT = 0.75;
+let decor = false;
+export function printTone(c: RGB, ink: number): RGB {
+  if (c.every((v) => v >= 254)) return c;
+  const lum = (c[0] + c[1] + c[2]) / 3;
+  const most = 255 * (1 - ink);
+  if (lum <= most) return c;
+  const k = most / lum;
+  return [Math.round(c[0] * k), Math.round(c[1] * k), Math.round(c[2] * k)];
+}
+const fill = (pdf: jsPDF, c: RGB) => {
+  const t = printTone(c, PRINT_FILL_INK);
+  pdf.setFillColor(t[0], t[1], t[2]);
+};
+const stroke = (pdf: jsPDF, c: RGB) => {
+  const t = printTone(c, decor ? PRINT_FILL_INK : PRINT_LINE_INK);
+  pdf.setDrawColor(t[0], t[1], t[2]);
+};
 const textColor = (pdf: jsPDF, c: RGB) => pdf.setTextColor(c[0], c[1], c[2]);
 export const paint = { fill, stroke, textColor };
 
@@ -214,9 +238,9 @@ export function drawBadge(pdf: jsPDF, shape: BadgeShape, cx: number, cy: number,
  */
 export function patternArea(pageW: number, pageH: number, bleed: boolean, gutter = 18, side: "recto" | "verso" = "recto"): Box {
   if (bleed) return { x: 0, y: 0, w: pageW, h: pageH };
-  // 0.25" plus a dot's reach, so no mark touches the minimum.
-  const edge = 18 + 2;
-  const spine = Math.max(gutter, 18) + 2;
+  // Well inside KDP's 0.25" minimum: 0.375" all round, like the text.
+  const edge = 27;
+  const spine = Math.max(gutter, edge) + 2;
   const left = side === "recto" ? spine : edge;
   const right = side === "recto" ? edge : spine;
   return { x: left, y: edge, w: pageW - left - right, h: pageH - edge * 2 };
@@ -228,7 +252,9 @@ export function drawPattern(pdf: jsPDF, kind: PatternKey, area: Box, look: Look,
   const c = look.pattern;
   const rng = mulberry32(seed);
   const { x, y, w, h } = area;
+  decor = true;
   stroke(pdf, c);
+  decor = false;
   fill(pdf, c);
   pdf.setLineWidth(0.6);
   switch (kind) {

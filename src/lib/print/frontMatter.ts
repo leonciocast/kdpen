@@ -15,7 +15,7 @@ export interface FrontMatter {
 }
 
 export const DEFAULT_NOTICE = [
-  "© {year} {author}. All rights reserved.",
+  "Copyright © {year} {author}. All rights reserved.",
   "No part of this publication may be reproduced, stored in a retrieval system, or transmitted in any form or by any means, electronic, mechanical, photocopying, recording, or otherwise, without the prior written permission of the publisher, except for brief quotations used in reviews.",
   "The puzzles in this book are intended for personal use. The purchaser may photocopy puzzle pages for their own personal, non-commercial use only.",
 ].join("\n\n");
@@ -49,10 +49,9 @@ export function copyrightDetails(fm: FrontMatter): string[] {
   const out: string[] = [];
   if (fm.edition.trim()) out.push(fm.edition.trim());
   if (fm.isbn.trim()) out.push(`ISBN ${fm.isbn.trim()}`);
-  // No imprint means you publish under your own name, so the author is the publisher (never a placeholder).
-  const author = fm.author.trim();
-  const publisher = fm.imprint.trim() || (author !== DEFAULT_FRONT_MATTER.author ? author : "");
-  if (publisher) out.push(`Published by ${publisher}`);
+  // A "Published by" line only for a real imprint. No imprint (e.g. KDP's free ISBN) means no line.
+  const imprint = fm.imprint.trim();
+  if (imprint) out.push(`Published by ${imprint}`);
   if (fm.website.trim()) out.push(fm.website.trim());
   return out;
 }
