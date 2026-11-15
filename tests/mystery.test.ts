@@ -174,3 +174,16 @@ describe("shapes for mystery cases", () => {
     for (let n = 1; n <= 24; n++) expect(phraseLetters(phraseFor(n)).length).toBeLessThanOrEqual(n);
   });
 });
+
+describe("square cases never fail, however slow the device", () => {
+  test("every starter case builds with no time at all (message on and off)", () => {
+    for (const spec of SALTMERE.cases) {
+      for (const message of [["THE KEEPER LIED", "ODETTE MARSH LIED"], ""]) {
+        for (const diff of ["easy", "hard"] as const) {
+          const g = generateCaseGrid({ words: spec.words, extra: spec.missing?.word, message, dirs: directionsFor(diff), seed: 9, timeLimitMs: 0 });
+          expect(checkCaseGrid(g.grid, spec.words, spec.missing?.word, g.message).ok).toBe(true);
+        }
+      }
+    }
+  });
+});

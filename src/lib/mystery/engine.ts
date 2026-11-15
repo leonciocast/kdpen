@@ -173,7 +173,11 @@ export function generateCaseGrid(input: CaseGridInput): CaseGrid {
     if (cells > most && sizes.length) break;
     sizes.push(n);
   }
-  if (!sizes.length) throw new Error("Couldn't fit this case's words and message into a grid. Try fewer or shorter words.");
+  if (!sizes.length) {
+    const rescue = shaped ? null : lastResort(input, all, words, wordings, longest); // shaped: the caller falls back to a square, with a note
+    if (rescue) return rescue;
+    throw new Error("Couldn't fit this case's words and message into a grid. Try fewer or shorter words.");
+  }
   // Roughly the natural size first, then the others nearest to it.
   const ideal = Math.sqrt(letters * 0.85 + shortest);
   const natural = sizes.find((n) => countCells(shapedGrid(n, input.shape) as GridArg) >= ideal * ideal) ?? sizes[0];
@@ -242,7 +246,33 @@ export function generateCaseGrid(input: CaseGridInput): CaseGrid {
     }
     if (fallback) return fallback;
   }
+  const rescue = shaped ? null : lastResort(input, all, words, wordings, longest); // shaped: the caller falls back to a square, with a note
+  if (rescue) return rescue;
   throw new Error("Couldn't fit this case's words and message into a grid. Try fewer or shorter words.");
+}
+
+/**
+ * Guaranteed fit, independent of the clock (a slow or busy device must never break a
+ * book): plain square grids, growing until every word and the whole message fit, with
+ * dotted squares for any leftover cells. Bounded by steps, not time.
+ */
+function lastResort(input: CaseGridInput, all: string[], words: string[], wordings: { text: string; letters: string }[], longest: number): CaseGrid | null {
+  const rng = mulberry32(input.seed ^ 0x5bd1e995);
+  const letters = all.reduce((a, w) => a + gridForm(w).length, 0);
+  const need = letters + Math.min(...wordings.map((w) => w.letters.length));
+  const start = Math.max(input.minSize ?? 6, longest, Math.ceil(Math.sqrt(need)));
+  for (let n = start; n <= start + 14; n++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const placed = autoPlace(n, [], all, input.dirs, rng, { overlapWeight: 0.8, timeLimitMs: 60000, maxSteps: 6000 });
+      if (placed.unplaced.length) continue;
+      const ps = orderPlacements(placed.placements, words, input.extra);
+      for (let wi = 0; wi < wordings.length; wi++) {
+        const done = finish(n, ps, wordings[wi].letters, n * n);
+        if (done) return { ...done, ...split(done.placements, input.extra), seed: input.seed, messageIndex: wi, message: wordings[wi].text };
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -265,6 +295,17 @@ function fillerCase(input: CaseGridInput, all: string[], words: string[], letter
       const grid = filled.grid.map((row) => row.slice());
       if (!ps.every((p) => findOccurrences(grid as LetterGrid, p.letters).length === 1)) continue;
       return { size: gsize(g), mask: typeof g === "number" ? null : g.mask, grid, ...split(ps, input.extra), messageCells: [], blanks: [], seed: input.seed, messageIndex: 0, message: "" };
+    }
+  }
+  // Same guarantee as with a message: plain squares, bounded by steps rather than time.
+  if (!shaped) for (let n = Math.max(minSize, longest); n <= Math.max(minSize, longest) + 14; n++) {
+    if (n * n < letters) continue;
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const placed = autoPlace(n, [], all, input.dirs, rng, { overlapWeight: 0.2, timeLimitMs: 60000, maxSteps: 6000 });
+      if (placed.unplaced.length) continue;
+      const ps = orderPlacements(placed.placements, words, input.extra);
+      const grid = fillGrid(n, ps, rng).grid.map((row) => row.slice());
+      if (ps.every((p) => findOccurrences(grid as LetterGrid, p.letters).length === 1)) return { size: n, mask: null, grid, ...split(ps, input.extra), messageCells: [], blanks: [], seed: input.seed, messageIndex: 0, message: "" };
     }
   }
   throw new Error("Couldn't fit this case's words into a grid. Try fewer or shorter words.");
