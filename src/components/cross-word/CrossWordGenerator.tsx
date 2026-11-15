@@ -3,7 +3,7 @@ import { tidyHandlers } from "@/components/ui/tidyText";
 import { tidyLines, tidySpaces } from "@/lib/text";
 import { plural } from "@/lib/plural";
 import React, { useMemo, useRef, useState } from "react";
-import { DraftTheme, PasteBox, PasteReview, draftsFrom, pasteTotals, totalsLine } from "@/components/ui/SmartPaste";
+import { DraftTheme, PasteBox, PasteReview, draftsFrom, pasteTotals } from "@/components/ui/SmartPaste";
 import { PASTE_EXAMPLE_CLUES, parsePasted } from "@/lib/paste/parse";
 import { BsClipboardCheck, BsArrowRepeat, BsDownload, BsKeyboard, BsLightningCharge, BsListUl, BsMagic, BsPlusLg, BsPuzzle, BsSearch, BsTrash, BsUpload } from "react-icons/bs";
 import { Panel } from "@/components/ui/Panel";
@@ -374,10 +374,9 @@ export default function CrossWordGenerator() {
             key: "review",
             wide: true,
             title: "Check your themes",
-            lead: "Rename a theme, click a clue to fix it, or press × to remove it. Each theme becomes its own titled crosswords.",
+            lead: "Each theme becomes its own titled crosswords. Click a name or a clue to change it.",
             canNext: pasteSum.words > 0 && drafts.every((t) => !t.items.length || t.name.trim()),
             blockedHint: pasteSum.words ? "Give every theme a name" : "There are no clues left",
-            hint: totalsLine(pasteSum, "crossword", "clue"),
             nextLabel: `Add ${plural(pasteSum.words, "clue")}`,
             nextTestId: "paste-apply",
             enter: false,

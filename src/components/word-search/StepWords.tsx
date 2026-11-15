@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo, useState } from "react";
 import { BsClipboardCheck, BsDownload, BsKeyboard, BsListUl, BsMagic, BsPlusLg, BsSearch, BsTrash, BsUpload } from "react-icons/bs";
-import { DraftTheme, PasteBox, PasteReview, draftsFrom, pasteTotals, totalsLine } from "@/components/ui/SmartPaste";
+import { DraftTheme, PasteBox, PasteReview, draftsFrom, pasteTotals } from "@/components/ui/SmartPaste";
 import { PASTE_EXAMPLE, lettersOf, parsePasted } from "@/lib/paste/parse";
 import { Panel } from "@/components/ui/Panel";
 import { ChoiceCards, FINISH, FlowCtl, Question, QuestionFlow } from "@/components/ui/Flow";
@@ -206,10 +206,9 @@ export default function StepWords({ entries, setEntries, flow, wordsPerPuzzle = 
     key: "review",
     wide: true,
     title: "Check your themes",
-    lead: "Rename a theme, click a word to fix it, or press × to remove it. Each theme becomes its own titled puzzles.",
+    lead: "Each theme becomes its own titled puzzles. Click a name or a word to change it.",
     canNext: totals.words > 0 && drafts.every((t) => !t.items.length || t.name.trim()),
     blockedHint: totals.words ? "Give every theme a name" : "There are no words left",
-    hint: totalsLine(totals),
     nextLabel: `Add ${totals.words.toLocaleString()} words`,
     nextTestId: "paste-apply",
     enter: false,

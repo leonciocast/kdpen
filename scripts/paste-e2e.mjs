@@ -55,6 +55,10 @@ const shot = async (name, opts = {}) => {
 const themes = () => page.$$eval('[data-testid="paste-theme"]', (els) => els.map((e) => ({ name: e.querySelector('[data-testid="paste-theme-name"]').value, count: Number(e.dataset.count), chips: [...e.querySelectorAll('[data-testid="paste-chip"] .pg-chip-text')].map((c) => c.firstChild.textContent.trim()), notes: [...e.querySelectorAll(".pg-paste-note")].map((n) => n.dataset.testid) })));
 const summary = () => page.textContent('[data-testid="paste-summary"] .pg-paste-total');
 const card = (i) => page.locator('[data-testid="paste-theme"]').nth(i);
+const menu = async (i, item) => {
+  await card(i).locator('[data-testid="paste-menu"]').click();
+  await card(i).locator(`[data-testid="${item}"]`).click();
+};
 const pdfText = (file) => execFileSync("pdftotext", ["-layout", file, "-"]).toString();
 async function exportPdf(name) {
   for (let i = 0; i < 14 && (await q()) !== "create"; i++) {
@@ -96,13 +100,31 @@ check((await q()) === "review", "ws: review question");
 let th = await themes();
 check(th.map((t) => t.name).join("|") === "Ice Cream Word Search Vocabulary|Ice Cream Shop Words", `ws: two themes found (${th.map((t) => t.name).join(" | ")})`);
 check(th[0].count === 39 && th[1].count === 10, `ws: 39 + 10 words (${th[0].count} + ${th[1].count})`);
-check((await summary()).trim() === "2 themes · 49 words · 3 puzzles", `ws: summary line (${(await summary()).trim()})`);
+check((await summary()).replace(/\s+/g, " ").trim() === "2 themes · 49 words · 3 puzzles", `ws: summary line (${(await summary()).trim()})`);
 check(th[0].notes.includes("paste-note-dups") && (await card(0).locator('[data-testid="paste-note-dups"]').textContent()).includes("SUNDAE"), "ws: SUNDAE duplicate removed and shown");
 check(th[0].notes.includes("paste-note-split"), "ws: long theme will be split into 2 puzzles");
 check((await card(0).locator('[data-testid="paste-note-split"]').textContent()).includes("Ice Cream Word Search Vocabulary 2"), "ws: split note names the numbered puzzles");
 check(th[0].notes.includes("paste-note-long") && /CHOCOLATECHIP/.test(await card(0).locator('[data-testid="paste-note-long"]').textContent()), "ws: long words flagged (CHOCOLATECHIP)");
 check(!th[0].notes.includes("paste-note-shared") && th[1].notes.includes("paste-note-shared") && /CONE/.test(await card(1).locator('[data-testid="paste-note-shared"]').textContent()), "ws: CONE in both themes is kept with a friendly note");
 check(th[1].chips.includes("CONE"), "ws: CONE stays in the shop theme");
+check(!(await card(0).locator(".pg-theme-notes").isVisible()) && (await card(0).locator('[data-testid="paste-notes-toggle"]').textContent()).includes("3 notes"), "ws: notes start collapsed behind “3 notes”");
+check((await card(0).locator('[data-testid="paste-chip"]').count()) === 24 && (await card(0).locator('[data-testid="paste-show-all"]').textContent()).includes("Show all 39"), "ws: long theme shows 24 words plus “Show all 39”");
+await card(0).locator('[data-testid="paste-show-all"]').click();
+check((await card(0).locator('[data-testid="paste-chip"]').count()) === 39 && (await card(0).locator('[data-testid="paste-chip"].long').count()) >= 3, "ws: Show all reveals every word, long ones marked");
+await card(0).locator('[data-testid="paste-show-all"]').click();
+check((await card(1).locator('[data-testid="paste-chip"].shared').count()) === 1, "ws: shared CONE is marked on its chip");
+check((await page.textContent('[data-testid="wizard-hint"]')).trim() === "", "ws: footer has no repeated summary");
+// keyboard: open the ⋯ menu with Enter, Escape closes it
+await card(1).locator('[data-testid="paste-menu"]').focus();
+await page.keyboard.press("Enter");
+await pause(150);
+const menuOpen = await card(1).locator('[role="menu"]').isVisible();
+await page.keyboard.press("Escape");
+await pause(150);
+check(menuOpen && !(await card(1).locator('[role="menu"]').isVisible()), "ws: ⋯ menu works from the keyboard");
+await card(0).locator('[data-testid="paste-notes-toggle"]').click();
+check(await card(0).locator(".pg-theme-notes").isVisible(), "ws: notes expand on click");
+await card(0).locator('[data-testid="paste-notes-toggle"]').click();
 await shot("03_parsed_review", { fullPage: true });
 await page.locator('[data-testid="paste-theme"]').nth(1).screenshot({ path: `${OUT}/03b_theme_card.png` });
 
@@ -113,20 +135,21 @@ await page.fill(".pg-chip-edit", "napkins");
 await page.keyboard.press("Enter");
 await pause(200);
 await card(1).locator('[data-testid="paste-chip"]').filter({ hasText: "COLD" }).locator(".pg-chip-x").click();
+await card(1).locator('[data-testid="paste-add-chip"]').click();
 await card(1).locator('[data-testid="paste-add-words"]').fill("waffle cone, sprinkle");
 await page.keyboard.press("Enter");
 await pause(250);
 th = await themes();
 check(th[1].name === "Ice Cream Shop" && th[1].chips.includes("NAPKINS") && !th[1].chips.includes("COLD") && th[1].chips.includes("WAFFLE CONE") && th[1].count === 11, `ws: rename, edit, remove and add words (${th[1].chips.join(" ")})`);
-await card(1).locator('[data-testid="paste-merge"]').click();
+await menu(1, "paste-merge");
 await pause(250);
 th = await themes();
 check(th.length === 1 && th[0].count === 49, `ws: merge with previous (1 theme, ${th[0]?.count} words; CONE merged once)`);
-await card(0).locator('[data-testid="paste-split"]').click();
+await menu(0, "paste-split");
 await pause(250);
 th = await themes();
 check(th.length === 3 && th.map((t) => t.name).join("|").includes("Ice Cream Word Search Vocabulary 2"), `ws: split into ${th.length} themes`);
-await card(2).locator('[data-testid="paste-delete"]').click();
+await menu(2, "paste-delete");
 await pause(250);
 check((await themes()).length === 2, "ws: delete a theme");
 // Start again from the text: back, then find themes again
@@ -208,6 +231,7 @@ check(th[0].chips.join(",") === "WHALE,SHARK,DOLPHIN,OCTOPUS,SEA HORSE,CRAB", `m
 check(th[2].chips.includes("PIÑA COLADA") && th[2].chips.includes("CREME BRULEE") && th[2].chips.includes("MANGO"), "messy: accents, Ñ and smart quotes");
 check(th[1].notes.includes("paste-note-small"), "messy: a 4-word theme suggests merging");
 await shot("05_messy_review", { fullPage: true });
+await card(1).locator('[data-testid="paste-notes-toggle"]').click();
 await card(1).locator('[data-testid="paste-merge-suggest"]').click();
 await pause(250);
 check((await themes()).length === 2 && (await themes())[0].count === 10, "messy: one-click merge of the small theme");

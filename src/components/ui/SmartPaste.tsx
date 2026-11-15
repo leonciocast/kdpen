@@ -1,6 +1,6 @@
 "use client";
-import React, { useMemo, useRef, useState } from "react";
-import { BsArrowsCollapse, BsCheckCircleFill, BsExclamationTriangleFill, BsFileEarmarkText, BsInfoCircleFill, BsMagic, BsPlusLg, BsScissors, BsTrash, BsUnion, BsXLg } from "react-icons/bs";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
+import { BsCheckCircleFill, BsChevronDown, BsFileEarmarkText, BsMagic, BsPencil, BsPlusLg, BsScissors, BsThreeDots, BsTrash, BsUnion, BsXLg } from "react-icons/bs";
 import { toast } from "react-toastify";
 import { PasteResult, PastedItem, PastedTheme, chunkSizes, lettersOf, parsePasted, reviewThemes } from "@/lib/paste/parse";
 import { PASTE_FILE_TYPES, readPasteFile } from "@/lib/paste/files";
@@ -139,14 +139,8 @@ interface ReviewProps {
   puzzleNoun?: string;
 }
 
-const Note = ({ tone, children, testId }: { tone: "ok" | "info" | "warn"; children: React.ReactNode; testId?: string }) => (
-  <div className={`pg-paste-note ${tone}`} data-testid={testId}>
-    {tone === "ok" ? <BsCheckCircleFill /> : tone === "warn" ? <BsExclamationTriangleFill /> : <BsInfoCircleFill />}
-    <span>{children}</span>
-  </div>
-);
-
 const list = (ws: string[], max = 4) => (ws.length > max ? `${ws.slice(0, max).join(", ")} and ${ws.length - max} more` : ws.join(", "));
+const SHOW_CHIPS = 24;
 
 export function PasteReview({ themes, setThemes, clues, wordsPerPuzzle, longAt, longNote, maxLetters, puzzleNoun = "puzzle" }: ReviewProps) {
   const reviews = useMemo(() => reviewThemes(themes, { wordsPerPuzzle, longAt }), [themes, wordsPerPuzzle, longAt]);
@@ -192,17 +186,23 @@ export function PasteReview({ themes, setThemes, clues, wordsPerPuzzle, longAt, 
         }
       return [{ ...prev[0], items, duplicates: [...prev.flatMap((t) => t.duplicates), ...dups], rejected: prev.flatMap((t) => t.rejected) }];
     });
+  const wordNoun = clues ? "clue" : "word";
 
   return (
     <div className="pg-paste-review">
       <div className="pg-paste-summary" data-testid="paste-summary">
-        <span className="pg-paste-total">{totalsLine(totals, puzzleNoun, clues ? "clue" : "word")}</span>
-        <span className="text-muted small">
-          {plural(wordsPerPuzzle, clues ? "clue" : "word")} per {puzzleNoun}: long themes become numbered {puzzleNoun}s automatically.
+        <span className="pg-paste-total">
+          <span>
+            <b>{totals.themes}</b> {totals.themes === 1 ? "theme" : "themes"}
+            <span className="pg-dot-sep"> · </span>
+            <b>{totals.words}</b> {totals.words === 1 ? wordNoun : `${wordNoun}s`}
+            <span className="pg-dot-sep"> · </span>
+            <b>{totals.puzzles}</b> {totals.puzzles === 1 ? puzzleNoun : `${puzzleNoun}s`}
+          </span>
         </span>
         {themes.length > 1 && (
-          <button type="button" className="btn btn-light btn-sm ms-auto" onClick={oneTheme} data-testid="paste-one-theme" title="Put every word under the first theme's name">
-            <BsArrowsCollapse /> One theme for everything
+          <button type="button" className="pg-quiet-btn" onClick={oneTheme} data-testid="paste-one-theme" title="Put every word under the first theme's name">
+            Combine into one theme
           </button>
         )}
       </div>
@@ -226,9 +226,60 @@ export function PasteReview({ themes, setThemes, clues, wordsPerPuzzle, longAt, 
         />
       ))}
       {themes.length === 0 && <div className="pg-empty-pointer">Nothing left. Go back to paste your list again.</div>}
-      <button type="button" className="btn btn-outline-primary btn-sm align-self-start" data-testid="paste-add-theme" onClick={() => setThemes((prev) => [...prev, { id: nextId++, name: `Theme ${prev.length + 1}`, items: [], duplicates: [], rejected: [] }])}>
+      <button type="button" className="pg-quiet-btn align-self-start" data-testid="paste-add-theme" onClick={() => setThemes((prev) => [...prev, { id: nextId++, name: `Theme ${prev.length + 1}`, items: [], duplicates: [], rejected: [] }])}>
         <BsPlusLg /> Add a theme
       </button>
+    </div>
+  );
+}
+
+/** "⋯" menu: Merge with previous, Split, Delete. Keyboard: Enter/Space opens, arrows move, Esc closes. */
+function ThemeMenu({ items, label }: { items: { key: string; label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean; testId: string }[]; label: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("mousedown", off);
+    ref.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+    return () => document.removeEventListener("mousedown", off);
+  }, [open]);
+  const onKey = (e: React.KeyboardEvent) => {
+    const els = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []);
+    const at = els.indexOf(document.activeElement as HTMLButtonElement);
+    if (e.key === "Escape") {
+      setOpen(false);
+      ref.current?.querySelector<HTMLButtonElement>(".pg-menu-btn")?.focus();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      els[(at + (e.key === "ArrowDown" ? 1 : els.length - 1)) % els.length]?.focus();
+    } else if (e.key === "Enter") e.stopPropagation();
+  };
+  return (
+    <div className="pg-menu" ref={ref} onKeyDown={onKey}>
+      <button type="button" className="pg-menu-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={id} aria-label={label} title="More actions" onClick={() => setOpen((o) => !o)} data-testid="paste-menu">
+        <BsThreeDots />
+      </button>
+      {open && (
+        <div className="pg-menu-list" role="menu" id={id}>
+          {items.map((it) => (
+            <button
+              key={it.key}
+              type="button"
+              role="menuitem"
+              className={it.danger ? "danger" : ""}
+              data-testid={it.testId}
+              onClick={() => {
+                setOpen(false);
+                it.onClick();
+              }}
+            >
+              {it.icon} {it.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -266,9 +317,13 @@ function ThemeCard({
 }) {
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
-  const [adding, setAdding] = useState("");
+  const [adding, setAdding] = useState<string | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [all, setAll] = useState(false);
+  const notesId = useId();
   const asText = (x: PastedItem) => (clues ? `${x.word} - ${x.clue ?? ""}` : x.word);
   const parseOne = (s: string) => parsePasted(s, { clues, maxLetters }).themes.flatMap((x) => x.items);
+  const wordNoun = clues ? "clue" : "word";
 
   const saveEdit = () => {
     if (editing === null) return;
@@ -277,7 +332,9 @@ function ThemeCard({
     setEditing(null);
   };
   const addWords = () => {
-    const got = parseOne(adding);
+    const text = adding ?? "";
+    if (!text.trim()) return setAdding(null);
+    const got = parseOne(text);
     if (!got.length) return toast.error(clues ? "Write each one as WORD - clue." : "No words found there.");
     let dup = 0;
     update((th) => {
@@ -299,96 +356,118 @@ function ThemeCard({
 
   const n = t.items.length;
   const chunks = review?.chunks ?? [];
+  const long = new Set(review?.long ?? []);
+  const shared = new Set((review?.shared ?? []).map(([w]) => w));
   const longest = Math.max(0, ...(review?.long ?? []).map((w) => lettersOf(w).length));
-  return (
-    <section className={`pg-theme-card ${t.guessed && !t.name.trim() ? "needs" : ""}`} data-testid="paste-theme" data-name={t.name} data-count={n}>
-      <header className="pg-theme-head">
-        <span className="pg-theme-num">{index + 1}</span>
-        <div className="pg-theme-name">
-          <label className="visually-hidden" htmlFor={`theme-${t.id}`}>
-            Theme name
-          </label>
-          <input id={`theme-${t.id}`} className="form-control" value={t.name} maxLength={60} placeholder="Name this theme" onChange={(e) => update((th) => ({ ...th, name: e.target.value, guessed: false }))} data-testid="paste-theme-name" />
-        </div>
-        <span className="pg-badge neutral" data-testid="paste-theme-count">
-          {plural(n, clues ? "clue" : "word")}
-        </span>
-        {chunks.length > 1 && <span className="pg-badge info">{plural(chunks.length, puzzleNoun)}</span>}
-        <span className="pg-theme-actions">
+  const nameNeeded = !t.name.trim();
+
+  // Notes: one quiet list behind a disclosure. `warn` ones tint the badge.
+  const notes: { key: string; testId: string; warn?: boolean; body: React.ReactNode }[] = [];
+  if (t.guessed && index === 0 && count === 1) notes.push({ key: "name", testId: "paste-note-name", warn: nameNeeded, body: <>No theme name in your text, so we suggested one. Rename it if you like.</> });
+  if (review?.small && !t.keepSmall)
+    notes.push({
+      key: "small",
+      testId: "paste-note-small",
+      warn: true,
+      body: (
+        <>
+          Only {plural(n, wordNoun)}, which makes a small {puzzleNoun}.{" "}
           {index > 0 && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={mergeUp} title={`Move these words into “${prevName}”`} data-testid="paste-merge">
-              <BsUnion /> Merge with previous
+            <button type="button" className="pg-link-btn" onClick={mergeUp} data-testid="paste-merge-suggest">
+              Merge with “{prevName}”
             </button>
           )}
-          {n > 1 && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={split} title={n > wordsPerPuzzle ? `Split into ${chunks.length} themes` : "Split into two themes"} data-testid="paste-split">
-              <BsScissors /> Split
-            </button>
-          )}
-          <button type="button" className="btn btn-ghost btn-sm text-danger" onClick={remove} aria-label={`Delete theme ${t.name}`} data-testid="paste-delete">
-            <BsTrash /> Delete
+          <button type="button" className="pg-link-btn pg-muted-link" onClick={() => update((th) => ({ ...th, keepSmall: true }))}>
+            Keep it
           </button>
+        </>
+      ),
+    });
+  if (t.rejected.length) notes.push({ key: "rej", testId: "paste-note-rejected", warn: true, body: <>Left out: {list(t.rejected.map((r) => `“${r.text}” ${r.reason}`), 3)}.</> });
+  if (review && review.shared.length)
+    notes.push({
+      key: "shared",
+      testId: "paste-note-shared",
+      body: (
+        <>
+          <span className="pg-mark shared">{list(review.shared.map(([w]) => w))}</span> {review.shared.length === 1 ? "is" : "are"} also in “{review.shared[0][1]}” and will be in both {puzzleNoun}s.{" "}
+          <button type="button" className="pg-link-btn" onClick={() => update((th) => ({ ...th, items: th.items.filter((x) => !shared.has(x.word)) }))}>
+            Remove from this theme
+          </button>
+        </>
+      ),
+    });
+  if (review && review.long.length)
+    notes.push({
+      key: "long",
+      testId: "paste-note-long",
+      body: (
+        <>
+          Long {review.long.length === 1 ? "word" : "words"}: {list(review.long.map((w) => `${w} (${lettersOf(w).length})`), 3)}. {longNote(longest, review.long.length)}
+        </>
+      ),
+    });
+  if (chunks.length > 1)
+    notes.push({
+      key: "split",
+      testId: "paste-note-split",
+      body: (
+        <>
+          Becomes {chunks.length} {puzzleNoun}s at {wordsPerPuzzle} {wordNoun}s each: {chunks.map((c, k) => `“${t.name || "Theme"} ${k + 1}” (${c})`).join(", ")}.
+        </>
+      ),
+    });
+  if (t.duplicates.length) notes.push({ key: "dups", testId: "paste-note-dups", body: <>{plural(t.duplicates.length, "duplicate")} removed: {list(Array.from(new Set(t.duplicates)))}.</> });
+  const warn = notes.some((x) => x.warn);
+
+  const visible = all || n <= SHOW_CHIPS + 4 ? t.items : t.items.slice(0, SHOW_CHIPS);
+  const menu = [
+    ...(index > 0 ? [{ key: "merge", label: "Merge with previous", icon: <BsUnion />, onClick: mergeUp, testId: "paste-merge" }] : []),
+    ...(n > 1 ? [{ key: "split", label: n > wordsPerPuzzle ? `Split into ${chunks.length} themes` : "Split in two", icon: <BsScissors />, onClick: split, testId: "paste-split" }] : []),
+    { key: "delete", label: "Delete theme", icon: <BsTrash />, onClick: remove, danger: true, testId: "paste-delete" },
+  ];
+
+  return (
+    <section className={`pg-theme-card ${nameNeeded ? "needs" : ""}`} data-testid="paste-theme" data-name={t.name} data-count={n} aria-label={`Theme ${index + 1}: ${t.name || "unnamed"}`}>
+      <header className="pg-theme-head">
+        <span className="pg-theme-num" aria-hidden="true">
+          {index + 1}
         </span>
+        <label className="pg-theme-name" data-value={t.name || "Name this theme"}>
+          <span className="visually-hidden">Theme name</span>
+          <input value={t.name} maxLength={60} placeholder="Name this theme" onChange={(e) => update((th) => ({ ...th, name: e.target.value, guessed: false }))} data-testid="paste-theme-name" size={1} />
+          <BsPencil className="pg-theme-pencil" aria-hidden="true" />
+        </label>
+        <span className="pg-theme-meta" data-testid="paste-theme-count">
+          {plural(n, wordNoun)}
+          {chunks.length > 1 && <> · {plural(chunks.length, puzzleNoun)}</>}
+        </span>
+        {notes.length > 0 && (
+            <button type="button" className={`pg-notes-btn ${warn ? "warn" : ""}`} aria-expanded={notesOpen} aria-controls={notesId} onClick={() => setNotesOpen((o) => !o)} data-testid="paste-notes-toggle">
+              {warn && <span className="pg-notes-dot" aria-hidden="true" />}
+              {plural(notes.length, "note")} <BsChevronDown className="pg-notes-chev" aria-hidden="true" />
+            </button>
+        )}
+        <ThemeMenu items={menu} label={`Actions for ${t.name || "this theme"}`} />
       </header>
 
-      <div className="pg-theme-notes">
-        {t.guessed && index === 0 && count === 1 && (
-          <Note tone="info" testId="paste-note-name">
-            We didn&apos;t find a theme name in your text, so we suggested one. Change it if you like.
-          </Note>
-        )}
-        {t.duplicates.length > 0 && (
-          <Note tone="ok" testId="paste-note-dups">
-            {plural(t.duplicates.length, "duplicate")} removed ({list(Array.from(new Set(t.duplicates)))}).
-          </Note>
-        )}
-        {chunks.length > 1 && (
-          <Note tone="info" testId="paste-note-split">
-            {n} {clues ? "clues" : "words"} at {wordsPerPuzzle} per {puzzleNoun} → {chunks.length} {puzzleNoun}s: {chunks.map((c, k) => `“${t.name || "Theme"} ${k + 1}” (${c})`).join(", ")}.
-          </Note>
-        )}
-        {review && review.long.length > 0 && (
-          <Note tone="info" testId="paste-note-long">
-            Long {review.long.length === 1 ? "word" : "words"}: {list(review.long.map((w) => `${w} (${lettersOf(w).length})`), 3)}. {longNote(longest, review.long.length)}
-          </Note>
-        )}
-        {review && review.shared.length > 0 && (
-          <Note tone="info" testId="paste-note-shared">
-            {list(review.shared.map(([w]) => w))} {review.shared.length === 1 ? "is" : "are"} also in “{review.shared[0][1]}”. That&apos;s fine: {review.shared.length === 1 ? "it" : "they"} will be in both {puzzleNoun}s.{" "}
-            <button type="button" className="pg-link-btn" onClick={() => update((th) => ({ ...th, items: th.items.filter((x) => !review.shared.some(([w]) => w === x.word)) }))}>
-              Remove from this theme
-            </button>
-          </Note>
-        )}
-        {review?.small && !t.keepSmall && (
-          <Note tone="warn" testId="paste-note-small">
-            Only {plural(n, clues ? "clue" : "word")}, a small {puzzleNoun}. Merge with “{prevName || "the theme before"}”?{" "}
-            {index > 0 && (
-              <button type="button" className="pg-link-btn" onClick={mergeUp} data-testid="paste-merge-suggest">
-                Merge
-              </button>
-            )}
-            <button type="button" className="pg-link-btn text-muted ms-2" onClick={() => update((th) => ({ ...th, keepSmall: true }))}>
-              Keep it
-            </button>
-          </Note>
-        )}
-        {t.rejected.length > 0 && (
-          <Note tone="warn" testId="paste-note-rejected">
-            Left out: {list(t.rejected.map((r) => `“${r.text}” ${r.reason}`), 3)}.
-          </Note>
-        )}
-      </div>
+      <ul className="pg-theme-notes" id={notesId} hidden={!notesOpen}>
+        {notes.map((x) => (
+          <li key={x.key} className={`pg-paste-note ${x.warn ? "warn" : ""} ${x.key}`} data-testid={x.testId}>
+            {x.body}
+          </li>
+        ))}
+      </ul>
 
       <div className={`pg-theme-chips ${clues ? "clues" : ""}`} data-testid="paste-chips">
-        {t.items.map((x, k) =>
+        {visible.map((x, k) =>
           editing === k ? (
             <input
               key={k}
-              className="form-control form-control-sm pg-chip-edit"
+              className="pg-chip-edit"
               value={draft}
               autoFocus
-              aria-label="Edit word"
+              aria-label={clues ? "Edit word and clue" : "Edit word"}
               onChange={(e) => setDraft(e.target.value)}
               onBlur={saveEdit}
               onKeyDown={(e) => {
@@ -398,20 +477,19 @@ function ThemeCard({
                   saveEdit();
                 } else if (e.key === "Escape") setEditing(null);
               }}
-              style={{ width: `${Math.max(8, draft.length + 2)}ch` }}
             />
           ) : (
-            <span key={`${x.word}-${k}`} className={`pg-chip pg-word-chip ${review?.long.includes(x.word) ? "long" : ""} ${review?.shared.some(([w]) => w === x.word) ? "shared" : ""}`} data-testid="paste-chip">
+            <span key={`${x.word}-${k}`} className={`pg-word-chip ${long.has(x.word) ? "long" : ""} ${shared.has(x.word) ? "shared" : ""}`} data-testid="paste-chip">
               <button
                 type="button"
                 className="pg-chip-text"
-                title={clues ? `${x.clue}\n(click to edit)` : "Click to edit"}
+                title={clues ? `${x.word}: ${x.clue}` : long.has(x.word) ? `${x.word}: long word (${lettersOf(x.word).length} letters)` : shared.has(x.word) ? `${x.word}: also in another theme` : `Edit ${x.word}`}
                 onClick={() => {
                   setEditing(k);
                   setDraft(asText(x));
                 }}
               >
-                {x.word}
+                <span className="pg-chip-word">{x.word}</span>
                 {clues && <span className="pg-chip-clue">{x.clue}</span>}
               </button>
               <button type="button" className="pg-chip-x" aria-label={`Remove ${x.word}`} onClick={() => update((th) => ({ ...th, items: th.items.filter((_, j) => j !== k) }))}>
@@ -420,29 +498,35 @@ function ThemeCard({
             </span>
           )
         )}
-        <span className="pg-chip-add">
+        {adding === null ? (
+          <button type="button" className="pg-chip-add" onClick={() => setAdding("")} data-testid="paste-add-chip">
+            <BsPlusLg /> {clues ? "Add clue" : "Add word"}
+          </button>
+        ) : (
           <input
-            className="form-control form-control-sm"
-            placeholder={clues ? "Add WORD - clue" : "Add words…"}
+            className="pg-chip-edit pg-chip-add-input"
+            autoFocus
+            placeholder={clues ? "WORD - clue" : "Type words, commas between"}
             value={adding}
-            aria-label={`Add words to ${t.name}`}
+            aria-label={`Add ${wordNoun}s to ${t.name}`}
             data-testid="paste-add-words"
             onChange={(e) => setAdding(e.target.value)}
+            onBlur={() => !adding.trim() && setAdding(null)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
                 e.stopPropagation();
                 addWords();
-              }
+              } else if (e.key === "Escape") setAdding(null);
             }}
           />
-          {adding.trim() && (
-            <button type="button" className="btn btn-primary btn-sm" onClick={addWords}>
-              Add
-            </button>
-          )}
-        </span>
+        )}
       </div>
+      {n > SHOW_CHIPS + 4 && (
+        <button type="button" className="pg-quiet-btn pg-show-all" onClick={() => setAll((a) => !a)} aria-expanded={all} data-testid="paste-show-all">
+          {all ? "Show fewer" : `Show all ${n}`} <BsChevronDown className={all ? "flip" : ""} aria-hidden="true" />
+        </button>
+      )}
     </section>
   );
 }
