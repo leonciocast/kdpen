@@ -128,15 +128,17 @@ await dl.saveAs(file);
 const text = pdfText(file);
 const caseFiles = (text.match(/CASE FILE/g) ?? []).length;
 check(caseFiles === 24, `PDF has 24 case-file pages (${caseFiles})`);
-for (const t of ["HOW TO SOLVE", "CASE BOARD", "CASE CLOSED", "SOLUTIONS", "THE SUSPECT FILE", "The Harbormaster's Last Watch", "The Lighthouse Stairs"]) check(text.includes(t), `PDF contains "${t}"`);
+// Casebook headings are set in title case; compare without case.
+const upper = text.toUpperCase();
+for (const t of ["HOW TO SOLVE", "CASE BOARD", "CASE CLOSED", "SOLUTIONS", "THE SUSPECT FILE", "DETECTIVE NOTES", "The Harbormaster's Last Watch", "The Lighthouse Stairs"]) check(upper.includes(t.toUpperCase()), `PDF contains "${t}"`);
 const flat = execFileSync("pdftotext", [file, "-"]).toString().replace(/\s+/g, " ");
 check(/THE KEEPER ODETTE MARSH LIED/.test(flat), "solutions reveal the final answer");
-check((text.match(/MISSING EVIDENCE/g) ?? []).length >= 24, "every case has a missing-evidence clue");
-check((text.match(/HIDDEN MESSAGE/g) ?? []).length >= 24, "every case has hidden-message blanks");
+check((text.match(/MISSING EVIDENCE/gi) ?? []).length >= 24, "every case has a missing-evidence clue");
+check((text.match(/HIDDEN MESSAGE/gi) ?? []).length >= 24, "every case has hidden-message blanks");
 const n = pages(file);
 check(n >= 40 && n % 2 === 0, `PDF page count looks right (${n})`);
 // Render the key pages for review.
-const pageOf = (needle) => text.split("\f").findIndex((p) => p.includes(needle)) + 1;
+const pageOf = (needle) => text.split("\f").findIndex((p) => p.toUpperCase().includes(needle.toUpperCase()) && !/CONTENTS/i.test(p)) + 1;
 const render = (pg, name) => pg > 0 && execFileSync("pdftoppm", ["-r", "110", "-png", "-singlefile", "-f", String(pg), "-l", String(pg), file, `${OUT}/${name}`]);
 render(pageOf("The Harbormaster's Last Watch"), "08_pdf_case_page");
 render(pageOf("SOLUTIONS"), "09_pdf_solution_page");
