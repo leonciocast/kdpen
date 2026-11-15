@@ -310,7 +310,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
     ),
   };
 
-  const cellChoices = tool === "sudoku" ? (["plain", "rounded", "circles"] as const) : (["plain", "boxed", "rounded", "circles"] as const);
+  const cellChoices = tool === "sudoku" ? (["plain", "rounded", "circles"] as const) : tool === "mystery" ? (["tiles", "plain", "boxed", "rounded", "circles"] as const) : (["plain", "boxed", "rounded", "circles"] as const);
   const frameExtras = (
     <div className="d-grid gap-3 mt-3" data-testid="frame-extras">
       {tool !== "crossword" && (
@@ -319,7 +319,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
           <div className="pg-seg" role="radiogroup" aria-label="Cell style">
             {cellChoices.map((o) => (
               <button key={o} type="button" role="radio" aria-checked={design.grid.cells === o} className={design.grid.cells === o ? "active" : ""} onClick={() => set((d) => (d.grid.cells = o))} data-testid={`cells-${o}`}>
-                {o === "plain" ? (tool === "sudoku" ? "Square" : "Plain") : o === "boxed" ? "Boxed" : o === "rounded" ? "Rounded boxes" : "Circles"}
+                {o === "plain" ? (tool === "sudoku" ? "Square" : "Plain") : o === "boxed" ? "Boxed" : o === "rounded" ? "Rounded boxes" : o === "tiles" ? "Soft tiles" : "Circles"}
               </button>
             ))}
           </div>
@@ -511,7 +511,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
               {tool !== "crossword" && (
                 <div>
                   <div className="form-label small mb-1">Cells</div>
-                  <Seg label="Cells" value={design.grid.cells} options={tool === "sudoku" ? (["plain", "rounded", "circles"] as const) : DESIGN_OPTIONS.CELLS} labels={{ plain: tool === "sudoku" ? "Square" : "Plain", boxed: "Boxed", rounded: "Rounded boxes", circles: "Circles" }} onChange={(v) => set((d) => (d.grid.cells = v))} />
+                  <Seg label="Cells" value={design.grid.cells} options={tool === "sudoku" ? (["plain", "rounded", "circles"] as const) : DESIGN_OPTIONS.CELLS} labels={{ plain: tool === "sudoku" ? "Square" : "Plain", boxed: "Boxed", rounded: "Rounded boxes", circles: "Circles", tiles: "Soft tiles" }} onChange={(v) => set((d) => (d.grid.cells = v))} />
                 </div>
               )}
               <div>

@@ -337,6 +337,8 @@ export interface HeaderInfo {
   subtitle?: string;
 }
 
+const titleCase = (t: string) => (t === t.toUpperCase() ? t.toLowerCase().replace(/(^|\s)(\p{L})/gu, (m, a, b) => a + b.toUpperCase()).replace(/\b(To|Of|The|A|And)\b(?!$)/g, (w, _a, i) => (i === 0 ? w : w.toLowerCase())) : t);
+
 /** Draw the page header and return the y where content may start. */
 export function drawHeader(pdf: jsPDF, box: Box, look: Look, info: HeaderInfo, s: number): number {
   const d = look.design.header;
@@ -453,6 +455,42 @@ export function drawHeader(pdf: jsPDF, box: Box, look: Look, info: HeaderInfo, s
       y += H + 2 * s;
       break;
     }
+    case "casebook": {
+      // A refined casebook header: small letter-spaced kicker, a hairline, then the title in the heading serif.
+      const kick = sub ? text : "";
+      const title = sub || titleCase(text);
+      const ky = y + 5 * s;
+      pdf.setFont(look.font("sans"), "bold");
+      pdf.setFontSize(7.4 * s);
+      pdf.setCharSpace(1.5 * s);
+      textColor(pdf, look.ink);
+      const kicker = [kick.toUpperCase(), info.number !== undefined ? `NO. ${String(info.number).padStart(2, "0")}` : ""].filter(Boolean).join(" · ");
+      if (kicker) pdf.text(kicker, x, ky, { baseline: "middle" });
+      pdf.setCharSpace(0);
+      if (d.icon !== "none") drawIcon(pdf, d.icon, x + w - 5 * s, ky, 10 * s, look.accent);
+      stroke(pdf, look.design.color.grayscale ? [200, 200, 200] : [224, 220, 213]);
+      pdf.setLineWidth(0.6);
+      pdf.line(x, y + 14 * s, x + w, y + 14 * s);
+      pdf.setFont(hf, "bold");
+      let size = 21 * s;
+      pdf.setFontSize(size);
+      let tl = pdf.splitTextToSize(title, w) as string[];
+      while (tl.length > 1 && size > 15 * s) {
+        pdf.setFontSize((size -= 1 * s));
+        tl = pdf.splitTextToSize(title, w) as string[];
+      }
+      tl = tl.slice(0, 2);
+      pdf.setTextColor(28, 28, 32);
+      let ty = y + 14 * s + 10 * s + size * 0.78;
+      tl.forEach((l, i) => pdf.text(l, x, ty + i * size * 1.15));
+      ty += (tl.length - 1) * size * 1.15;
+      stroke(pdf, look.accent);
+      pdf.setLineWidth(1.3);
+      pdf.line(x, ty + 9 * s, x + 26 * s, ty + 9 * s);
+      pdf.setTextColor(0, 0, 0);
+      y = ty + 9 * s + 12 * s;
+      break;
+    }
     case "minimal": {
       textColor(pdf, look.ink);
       pdf.setCharSpace(2 * s);
@@ -489,7 +527,7 @@ export function drawHeader(pdf: jsPDF, box: Box, look: Look, info: HeaderInfo, s
       y += H + 6 * s;
     }
   }
-  if (sub) {
+  if (sub && d.style !== "casebook") {
     pdf.setFont(look.font(look.design.fonts.list), "normal");
     pdf.setFontSize(11.5 * s);
     textColor(pdf, look.muted);
@@ -639,6 +677,13 @@ export function drawGridBody(pdf: jsPDF, x: number, y: number, cell: number, row
 export function drawCellMarks(pdf: jsPDF, x: number, y: number, cell: number, rows: number, cols: number, look: Look, isCell: (r: number, c: number) => boolean = () => true) {
   const style = look.design.grid.cells;
   if (style === "plain") return;
+  if (style === "tiles") {
+    fill(pdf, look.design.color.grayscale ? [240, 240, 240] : [244, 241, 236]);
+    const ins = cell * 0.055;
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < cols; c++) if (isCell(r, c)) pdf.roundedRect(x + c * cell + ins, y + r * cell + ins, cell - ins * 2, cell - ins * 2, cell * 0.16, cell * 0.16, "F");
+    return;
+  }
   stroke(pdf, [120, 120, 120]);
   pdf.setLineWidth(Math.max(0.35, Math.min(0.6, cell * 0.025)));
   const inset = cell * (style === "circles" ? 0.07 : 0.08);

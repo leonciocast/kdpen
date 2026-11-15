@@ -39,23 +39,49 @@ export function casePuzzle(c: MysteryCase): BookPuzzle {
 
 const mix = (a: RGB, b: RGB, t: number): RGB => [0, 1, 2].map((i) => Math.round(a[i] * (1 - t) + b[i] * t)) as RGB;
 const WHITE: RGB = [255, 255, 255];
-const paper = (look: Look): RGB => mix(look.soft, WHITE, 0.45);
-const rule = (look: Look): RGB => (look.design.color.grayscale ? [175, 175, 175] : mix(look.ink, WHITE, 0.7));
+/** Casebook palette: a calm warm-neutral surface, hairlines, near-black ink; the accent is used sparingly. */
+const SURFACE: RGB = [248, 246, 242];
+const CHIP: RGB = [241, 238, 233];
+const INK: RGB = [28, 28, 32];
+const BODY: RGB = [58, 58, 64];
+const MUTED: RGB = [118, 116, 122];
+const paper = (look: Look): RGB => (look.design.color.grayscale ? [246, 246, 246] : SURFACE);
+const rule = (look: Look): RGB => (look.design.color.grayscale ? [205, 205, 205] : [224, 220, 213]);
+const ink = (pdf: jsPDF, c: RGB) => pdf.setTextColor(c[0], c[1], c[2]);
+/** Small print never drops below 6.2pt, even on 6x9 pages. */
+const small = (v: number, s: number) => Math.max(6.2, v * s);
+void mix;
 
-function card(pdf: jsPDF, r: Rect, look: Look, s: number, fill: RGB | null = paper(look)) {
+/** Answer grids: a thin outline instead of tiles, so the loops read clearly. */
+export function answerLook(look: Look): Look {
+  const l = caseLook(look);
+  if (look.design.grid.cells !== "tiles") return l;
+  return { ...l, soft: look.design.color.grayscale ? l.soft : [238, 234, 228], design: { ...l.design, grid: { ...l.design.grid, cells: "plain", border: l.design.grid.border === "none" ? "rounded" : l.design.grid.border, frame: 0.6 } } };
+}
+
+/** On case pages with soft tiles, the tiles draw the shape: no stepped or smooth outline on top. */
+export function caseLook(look: Look): Look {
+  if (look.design.grid.cells !== "tiles") return look;
+  return { ...look, design: { ...look.design, shape: { ...look.design.shape, mix: "one", outline: "smooth", shade: false } } };
+}
+
+function card(pdf: jsPDF, r: Rect, look: Look, s: number, fill: RGB | null = paper(look), border = true) {
   if (fill) paint.fill(pdf, fill);
   paint.stroke(pdf, rule(look));
-  pdf.setLineWidth(0.7);
-  pdf.roundedRect(r.x, r.y, r.w, r.h, 7 * s, 7 * s, fill ? "FD" : "S");
+  pdf.setLineWidth(0.6);
+  pdf.roundedRect(r.x, r.y, r.w, r.h, 6 * s, 6 * s, fill ? (border ? "FD" : "F") : "S");
 }
 
 /** Small letter-spaced label ("EVIDENCE"). */
 function label(pdf: jsPDF, text: string, x: number, y: number, look: Look, s: number, color?: RGB, align: "left" | "center" | "right" = "left") {
   pdf.setFont(SANS, "bold");
-  pdf.setFontSize(7.4 * s);
-  pdf.setCharSpace(1.1 * s);
+  pdf.setFontSize(small(7.2, s));
+  pdf.setCharSpace(1.4 * s);
   paint.textColor(pdf, color ?? look.ink);
-  pdf.text(text, x, y, { align, baseline: "middle" });
+  // jsPDF centers / right-aligns without the letter spacing; shift by it.
+  const extra = text.length * 1.4 * s;
+  const ax = align === "center" ? x - extra / 2 : align === "right" ? x - extra : x;
+  pdf.text(text, ax, y, { align, baseline: "middle" });
   pdf.setCharSpace(0);
   pdf.setTextColor(0, 0, 0);
 }
@@ -108,9 +134,9 @@ function blanks(pdf: jsPDF, text: string, x: number, y: number, w: number, s: nu
     }
     for (let i = 0; i < word.length; i++) {
       const lx = cx + i * cellW;
-      paint.stroke(pdf, [70, 70, 70]);
-      pdf.setLineWidth(0.8);
-      pdf.line(lx + cellW * 0.13, cy, lx + cellW * 0.87, cy);
+      paint.stroke(pdf, [110, 110, 114]);
+      pdf.setLineWidth(0.7);
+      pdf.line(lx + cellW * 0.14, cy, lx + cellW * 0.86, cy);
       if (fill) {
         paint.textColor(pdf, look.ink);
         pdf.text(word[i], lx + cellW / 2, cy - 2 * s, { align: "center" });
@@ -162,13 +188,36 @@ function lines(pdf: jsPDF, text: string, w: number, font: string, style: "normal
   return pdf.splitTextToSize(text, w) as string[];
 }
 
+/** Trait chips wrapped to `w`; returns their rows (each chip text with its width). */
+function chipRows(pdf: jsPDF, traits: string[], w: number, s: number): { t: string; w: number }[][] {
+  pdf.setFont(SANS, "normal");
+  pdf.setFontSize(small(7, s));
+  const padX = 4.2 * s;
+  const gap = 3 * s;
+  const rows: { t: string; w: number }[][] = [[]];
+  let x = 0;
+  for (const raw of traits) {
+    const t = (pdf.splitTextToSize(raw, w - padX * 2) as string[])[0];
+    const cw = pdf.getTextWidth(t) + padX * 2;
+    if (x > 0 && x + cw > w) {
+      rows.push([]);
+      x = 0;
+    }
+    rows[rows.length - 1].push({ t, w: cw });
+    x += cw + gap;
+  }
+  return rows.filter((r) => r.length);
+}
+const chipH = (s: number) => Math.max(11 * s, small(7, s) + 3.8);
+
+/** A suspect card's content: name, role, trait chips. Returns the bottom y. */
 function suspectBlock(pdf: jsPDF, p: Person, x: number, y: number, w: number, s: number, look: Look, culprit = false): number {
-  const nameL = lines(pdf, p.name, w, SANS, "bold", 9.2 * s);
+  const nameL = lines(pdf, p.name, w, SANS, "bold", 9.4 * s);
   let yy = y;
-  pdf.setTextColor(0, 0, 0);
+  ink(pdf, INK);
   nameL.forEach((l) => {
     pdf.text(l, x, yy, { baseline: "top" });
-    yy += 11 * s;
+    yy += 11.5 * s;
   });
   if (culprit) {
     paint.stroke(pdf, look.accent);
@@ -177,176 +226,199 @@ function suspectBlock(pdf: jsPDF, p: Person, x: number, y: number, w: number, s:
   }
   if (p.role) {
     pdf.setFont(SANS, "normal");
-    pdf.setFontSize(7.6 * s);
-    pdf.setTextColor(110, 110, 110);
-    pdf.text((pdf.splitTextToSize(p.role, w) as string[])[0], x, yy + 0.5 * s, { baseline: "top" });
+    pdf.setFontSize(small(7.4, s));
+    ink(pdf, MUTED);
+    pdf.text((pdf.splitTextToSize(p.role, w) as string[])[0], x, yy, { baseline: "top" });
     yy += 10 * s;
   }
-  pdf.setFont(SERIF, "normal");
-  pdf.setFontSize(8 * s);
-  pdf.setTextColor(45, 45, 45);
-  for (const t of p.traits) {
-    const tl = pdf.splitTextToSize(t, w - 7 * s) as string[];
-    paint.fill(pdf, look.accent);
-    pdf.circle(x + 1.6 * s, yy + 4.6 * s, 1.1 * s, "F");
-    tl.forEach((l) => {
-      pdf.text(l, x + 7 * s, yy + 1.5 * s, { baseline: "top" });
-      yy += 9.6 * s;
-    });
+  yy += 4 * s;
+  const ch = chipH(s);
+  for (const row of chipRows(pdf, p.traits, w, s)) {
+    let cx = x;
+    for (const c of row) {
+      paint.fill(pdf, look.design.color.grayscale ? [238, 238, 238] : CHIP);
+      pdf.roundedRect(cx, yy, c.w, ch, ch / 2, ch / 2, "F");
+      pdf.setFont(SANS, "normal");
+      pdf.setFontSize(small(7, s));
+      ink(pdf, [70, 70, 76]);
+      pdf.text(c.t, cx + c.w / 2, yy + ch / 2 + 0.2 * s, { align: "center", baseline: "middle" });
+      cx += c.w + 3 * s;
+    }
+    yy += ch + 3 * s;
   }
   pdf.setTextColor(0, 0, 0);
-  return yy;
+  return yy - 3 * s;
 }
 
 function suspectHeight(pdf: jsPDF, p: Person, w: number, s: number): number {
-  let h = lines(pdf, p.name, w, SANS, "bold", 9.2 * s).length * 11 * s;
+  let h = lines(pdf, p.name, w, SANS, "bold", 9.4 * s).length * 11.5 * s;
   if (p.role) h += 10 * s;
-  pdf.setFont(SERIF, "normal");
-  pdf.setFontSize(8 * s);
-  for (const t of p.traits) h += (pdf.splitTextToSize(t, w - 7 * s) as string[]).length * 9.6 * s;
-  return h;
+  const rows = chipRows(pdf, p.traits, w, s).length;
+  return h + 4 * s + rows * (chipH(s) + 3 * s) - (rows ? 3 * s : 0);
 }
 
 // ---------------------------------------------------------------- case page
 
 function casePage(c: MysteryCase, style: CaseStyle, headerText: string): PageRenderer {
   return (ctx: PageContext) => {
-    const { pdf, box, s, look } = ctx;
+    const { pdf, box, s } = ctx;
+    const look = caseLook(ctx.look);
     const d = look.design;
-    const dossier = style === "dossier";
-    const top = heading(ctx, headerText, c.number, c.title) + (dossier ? 14 : 6) * s;
-    const pad = 10 * s;
-    const innerW = box.w - pad * 2;
+    void style;
+    let y = heading(ctx, headerText, c.number, c.title);
 
-    // ---- brief
-    const storySize = 9.8 * s;
-    const storyLead = 13.4 * s;
-    const storyL = lines(pdf, c.story, innerW, SERIF, "normal", storySize);
-    const n = c.suspects.length;
-    const colGap = 12 * s;
-    const colW = n ? (innerW - colGap * (n - 1)) / n : innerW;
-    const susH = n ? Math.max(...c.suspects.map((p) => suspectHeight(pdf, p, colW, s))) : 0;
-    const labelH = dossier ? 0 : 12 * s;
-    const briefH = pad + labelH + storyL.length * storyLead + (n ? 10 * s + 12 * s + susH : 0) + pad * 0.7;
-    const brief = { x: box.x, y: top, w: box.w, h: briefH };
-    card(pdf, brief, look, s);
-    if (dossier) {
-      tab(pdf, "CASE BRIEF", brief.x + 12 * s, brief.y, look, s);
-      stamp(pdf, "CONFIDENTIAL", brief.x + brief.w - 10 * s, brief.y, look, s);
-    } else label(pdf, "THE BRIEF", brief.x + pad, brief.y + pad + 2 * s, look, s);
-    let y = brief.y + pad + labelH + storySize * 0.8;
+    // ---- the story: a quiet lead paragraph
+    const storySize = 10.2 * s;
+    const storyLead = 14.4 * s;
+    const storyL = lines(pdf, c.story, box.w * 0.92, SERIF, "normal", storySize);
     pdf.setFont(SERIF, "normal");
     pdf.setFontSize(storySize);
-    pdf.setTextColor(25, 25, 25);
-    storyL.forEach((l) => {
-      pdf.text(l, brief.x + pad, y);
-      y += storyLead;
-    });
+    ink(pdf, BODY);
+    storyL.forEach((l, i) => pdf.text(l, box.x, y + storySize * 0.8 + i * storyLead));
+    y += storyL.length * storyLead + 12 * s;
+
+    // ---- suspects: three even cards
+    const n = c.suspects.length;
     if (n) {
-      y += 2 * s;
-      paint.stroke(pdf, rule(look));
-      pdf.setLineWidth(0.5);
-      pdf.line(brief.x + pad, y, brief.x + brief.w - pad, y);
-      label(pdf, "SUSPECTS", brief.x + pad, y + 8 * s, look, s, [120, 120, 120]);
-      const sy = y + 15 * s;
-      c.suspects.forEach((p, i) => suspectBlock(pdf, p, brief.x + pad + i * (colW + colGap), sy, colW, s, look));
+      label(pdf, "SUSPECTS", box.x, y, look, s, MUTED);
+      y += 9 * s;
+      const gap = 8 * s;
+      const pad = 8 * s;
+      const colW = (box.w - gap * (n - 1)) / n;
+      const h = Math.max(...c.suspects.map((p) => suspectHeight(pdf, p, colW - pad * 2, s))) + pad * 2;
+      c.suspects.forEach((p, i) => {
+        const r = { x: box.x + i * (colW + gap), y, w: colW, h };
+        card(pdf, r, look, s, WHITE);
+        suspectBlock(pdf, p, r.x + pad, r.y + pad, colW - pad * 2, s, look);
+      });
+      y += h + 14 * s;
     }
 
-    // ---- bottom: evidence + report
-    const gap = 14 * s;
-    const leftW = (box.w - gap) * 0.5;
+    // ---- bottom: evidence list + detective notes
+    const gap = 16 * s;
+    const leftW = (box.w - gap) * 0.54;
     const rightW = box.w - gap - leftW;
+    const pad = 10 * s;
     const items = sortList(c.words, d.list.sort);
     const lf = look.font(d.fonts.list);
-    const listInner = leftW - pad * 2;
-    const base = Math.min(10.5, Math.max(8, 11.5 - items.length / 8)) * s * d.fonts.listScale;
-    const layout = layoutList(pdf, items, listInner, lf, base, { columns: items.length > 7 ? 2 : 1, checkbox: d.list.checkbox, minSize: 7 });
-    const leftH = pad + 12 * s + layout.height + pad * 0.6;
-    const cellW = 10.6 * s;
-    const repInner = rightW - pad * 2;
-    const LBL = 15 * s; // label to content
-    const SEC = 12 * s; // between sections
-    const CL = 10.8 * s; // clue leading
-    let rightH = pad + 2 * s;
-    let clueL: string[] = [];
-    if (c.missing) {
-      const n = c.missing.word.replace(/[^A-ZÑ]/g, "").length;
-      clueL = lines(pdf, c.missing.clue ? `${c.missing.clue} (${n} letters)` : `${n} letters`, repInner, SERIF, "normal", 8.6 * s);
-      rightH += LBL + clueL.length * CL + cellW * 1.25 + blanksHeight(pdf, c.missing.word, repInner, s, cellW) - cellW * 1.65 + SEC;
-    }
-    if (c.message) rightH += LBL + cellW * 1.05 + blanksHeight(pdf, c.message, repInner, s, cellW) - cellW * 1.65 + SEC;
-    if (c.culprit) rightH += 24 * s;
-    if (c.key) rightH += 26 * s;
-    rightH += pad * 0.3;
+    const base = Math.min(10, Math.max(8, 11 - items.length / 8)) * s * d.fonts.listScale;
+    const layout = layoutList(pdf, items, leftW, lf, base, { columns: items.length > 6 ? 2 : 1, checkbox: d.list.checkbox, minSize: 7 });
+    const leftH = 16 * s + layout.height;
+    const cellW = 10.4 * s;
+    const inner = rightW - pad * 2;
+    const k = c.missing ? c.missing.word.replace(/[^A-ZÑ]/g, "").length : 0;
+    const clueL = c.missing ? lines(pdf, c.missing.clue ? `${c.missing.clue} (${k} letters)` : `${k} letters`, inner, SERIF, "normal", 8.6 * s) : [];
+    /** Detective notes: measured first (draw = false), then drawn at (rx, top). Returns the height. */
+    const notes = (draw: boolean, rx: number, top: number): number => {
+      let ry = top + pad + 4 * s;
+      if (draw) label(pdf, "DETECTIVE NOTES", rx, ry, look, s);
+      ry += 18 * s;
+      const sub = (t: string) => {
+        if (!draw) return;
+        pdf.setFont(SANS, "bold");
+        pdf.setFontSize(7.6 * s);
+        ink(pdf, INK);
+        pdf.text(t, rx, ry, { baseline: "middle" });
+      };
+      const blanksAt = (text: string, y0: number) => (draw ? blanks(pdf, text, rx, y0, inner, s, look, false, cellW) : y0 + blanksHeight(pdf, text, inner, s, cellW) - cellW * 1.65 + 3 * s);
+      if (c.missing) {
+        sub("Missing evidence");
+        if (draw) {
+          pdf.setFont(SERIF, "normal");
+          pdf.setFontSize(8.6 * s);
+          ink(pdf, BODY);
+          clueL.forEach((l, i) => pdf.text(l, rx, ry + 12 * s + i * 11 * s));
+        }
+        ry += 12 * s + (clueL.length - 1) * 11 * s + cellW * 1.5;
+        ry = blanksAt(c.missing.word, ry) + 14 * s;
+      }
+      if (c.message) {
+        sub("Hidden message");
+        ry += cellW * 1.6;
+        ry = blanksAt(c.message, ry) + 14 * s;
+      }
+      if (c.culprit) {
+        sub("Culprit");
+        if (draw) {
+          paint.stroke(pdf, [160, 160, 160]);
+          pdf.setLineWidth(0.6);
+          pdf.line(rx + 36 * s, ry + 3 * s, rx + inner, ry + 3 * s);
+        }
+        ry += 18 * s;
+      }
+      if (c.key) {
+        const kb = 20 * s;
+        if (draw) {
+          paint.stroke(pdf, rule(look));
+          pdf.setLineWidth(0.5);
+          pdf.line(rx, ry - 4 * s, rx + inner, ry - 4 * s);
+          keyBox(pdf, rx, ry + 4 * s, kb, c.key.box, look, s);
+          pdf.setFont(SANS, "bold");
+          pdf.setFontSize(7.8 * s);
+          ink(pdf, INK);
+          pdf.text(`Case Board · box ${c.key.box}`, rx + kb + 7 * s, ry + 10 * s, { baseline: "middle" });
+          pdf.setFont(SERIF, "normal");
+          pdf.setFontSize(8.2 * s);
+          ink(pdf, BODY);
+          pdf.text((pdf.splitTextToSize(keyInstruction(c.key), inner - kb - 7 * s) as string[])[0], rx + kb + 7 * s, ry + 19.5 * s, { baseline: "middle" });
+        }
+        ry += 4 * s + kb;
+      }
+      return ry + pad - top;
+    };
+    const rightH = notes(false, 0, 0);
     const bottomH = Math.max(leftH, rightH);
-    const leadH = c.lead ? 18 * s : 0;
+    const leadH = c.lead ? 24 * s : 0;
     const bottomY = box.y + box.h - bottomH - leadH;
 
-    // ---- grid between brief and bottom
+    // ---- the puzzle: centered in the space that's left, tiles in an even rhythm
     const pz = casePuzzle(c);
     const geo = wsGeometry(pz, puzzleOutline(look, pz));
-    const extW = geo.ext.x1 - geo.ext.x0;
-    const extH = geo.ext.y1 - geo.ext.y0;
-    const gTop = brief.y + brief.h + 12 * s;
-    const availH = bottomY - 12 * s - gTop;
-    const cell = Math.min((box.w * 0.9) / (extW + 0.06), availH / (extH + 0.06), 31 * s);
-    const gx = box.x + (box.w - extW * cell) / 2 - geo.ext.x0 * cell;
-    const gy = gTop + (availH - extH * cell) / 2 - geo.ext.y0 * cell;
+    const tiles = d.grid.cells === "tiles" && d.grid.border === "none";
+    const extW = tiles ? geo.cols : geo.ext.x1 - geo.ext.x0;
+    const extH = tiles ? geo.rows : geo.ext.y1 - geo.ext.y0;
+    const ox0 = tiles ? 0 : geo.ext.x0;
+    const oy0 = tiles ? 0 : geo.ext.y0;
+    const gTop = y + 2 * s;
+    const availH = bottomY - 16 * s - gTop;
+    const cell = Math.min((box.w * 0.9) / extW, availH / extH, 27 * s);
+    const gx = box.x + (box.w - extW * cell) / 2 - ox0 * cell;
+    const gy = gTop + (availH - extH * cell) / 2 - oy0 * cell;
     drawWordSearchGrid(pdf, look, pz, gx, gy, cell, { answers: false, backing: true });
 
     // ---- evidence
-    const left = { x: box.x, y: bottomY, w: leftW, h: bottomH };
-    card(pdf, left, look, s, WHITE);
-    label(pdf, "EVIDENCE", left.x + pad, left.y + pad + 2 * s, look, s);
-    drawList(pdf, items, left.x + pad, left.y + pad + 14 * s + layout.fontSize * 0.4, listInner, lf, layout, d.list.checkbox);
+    label(pdf, "EVIDENCE", box.x, bottomY + 4 * s, look, s);
+    paint.stroke(pdf, rule(look));
+    pdf.setLineWidth(0.6);
+    pdf.line(box.x, bottomY + 10 * s, box.x + leftW, bottomY + 10 * s);
+    drawList(pdf, items, box.x, bottomY + 18 * s + layout.fontSize * 0.4, leftW, lf, layout, d.list.checkbox);
 
-    // ---- report
-    const right = { x: box.x + leftW + gap, y: bottomY, w: rightW, h: bottomH };
-    card(pdf, right, look, s, WHITE);
-    let ry = right.y + pad + 2 * s;
-    const rx = right.x + pad;
-    if (c.missing) {
-      label(pdf, "MISSING EVIDENCE", rx, ry, look, s);
-      pdf.setFont(SERIF, "normal");
-      pdf.setFontSize(8.6 * s);
-      pdf.setTextColor(50, 50, 50);
-      clueL.forEach((l, i) => pdf.text(l, rx, ry + LBL - 2 * s + i * CL));
-      ry += LBL + (clueL.length - 1) * CL + cellW * 1.25;
-      ry = blanks(pdf, c.missing.word, rx, ry, repInner, s, look, false, cellW) - 3 * s + SEC + 4 * s;
-    }
-    if (c.message) {
-      label(pdf, "HIDDEN MESSAGE", rx, ry, look, s);
-      ry += LBL + cellW * 0.55;
-      ry = blanks(pdf, c.message, rx, ry, repInner, s, look, false, cellW) - 3 * s + SEC + 4 * s;
-    }
-    if (c.culprit) {
-      label(pdf, "CULPRIT", rx, ry + 1 * s, look, s);
-      paint.stroke(pdf, [70, 70, 70]);
-      pdf.setLineWidth(0.6);
-      pdf.line(rx + 46 * s, ry + 4 * s, right.x + right.w - pad, ry + 4 * s);
-      ry += 20 * s;
-    }
-    if (c.key) {
-      const kb = 22 * s;
-      keyBox(pdf, rx, ry - 3 * s, kb, c.key.box, look, s);
-      pdf.setFont(SANS, "bold");
-      pdf.setFontSize(8.2 * s);
-      paint.textColor(pdf, look.ink);
-      pdf.text(`Case key → Box ${c.key.box}`, rx + kb + 7 * s, ry + 3 * s, { baseline: "middle" });
-      pdf.setFont(SERIF, "normal");
-      pdf.setFontSize(8.2 * s);
-      pdf.setTextColor(60, 60, 60);
-      pdf.text((pdf.splitTextToSize(keyInstruction(c.key), repInner - kb - 7 * s) as string[])[0], rx + kb + 7 * s, ry + 13 * s, { baseline: "middle" });
-      pdf.setTextColor(0, 0, 0);
-    }
+    // ---- detective notes
+    const right = { x: box.x + leftW + gap, y: bottomY - 6 * s, w: rightW, h: bottomH + 6 * s };
+    card(pdf, right, look, s, paper(look), false);
+    notes(true, right.x + pad, right.y);
+
+    // ---- next lead: a refined footer line
     if (c.lead) {
+      const fy = box.y + box.h - 4 * s;
+      paint.stroke(pdf, rule(look));
+      pdf.setLineWidth(0.6);
+      pdf.line(box.x, fy - 14 * s, box.x + box.w, fy - 14 * s);
+      pdf.setFont(SANS, "bold");
+      pdf.setFontSize(7.2 * s);
+      const kw = pdf.getTextWidth("NEXT LEAD") + 9 * 1.4 * s;
       pdf.setFont(SERIF, "normal");
-      pdf.setFontSize(8.6 * s);
-      pdf.setTextColor(95, 95, 95);
-      const t = (pdf.splitTextToSize(`Next lead: ${c.lead}`, box.w) as string[])[0];
-      pdf.text(t, box.x + box.w / 2, box.y + box.h - 4 * s, { align: "center" });
-      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(8.8 * s);
+      const t = (pdf.splitTextToSize(c.lead, box.w - kw - 14 * s) as string[])[0];
+      const tw = pdf.getTextWidth(t);
+      const x0 = box.x + (box.w - kw - 10 * s - tw) / 2;
+      label(pdf, "NEXT LEAD", x0, fy - 2.6 * s, look, s);
+      pdf.setFont(SERIF, "normal");
+      pdf.setFontSize(8.8 * s);
+      ink(pdf, BODY);
+      pdf.text(t, x0 + kw + 10 * s, fy);
     }
+    pdf.setTextColor(0, 0, 0);
   };
 }
 
@@ -379,7 +451,7 @@ function boardPage(b: BoardItem): PageRenderer {
       const h = Math.max(...row.map((p) => suspectHeight(pdf, p, cw - pad * 2, s))) + pad * 2;
       row.forEach((p, i) => {
         const x = box.x + i * (cw + gap);
-        card(pdf, { x, y, w: cw, h }, look, s);
+        card(pdf, { x, y, w: cw, h }, look, s, WHITE);
         suspectBlock(pdf, p, x + pad, y + pad, cw - pad * 2, s, look);
       });
       y += h + gap;
@@ -473,7 +545,7 @@ function finalePage(f: FinaleItem): PageRenderer {
     while (rows.length > 3 && size > 16 * s) rows = fits((size -= 2 * s));
     let n = 0;
     const card0 = { x: box.x, y: y - 16 * s, w: box.w, h: rows.length * (size + 14 * s) + 18 * s };
-    card(pdf, card0, look, s);
+    card(pdf, card0, look, s, paper(look), false);
     for (const row of rows) {
       const rw = row.reduce((a, w) => a + w.length * (size + bgap) - bgap, 0) + wgap * (row.length - 1);
       let x = box.x + (box.w - rw) / 2;
@@ -488,7 +560,7 @@ function finalePage(f: FinaleItem): PageRenderer {
     y += 22 * s;
     pdf.setFont(look.font(look.design.fonts.heading), "bold");
     pdf.setFontSize(13 * s);
-    paint.textColor(pdf, look.ink);
+    ink(pdf, INK);
     (pdf.splitTextToSize(f.question, box.w * 0.85) as string[]).forEach((l) => {
       pdf.text(l, box.x + box.w / 2, y, { align: "center" });
       y += 17 * s;
@@ -529,7 +601,8 @@ function solutionLines(c: MysteryCase): [string, string][] {
 
 function answersPage(entries: Entry[], first: boolean, per: number): PageRenderer {
   return (ctx: PageContext) => {
-    const { pdf, box, s, look } = ctx;
+    const { pdf, box, s } = ctx;
+    const look = answerLook(ctx.look);
     const top = first ? heading(ctx, "SOLUTIONS") + 4 * s : box.y;
     const cols = per <= 2 ? 1 : 2;
     const rows = per === 1 ? 1 : per === 2 ? 2 : per === 4 ? 2 : 3;
@@ -545,7 +618,7 @@ function answersPage(entries: Entry[], first: boolean, per: number): PageRendere
       const ttl = (text: string) => {
         pdf.setFont(hf, "bold");
         pdf.setFontSize(10 * s);
-        paint.textColor(pdf, look.ink);
+        ink(pdf, INK);
         pdf.text((pdf.splitTextToSize(text, slotW - 10 * s) as string[])[0], sx + slotW / 2, sy + 9 * s, { align: "center", baseline: "middle" });
         pdf.setTextColor(0, 0, 0);
       };
@@ -676,7 +749,8 @@ export interface HowToFlags {
 
 export function mysteryHowTo(f: HowToFlags): PageRenderer {
   return (ctx: PageContext) => {
-    const { pdf, box, s, look } = ctx;
+    const { pdf, box, s } = ctx;
+    const look = answerLook(ctx.look);
     const hf = look.font(look.design.fonts.heading);
     let y = heading(ctx, "HOW TO SOLVE") + 12 * s;
     const steps: [string, string][] = [["Read the brief", "Each case starts with a short story and its suspects. Note their traits."]];
@@ -691,19 +765,21 @@ export function mysteryHowTo(f: HowToFlags): PageRenderer {
     const textX = box.x + numR * 2 + 10 * s;
     const textW = box.w - (textX - box.x);
     steps.forEach(([t, body], i) => {
-      paint.fill(pdf, look.accent);
-      pdf.circle(box.x + numR, y + numR * 0.4, numR, "F");
+      paint.fill(pdf, WHITE);
+      paint.stroke(pdf, look.accent);
+      pdf.setLineWidth(0.9);
+      pdf.circle(box.x + numR, y + numR * 0.4, numR, "FD");
       pdf.setFont(SANS, "bold");
-      pdf.setFontSize(10 * s);
-      paint.textColor(pdf, look.onAccent);
+      pdf.setFontSize(9.5 * s);
+      paint.textColor(pdf, look.ink);
       pdf.text(String(i + 1), box.x + numR, y + numR * 0.45, { align: "center", baseline: "middle" });
       pdf.setFont(hf, "bold");
       pdf.setFontSize(11.5 * s);
-      paint.textColor(pdf, look.ink);
+      ink(pdf, INK);
       pdf.text(t, textX, y + 3 * s);
-      pdf.setFont(SERIF, "normal");
-      pdf.setFontSize(9.8 * s);
-      pdf.setTextColor(35, 35, 35);
+      pdf.setFont(SANS, "normal");
+      pdf.setFontSize(9.2 * s);
+      ink(pdf, BODY);
       const bl = pdf.splitTextToSize(body, textW) as string[];
       bl.forEach((l, k) => pdf.text(l, textX, y + 17 * s + k * 13.4 * s));
       y += 17 * s + bl.length * 13.4 * s + 12 * s;
@@ -717,7 +793,7 @@ export function mysteryHowTo(f: HowToFlags): PageRenderer {
     const cell = Math.max(12 * s, Math.min(27 * s, (avail - 40 * s) / (demo.size + 0.6)));
     const gw = demo.size * cell;
     const ex = { x: box.x, y: y, w: box.w, h: gw + cell * 0.6 + 44 * s };
-    card(pdf, ex, look, s);
+    card(pdf, ex, look, s, paper(look), false);
     label(pdf, "A SOLVED EXAMPLE", ex.x + 14 * s, ex.y + 14 * s, look, s);
     const gx = ex.x + 16 * s + cell * 0.3;
     const gy = ex.y + 28 * s + cell * 0.3;
@@ -726,13 +802,10 @@ export function mysteryHowTo(f: HowToFlags): PageRenderer {
     const tw = ex.x + ex.w - 12 * s - tx;
     let ty = gy + 6 * s;
     const row = (k: string, v: string) => {
-      pdf.setFont(SANS, "bold");
-      pdf.setFontSize(8 * s);
-      paint.textColor(pdf, look.ink);
-      pdf.text(k, tx, ty);
-      pdf.setFont(SERIF, "normal");
-      pdf.setFontSize(9.4 * s);
-      pdf.setTextColor(30, 30, 30);
+      label(pdf, k, tx, ty - 2.5 * s, look, s);
+      pdf.setFont(SANS, "normal");
+      pdf.setFontSize(9 * s);
+      ink(pdf, BODY);
       const l = pdf.splitTextToSize(v, tw) as string[];
       l.forEach((x, i) => pdf.text(x, tx, ty + 12 * s + i * 12.5 * s));
       ty += 12 * s + l.length * 12.5 * s + 9 * s;
@@ -743,9 +816,9 @@ export function mysteryHowTo(f: HowToFlags): PageRenderer {
     if (f.message) row("THE CULPRIT", `Only one suspect is a ${/GARDENER/.test(demo.message.toUpperCase()) ? "gardener" : "cook"}, so that suspect is the culprit.`);
     if (f.board) row("CASE KEY", "\"Box 3: letter 2 of the culprit's first name\". Write that letter in box 3 of the Case Board.");
     pdf.setTextColor(0, 0, 0);
-    pdf.setFont(hf, "bold");
-    pdf.setFontSize(11 * s);
-    paint.textColor(pdf, look.ink);
+    pdf.setFont(SERIF, "normal");
+    pdf.setFontSize(10 * s);
+    ink(pdf, BODY);
     pdf.text(`Solutions start on page ${ctx.solutionsPage}.`, box.x + box.w / 2, box.y + box.h - 8 * s, { align: "center" });
     pdf.setTextColor(0, 0, 0);
     void drawCheckbox;
@@ -797,16 +870,25 @@ export function buildMysteryBook(items: MysteryItem[], opts: MysteryBookOptions,
   });
 }
 
-/** Default look for case files: book serif, typewriter lists, a deep red accent. */
+/** Default look for case files: a bright casebook. Serif titles, clean sans body and grid on soft tiles, one oxblood accent. */
+export const CASEBOOK_NAME = "Casebook";
 export function mysteryDesign(): Design {
   const d: Design = JSON.parse(JSON.stringify(DEFAULT_DESIGN));
   d.template = "elegant";
-  d.name = "Case file";
-  d.header = { style: "underline", text: "", showPuzzleTitle: true, badge: true, badgeShape: "diamond", icon: "magnifier" };
-  d.fonts = { heading: "serif", grid: "serif", list: "mono", gridScale: 1, listScale: 1 };
-  d.grid = { ...d.grid, lines: false, border: "double", shade: "none", frame: 0.9 };
-  d.pageNumber = "dashes";
-  d.color = { accent: "#8b1e1e", grayscale: false };
-  d.list = { ...d.list, columns: 2, checkbox: true, sort: "alpha" };
+  d.name = CASEBOOK_NAME;
+  d.header = { style: "casebook", text: "", showPuzzleTitle: true, badge: true, badgeShape: "circle", icon: "magnifier" };
+  d.fonts = { heading: "serif", grid: "sans", list: "sans", gridScale: 1, listScale: 1 };
+  d.grid = { ...d.grid, lines: false, border: "none", shade: "none", frame: 0.8, cells: "tiles", shadow: false, line: "solid" };
+  d.shape = { ...d.shape, shade: false };
+  d.pageNumber = "plain";
+  d.color = { accent: "#7a2331", grayscale: false };
+  d.list = { ...d.list, columns: 2, checkbox: true, sort: "alpha", box: "none" };
   return d;
+}
+
+/** Designs saved before the casebook redesign (the old "Case file" default) move to the new look, keeping the shapes. */
+export function upgradeMysteryDesign(d: Design): Design {
+  if (d.name !== "Case file" || d.header.style !== "underline" || d.grid.border !== "double") return d;
+  const n = mysteryDesign();
+  return { ...n, shape: { ...d.shape, shade: false }, list: { ...n.list, checkbox: d.list.checkbox }, color: { ...n.color, grayscale: d.color.grayscale } };
 }

@@ -6,7 +6,7 @@ import type { BadgeShape, CellStyle, Design, GridBorder, GridShade, HeaderStyle,
 import { SHAPE_KEYS, OutlineStyle, ShapeKey, ShapeMix } from "../shapes/shapes";
 import { MAX_PINS, PLAN_LEAF_IDS, ThemeMode } from "../shapes/plan";
 
-const HEADERS: HeaderStyle[] = ["rule", "banner", "ribbon", "underline", "boxed", "tab", "minimal"];
+const HEADERS: HeaderStyle[] = ["rule", "banner", "ribbon", "underline", "boxed", "tab", "minimal", "casebook"];
 const BADGES: BadgeShape[] = ["circle", "rounded", "diamond", "hexagon"];
 const ICONS: IconKey[] = ["none", "magnifier", "star", "heart", "leaf", "sun", "snowflake", "flower", "pencil"];
 const PATTERNS: PatternKey[] = ["none", "dots", "diagonal", "waves", "confetti", "grid", "corners", "snow"];
@@ -15,7 +15,7 @@ const SHADES: GridShade[] = ["none", "rows", "checker"];
 const NUMBERS: PageNumberStyle[] = ["plain", "dashes", "circle", "pill", "none"];
 const SORTS: ListSort[] = ["entered", "alpha", "length"];
 const LINES: LineStyle[] = ["solid", "dashed", "dotted"];
-const CELLS: CellStyle[] = ["plain", "boxed", "rounded", "circles"];
+const CELLS: CellStyle[] = ["plain", "boxed", "rounded", "circles", "tiles"];
 const LIST_BOXES: ListBox[] = ["none", "solid", "rounded", "dashed", "double"];
 const MIXES: ShapeMix[] = ["one", "each", "pick", "manual", "theme", "animals", "category"];
 const THEME_MODES: ThemeMode[] = ["off", "match", "group"];

@@ -5,7 +5,7 @@ import { CASES_EXAMPLE, casesToText, parseCases } from "../src/lib/mystery/parse
 import { SALTMERE, phraseFor, starterCases } from "../src/lib/mystery/starter";
 import { SETTINGS, scaffoldBook } from "../src/lib/mystery/templates";
 import { DEFAULT_MYSTERY_SETTINGS, type MysteryItem } from "../src/lib/mystery/types";
-import { buildMysteryBook, mysteryDesign } from "../src/lib/mystery/pdf";
+import { buildMysteryBook, mysteryDesign, upgradeMysteryDesign } from "../src/lib/mystery/pdf";
 import { nodeFonts } from "../src/lib/print/nodeFonts";
 import { DEFAULT_EXTRAS } from "../src/lib/print/book";
 import { DEFAULT_FRONT_MATTER } from "../src/lib/print/frontMatter";
@@ -144,6 +144,26 @@ describe("case-file PDF", () => {
       if (trim === "8.5x11") expect(Math.min(...sizes)).toBeGreaterThanOrEqual(7);
       expect(BLANK).toBe("·");
     }, 60000);
+});
+
+describe("casebook design", () => {
+  test("the default is the bright casebook: serif titles, sans grid on soft tiles, no frame", () => {
+    const d = mysteryDesign();
+    expect(d.header.style).toBe("casebook");
+    expect(d.grid.cells).toBe("tiles");
+    expect(d.grid.border).toBe("none");
+    expect(d.fonts).toMatchObject({ heading: "serif", grid: "sans", list: "sans" });
+  });
+  test("a design saved with the old Case file default moves to the casebook, keeping its shapes", () => {
+    const old = { ...mysteryDesign(), name: "Case file", header: { ...mysteryDesign().header, style: "underline" as const }, grid: { ...mysteryDesign().grid, border: "double" as const, cells: "plain" as const } };
+    old.shape = { ...old.shape, kind: "heart", mix: "each", seed: 9 };
+    const up = upgradeMysteryDesign(old);
+    expect(up.header.style).toBe("casebook");
+    expect(up.grid.cells).toBe("tiles");
+    expect(up.shape).toMatchObject({ kind: "heart", mix: "each", seed: 9 });
+    const mine = { ...mysteryDesign(), name: "My look", grid: { ...mysteryDesign().grid, border: "double" as const } };
+    expect(upgradeMysteryDesign(mine)).toBe(mine);
+  });
 });
 
 describe("shapes for mystery cases", () => {

@@ -773,17 +773,17 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
               {viewCase && (
                 <div className="pg-my-viewer">
                   <div className="pg-my-viewer-bar">
-                    <button type="button" className="btn btn-light btn-sm" aria-label="Previous case" disabled={view === 0} onClick={() => setView((v) => Math.max(0, v - 1))}>
+                    <button type="button" className="pg-my-viewer-nav" aria-label="Previous case" disabled={view === 0} onClick={() => setView((v) => Math.max(0, v - 1))}>
                       <BsChevronLeft />
                     </button>
                     <span className="pg-my-viewer-pos" data-testid="my-view-pos">
                       Case {viewCase.number} of {cases.length}
                     </span>
-                    <button type="button" className="btn btn-light btn-sm" aria-label="Next case" disabled={view >= cases.length - 1} onClick={() => setView((v) => Math.min(cases.length - 1, v + 1))}>
+                    <button type="button" className="pg-my-viewer-nav" aria-label="Next case" disabled={view >= cases.length - 1} onClick={() => setView((v) => Math.min(cases.length - 1, v + 1))}>
                       <BsChevronRight />
                     </button>
-                    <button type="button" className="pg-quiet-btn ms-auto" data-testid="my-solution-toggle" onClick={() => setSolved((x) => !x)}>
-                      {solved ? <BsEyeSlash /> : <BsEye />} {solved ? "Hide solution" : "Show solution"}
+                    <button type="button" className={`pg-my-viewer-chip ${solved ? "on" : ""}`} aria-pressed={solved} data-testid="my-solution-toggle" onClick={() => setSolved((x) => !x)}>
+                      {solved ? <BsEyeSlash /> : <BsEye />} {solved ? "Hide solution" : "Solution"}
                     </button>
                   </div>
                   <CaseView c={viewCase} solved={solved} />

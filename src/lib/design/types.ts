@@ -2,7 +2,7 @@ import type { FontKey } from "./fonts";
 import type { OutlineStyle, ShapeKey, ShapeMix } from "../shapes/shapes";
 import type { ThemeMode } from "../shapes/plan";
 
-export type HeaderStyle = "rule" | "banner" | "ribbon" | "underline" | "boxed" | "tab" | "minimal";
+export type HeaderStyle = "rule" | "banner" | "ribbon" | "underline" | "boxed" | "tab" | "minimal" | "casebook";
 export type BadgeShape = "circle" | "rounded" | "diamond" | "hexagon";
 export type IconKey = "none" | "magnifier" | "star" | "heart" | "leaf" | "sun" | "snowflake" | "flower" | "pencil";
 export type PatternKey = "none" | "dots" | "diagonal" | "waves" | "confetti" | "grid" | "corners" | "snow";
@@ -10,8 +10,8 @@ export type GridBorder = "square" | "rounded" | "double" | "none";
 export type GridShade = "none" | "rows" | "checker";
 /** Line style of the outline around the grid. */
 export type LineStyle = "solid" | "dashed" | "dotted";
-/** How each letter / number cell is drawn. */
-export type CellStyle = "plain" | "boxed" | "rounded" | "circles";
+/** How each letter / number cell is drawn ("tiles": a soft filled tile behind each letter, no outline). */
+export type CellStyle = "plain" | "boxed" | "rounded" | "circles" | "tiles";
 /** Box around the word list. */
 export type ListBox = "none" | "solid" | "rounded" | "dashed" | "double";
 export type PageNumberStyle = "plain" | "dashes" | "circle" | "pill" | "none";

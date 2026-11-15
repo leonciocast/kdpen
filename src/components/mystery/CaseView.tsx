@@ -11,7 +11,25 @@ function cellsOf(p: { letters: string; row: number; col: number; dir: string }):
   return Array.from(p.letters, (_, i) => `${p.row + dr * i},${p.col + dc * i}`);
 }
 
-/** A case file on screen: brief, suspects, grid and evidence (optionally solved). */
+/** Letter blanks grouped by word, like the printed page. */
+function Blanks({ text, fill }: { text: string; fill?: boolean }) {
+  const words = text.toUpperCase().split(/\s+/).map((w) => w.replace(/[^A-ZÑ]/g, "")).filter(Boolean);
+  return (
+    <span className="pg-blanks" aria-label={fill ? text : `${words.map((w) => w.length).join(", ")} letters`}>
+      {words.map((w, i) => (
+        <span key={i} className="pg-blank-word">
+          {Array.from(w, (ch, k) => (
+            <span key={k} className="pg-blank">
+              {fill ? ch : ""}
+            </span>
+          ))}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** A case file on screen, matching the printed casebook page: title, story, suspects, the grid, evidence and detective notes. */
 export default function CaseView({ c, solved }: { c: MysteryCase; solved: boolean }) {
   const { word, extra, message } = useMemo(() => {
     const word = new Set(c.placements.flatMap(cellsOf));
@@ -19,30 +37,40 @@ export default function CaseView({ c, solved }: { c: MysteryCase; solved: boolea
     const message = new Set(c.messageCells.map(([r, k]) => `${r},${k}`));
     return { word, extra, message };
   }, [c]);
-  // Crop shaped grids to their used rows / columns.
+  // Crop shaped grids to their used rows / columns; the tiles draw the shape.
   const rows = c.grid.map((row, r) => ({ r, row })).filter(({ row }) => row.some((v) => v));
   const cols = c.grid[0].map((_, k) => k).filter((k) => c.grid.some((row) => row[k]));
+  const words = [...c.words].sort((a, b) => a.localeCompare(b));
   return (
-    <div className="pg-case" data-testid="my-case-view">
-      <div className="pg-case-head">
-        <span className="pg-case-num">Case {c.number}</span>
+    <article className="pg-case" data-testid="my-case-view">
+      <header className="pg-case-head">
+        <div className="pg-case-kicker">
+          Case file · No. {String(c.number).padStart(2, "0")}
+          {c.templated && <span className="pg-case-tag">Templated</span>}
+        </div>
         <h3 className="pg-case-title">{c.title}</h3>
-        {c.templated && <span className="pg-case-tag">Templated</span>}
-      </div>
+      </header>
       <p className="pg-case-story">{c.story}</p>
       {c.suspects.length > 0 && (
-        <div className="pg-case-suspects">
-          {c.suspects.map((p) => (
-            <div key={p.name} className={`pg-suspect ${solved && c.culprit === p ? "culprit" : ""}`}>
-              <div className="pg-suspect-name">{p.name}</div>
-              {p.role && <div className="pg-suspect-role">{p.role}</div>}
-              <div className="pg-suspect-traits">{p.traits.join(" · ")}</div>
-            </div>
-          ))}
-        </div>
+        <section aria-label="Suspects">
+          <div className="pg-case-label muted">Suspects</div>
+          <div className="pg-case-suspects" style={{ gridTemplateColumns: `repeat(${c.suspects.length}, minmax(0, 1fr))` }}>
+            {c.suspects.map((p) => (
+              <div key={p.name} className={`pg-suspect ${solved && c.culprit === p ? "culprit" : ""}`}>
+                <div className="pg-suspect-name">{p.name}</div>
+                {p.role && <div className="pg-suspect-role">{p.role}</div>}
+                <ul className="pg-suspect-traits">
+                  {p.traits.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
       )}
-      <div className="pg-case-body">
-        <div className="pg-case-grid" style={{ gridTemplateColumns: `repeat(${cols.length}, 1fr)` }} aria-label={`Letter grid, ${c.size} by ${c.size}`}>
+      <div className="pg-case-puzzle">
+        <div className="pg-case-grid" style={{ "--cols": cols.length, "--rows": rows.length } as React.CSSProperties} aria-label={`Letter grid, ${rows.length} rows by ${cols.length} columns`}>
           {rows.map(({ r, row }) =>
             cols.map((k) => {
               const v = row[k];
@@ -56,43 +84,64 @@ export default function CaseView({ c, solved }: { c: MysteryCase; solved: boolea
             }),
           )}
         </div>
-        <div className="pg-case-side">
+      </div>
+      <div className="pg-case-foot">
+        <section className="pg-case-evidence" aria-label="Evidence">
           <div className="pg-case-label">Evidence</div>
           <ul className="pg-case-words">
-            {c.words.map((w) => (
+            {words.map((w) => (
               <li key={w}>{w}</li>
             ))}
           </ul>
+        </section>
+        <section className="pg-case-notes" aria-label="Detective notes">
+          <div className="pg-case-label">Detective notes</div>
           {c.missing && (
-            <>
-              <div className="pg-case-label">Missing evidence</div>
-              <p className="pg-case-clue">
-                {c.missing.clue} ({c.missing.word.replace(/[^A-ZÑ]/g, "").length} letters){solved && <strong> {c.missing.word}</strong>}
+            <div className="pg-note">
+              <div className="pg-note-title">Missing evidence</div>
+              <p className="pg-note-text">
+                {c.missing.clue} ({c.missing.word.replace(/[^A-ZÑ]/g, "").length} letters)
               </p>
-            </>
+              <Blanks text={c.missing.word} fill={solved} />
+            </div>
           )}
-          {c.message && solved && (
-            <>
-              <div className="pg-case-label">Hidden message</div>
-              <p className="pg-case-msg" data-testid="my-case-message">
-                {c.message}
-              </p>
-            </>
+          {c.message && (
+            <div className="pg-note">
+              <div className="pg-note-title">Hidden message</div>
+              {solved ? (
+                <p className="pg-case-msg" data-testid="my-case-message">
+                  {c.message}
+                </p>
+              ) : (
+                <Blanks text={c.message} />
+              )}
+            </div>
           )}
-          {solved && c.culprit && (
-            <p className="pg-case-answer">
-              Culprit: <strong>{c.culprit.name}</strong>
-            </p>
+          {c.culprit && (
+            <div className="pg-note pg-note-line">
+              <span className="pg-note-title">Culprit</span>
+              <span className="pg-note-fill">{solved ? c.culprit.name : ""}</span>
+            </div>
           )}
           {c.key && (
-            <p className="pg-case-key">
-              <span className="pg-keybox">{c.key.box}</span> {keyInstruction(c.key)}
-              {solved && <strong> = {c.key.letter}</strong>}
-            </p>
+            <div className="pg-note pg-note-key">
+              <span className="pg-keybox">
+                <span>{c.key.box}</span>
+                {solved && <strong>{c.key.letter}</strong>}
+              </span>
+              <span>
+                <span className="pg-note-title">Case Board · box {c.key.box}</span>
+                <span className="pg-note-text">{keyInstruction(c.key)}</span>
+              </span>
+            </div>
           )}
-        </div>
+        </section>
       </div>
-      {c.lead && <p className="pg-case-lead">Next lead: {c.lead}</p>}
-    </div>
+      {c.lead && (
+        <footer className="pg-case-lead">
+          <span className="pg-case-label">Next lead</span> {c.lead}
+        </footer>
+      )}
+    </article>
   );
 }
