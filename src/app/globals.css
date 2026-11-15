@@ -824,3 +824,43 @@ a { text-underline-offset: 2px; }
 .pg-spin { animation: pg-spin 1s linear infinite; }
 @keyframes pg-spin { to { transform: rotate(360deg); } }
 .pg-ai-notes > summary { color: #475569; font-size: .88rem; }
+
+/* AI magic start */
+.pg-ai-start { display: flex; flex-direction: column; gap: .9rem; }
+.pg-ai-hero { display: flex; flex-direction: column; align-items: center; gap: .7rem; text-align: center; padding: 2.2rem 1rem 1.8rem; border: 1px solid #e3e7f5; border-radius: 16px; background: radial-gradient(120% 140% at 50% 0%, #f4f3ff 0%, #fff 62%); }
+.pg-magic { display: inline-flex; align-items: center; gap: .55rem; border: 0; border-radius: 999px; color: #fff; font-weight: 700; letter-spacing: .01em; background: linear-gradient(135deg, var(--pg-primary) 0%, #7c3aed 100%); box-shadow: 0 8px 22px rgba(79, 70, 229, .28); transition: transform .12s, box-shadow .12s; }
+.pg-magic.lg { font-size: 1.12rem; padding: .85rem 1.9rem; }
+.pg-magic.sm { font-size: .86rem; padding: .38rem .9rem; box-shadow: 0 4px 12px rgba(79, 70, 229, .22); }
+.pg-magic:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(79, 70, 229, .34); }
+.pg-magic:disabled { opacity: .55; }
+.pg-magic svg { flex-shrink: 0; }
+.pg-magic-confirm { display: inline-flex; align-items: center; flex-wrap: wrap; gap: .6rem; font-size: .88rem; color: #334155; }
+.pg-ai-hero-meta { font-size: .86rem; color: #64748b; }
+.pg-quiet-more { border-top: 1px solid var(--pg-border); padding-top: .7rem; }
+.pg-quiet-more > summary { cursor: pointer; list-style: none; font-size: .88rem; font-weight: 600; color: #475569; display: inline-flex; align-items: center; gap: .35rem; }
+.pg-quiet-more > summary::-webkit-details-marker { display: none; }
+.pg-quiet-more > summary::after { content: "▾"; font-size: .75rem; color: #94a3b8; }
+.pg-quiet-more[open] > summary::after { content: "▴"; }
+.pg-quiet-more[open] > summary { margin-bottom: .9rem; }
+.pg-ai-others { display: grid; gap: .5rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.pg-ai-other { display: flex; gap: .7rem; align-items: flex-start; text-align: left; border: 1px solid var(--pg-border); background: #fff; border-radius: 12px; padding: .75rem .85rem; transition: border-color .12s, background .12s; }
+.pg-ai-other:hover:not(:disabled) { border-color: #c7d2fe; background: #fafaff; }
+.pg-ai-other-icon { color: var(--pg-primary); font-size: 1.05rem; margin-top: .1rem; }
+.pg-ai-other-title { display: block; font-weight: 600; font-size: .9rem; color: var(--pg-ink, #0f172a); }
+.pg-ai-other-text { display: block; font-size: .8rem; color: #64748b; }
+.pg-ai-count { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.pg-ai-progress-title { font-size: 1.02rem; color: #1e1b4b; }
+.pg-ai-progress-msg { display: flex; align-items: center; gap: .4rem; font-size: .88rem; color: #3730a3; font-weight: 500; }
+.pg-ai-progress-count { margin-left: auto; color: #64748b; font-weight: 500; font-size: .82rem; }
+.pg-ai-titles { list-style: none; margin: .8rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .3rem 1rem; font-size: .84rem; color: #94a3b8; }
+.pg-ai-titles li { display: flex; align-items: center; gap: .45rem; animation: pg-fade-in .4s ease both; }
+.pg-ai-titles li.done { color: #334155; }
+.pg-ai-titles li.more { color: #94a3b8; font-style: italic; }
+.pg-ai-tick { width: 1.3rem; height: 1.3rem; flex-shrink: 0; border-radius: 99px; display: inline-flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; background: #eef0f6; color: #94a3b8; }
+.pg-ai-titles li.done .pg-ai-tick { background: var(--pg-success-50, #ecfdf5); color: var(--pg-success, #059669); }
+@keyframes pg-fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.pg-ai-summary-actions { display: inline-flex; align-items: center; gap: .4rem; }
+.pg-ai-stats { color: #64748b; }
+.pg-my-row.busy { opacity: .7; }
+.pg-ai-rewriting { display: inline-flex; align-items: center; gap: .4rem; color: #4338ca; font-weight: 500; }
+.pg-ai-build-magic { display: flex; align-items: center; justify-content: flex-end; gap: .7rem; font-size: .86rem; color: #64748b; margin: 0 0 .8rem; }

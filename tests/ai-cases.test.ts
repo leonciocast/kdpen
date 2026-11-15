@@ -2,7 +2,8 @@ import { describe, expect, test } from "vitest";
 import type { ConverseCommandOutput } from "@aws-sdk/client-bedrock-runtime";
 import { AiError, bedrockLlm, extractToolInput, type ConverseSender } from "../src/lib/ai/bedrock";
 import { checkAiCase, checkOutline, unsuitable } from "../src/lib/ai/check";
-import { generateAiBook, regenerateCase } from "../src/lib/ai/generate";
+import { generateAiBook, regenerateCase, type AiProgress } from "../src/lib/ai/generate";
+import { flavorFor, outlinePrompt } from "../src/lib/ai/prompts";
 import { mockLlm } from "../src/lib/ai/mock";
 import { GenerateRequest, toolSchema, AiOutline } from "../src/lib/ai/schema";
 import { generateMystery } from "../src/lib/mystery/model";
@@ -64,6 +65,42 @@ describe("Bedrock wrapper (mocked client)", () => {
     const js = toolSchema(AiOutline);
     expect(js.type).toBe("object");
     expect(js.$schema).toBeUndefined();
+  });
+});
+
+describe("speed and variety", () => {
+  test("low effort is sent, and dropped once if the model rejects it", async () => {
+    const seen: unknown[] = [];
+    let n = 0;
+    const client = {
+      async send(cmd: { input: { additionalModelRequestFields?: unknown } }) {
+        seen.push(cmd.input.additionalModelRequestFields);
+        if (n++ === 0) throw named("ValidationException", "output_config: Extra inputs are not permitted");
+        return toolReply({ a: 1 });
+      },
+    } as unknown as ConverseSender;
+    const llm = bedrockLlm({ client, modelId: "us.anthropic.claude-sonnet-5-5", retries: 0 });
+    expect((await llm(TOOL)).input).toEqual({ a: 1 });
+    expect(await llm(TOOL)).toBeTruthy();
+    expect(seen).toEqual([{ output_config: { effort: "low" } }, undefined, undefined]);
+  });
+  test("a surprise setting gets a seeded starting idea, and recent books are avoided", () => {
+    const a = outlinePrompt(req({ setting: "surprise", seed: 1, avoid: ["The Lanterns of Marrowby Pier (winter 1894 seaside)"] }), 8);
+    const b = outlinePrompt(req({ setting: "surprise", seed: 2 }), 8);
+    expect(a).toMatch(/Marrowby/);
+    expect(a).toMatch(/Starting idea/);
+    expect(a).not.toEqual(b);
+    const ideas = new Set(Array.from({ length: 20 }, (_, i) => flavorFor(i * 7919 + 13)));
+    expect(ideas.size).toBeGreaterThan(15);
+  });
+  test("progress carries the title, case titles and written cases", async () => {
+    const r = req({ caseCount: 6 });
+    const seen: AiProgress[] = [];
+    await generateAiBook(r, mockLlm(r), { onProgress: (p) => seen.push(p) });
+    const last = seen[seen.length - 1];
+    expect(last.title).toBeTruthy();
+    expect(last.titles).toHaveLength(6);
+    expect(seen.some((p) => (p.written?.length ?? 0) > 0 && (p.written?.length ?? 0) < 6 + 1)).toBe(true);
   });
 });
 

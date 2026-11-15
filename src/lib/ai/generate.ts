@@ -15,6 +15,19 @@ export interface AiProgress {
   done: number;
   total: number;
   message: string;
+  /** Book title and case titles, as soon as the outline is in. */
+  title?: string;
+  titles?: string[];
+  /** Case numbers (1-based) already written and checked. */
+  written?: number[];
+}
+export interface AiStats {
+  inputTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  calls: number;
+  ms: number;
+  model: string;
 }
 export interface AiBook {
   book: CaseBook;
@@ -28,6 +41,8 @@ export interface AiBook {
   calls: number;
   ms: number;
 }
+/** Price function injected by the server (keeps this module free of env reads). */
+export type CostFn = (u: Usage) => number;
 export interface GenerateOptions {
   onProgress?: (p: AiProgress) => void;
   onCall?: (label: string, r: ToolResult) => void;
@@ -97,8 +112,12 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
   const specs: (CaseSpec | null)[] = Array(N).fill(null);
   const caseNotes: string[][] = Array.from({ length: N }, () => []);
   const problems = new Map<number, string[]>();
-  const size = opts.chunkSize ?? 8;
-  let written = 0;
+  // Small batches, many at once: a batch's time grows with its length, so 4 cases x 6 in
+  // parallel is far faster than 8 cases x 2 (Bedrock quotas allow this easily).
+  const size = opts.chunkSize ?? (N <= 6 ? 3 : 4);
+  const done = new Set<number>();
+  const titles = outline.cases.map((c) => c.title);
+  const tell = (phase: AiProgress["phase"], message: string) => progress({ phase, done: done.size, total: N, message, title: outline!.title, titles, written: [...done].sort((a, b) => a - b) });
   const writeRange = async (idxs: number[], fb?: Map<number, string[]>) => {
     const from = idxs[0];
     const to = idxs[idxs.length - 1];
@@ -128,19 +147,21 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
       const was = fb?.get(i);
       caseNotes[i - 1] = [...(was?.length && !chk.problems.length ? [`rewritten once to fix: ${was.join(" ").replace(/\.$/, "")}`] : []), ...chk.repairs];
       if (chk.problems.length) problems.set(i, chk.problems);
-      else problems.delete(i);
+      else {
+        problems.delete(i);
+        done.add(i);
+      }
     }
-    written += idxs.length;
-    progress({ phase: "cases", done: Math.min(N, written), total: N, message: `Writing case ${Math.min(N, written)} of ${N}…` });
+    tell(problems.size && done.size + problems.size >= N ? "repair" : "cases", done.size >= N ? "Checking every case…" : `Writing case ${Math.min(N, done.size + 1)} of ${N}…`);
   };
   const chunks: number[][] = [];
   for (let a = 1; a <= N; a += size) chunks.push(Array.from({ length: Math.min(size, N - a + 1) }, (_, k) => a + k));
-  progress({ phase: "cases", done: 0, total: N, message: `Writing case 1 of ${N}…` });
-  await pool(chunks, opts.concurrency ?? 2, (c) => writeRange(c));
+  tell("cases", `Writing case 1 of ${N}…`);
+  await pool(chunks, opts.concurrency ?? 6, (c) => writeRange(c));
 
   for (let round = 0; round < (opts.maxRounds ?? 2) && problems.size; round++) {
     const failing = [...problems.keys()].sort((a, b) => a - b);
-    progress({ phase: "repair", done: N - failing.length, total: N, message: `Polishing ${failing.length === 1 ? "1 case" : `${failing.length} cases`}…` });
+    tell("repair", `Polishing ${failing.length === 1 ? "1 case" : `${failing.length} cases`}…`);
     const fb = new Map(problems);
     const groups: number[][] = [];
     // Contiguous runs, at most `size` long, so each request stays small.
@@ -149,7 +170,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
       if (g && g[g.length - 1] === i - 1 && g.length < size) g.push(i);
       else groups.push([i]);
     }
-    await pool(groups, opts.concurrency ?? 2, (g) => writeRange(g, fb));
+    await pool(groups, opts.concurrency ?? 6, (g) => writeRange(g, fb));
   }
   // Whatever still fails: keep it if it builds (with a note), otherwise leave it out.
   const kept: CaseSpec[] = [];
@@ -166,7 +187,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
     keptNotes.push([...caseNotes[k], ...(p ?? [])]);
   });
   if (!kept.length) throw new AiError("The cases couldn't be written. Please try again.", "bad-output");
-  progress({ phase: "done", done: N, total: N, message: "Done" });
+  tell("done", "Done");
   const phrase = req.storyline ? outline.finalAnswer : "";
   return {
     book: { title: outline.title, intro: outline.intro, cast, cases: kept, finale: { phrase, question: outline.finaleQuestion, epilogue: outline.epilogue } },

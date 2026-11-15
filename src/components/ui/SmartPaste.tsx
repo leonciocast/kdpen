@@ -234,7 +234,7 @@ export function PasteReview({ themes, setThemes, clues, wordsPerPuzzle, longAt, 
 }
 
 /** "⋯" menu: Merge with previous, Split, Delete. Keyboard: Enter/Space opens, arrows move, Esc closes. */
-function ThemeMenu({ items, label }: { items: { key: string; label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean; testId: string }[]; label: string }) {
+export function ThemeMenu({ items, label, testId = "paste-menu" }: { items: { key: string; label: string; icon: React.ReactNode; onClick: () => void; danger?: boolean; testId: string }[]; label: string; testId?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const id = useId();
@@ -258,7 +258,7 @@ function ThemeMenu({ items, label }: { items: { key: string; label: string; icon
   };
   return (
     <div className="pg-menu" ref={ref} onKeyDown={onKey}>
-      <button type="button" className="pg-menu-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={id} aria-label={label} title="More actions" onClick={() => setOpen((o) => !o)} data-testid="paste-menu">
+      <button type="button" className="pg-menu-btn" aria-haspopup="menu" aria-expanded={open} aria-controls={id} aria-label={label} title="More actions" onClick={() => setOpen((o) => !o)} data-testid={testId}>
         <BsThreeDots />
       </button>
       {open && (

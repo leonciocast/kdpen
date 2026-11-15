@@ -6,7 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { AiError, bedrockLlm, costOf, DEFAULT_MODEL, type Llm } from "./bedrock";
-import { generateAiBook, type AiBook, type AiProgress } from "./generate";
+import { generateAiBook, type AiBook, type AiProgress, type AiStats } from "./generate";
 import { mockLlm } from "./mock";
 import type { GenerateRequest } from "./schema";
 
@@ -56,6 +56,7 @@ export function clientIp(h: Headers): string {
 
 // ---------------------------------------------------------------- jobs
 export interface Job {
+  stats?: AiStats;
   id: string;
   ip: string;
   status: "running" | "done" | "failed" | "cancelled";
@@ -79,9 +80,10 @@ export function startJob(req: GenerateRequest, ip: string): Job | string {
   const job: Job = { id, ip, status: "running", progress: { phase: "outline", done: 0, total: req.caseCount, message: "Starting…" }, started: Date.now(), ctl };
   jobs.set(id, job);
   const timer = setTimeout(() => ctl.abort(), JOB_TIMEOUT_MS);
-  generateAiBook(req, llmFor(req), { signal: ctl.signal, onProgress: (p) => (job.progress = p), onCall: (label, r) => log(id, label, r.usage, r.ms) })
+  generateAiBook(req, llmFor(req), { signal: ctl.signal, concurrency: Number(process.env.AI_CONCURRENCY ?? 6), onProgress: (p) => (job.progress = p), onCall: (label, r) => log(id, label, r.usage, r.ms) })
     .then((res) => {
       job.result = res;
+      job.stats = { ...res.usage, costUsd: Number(costOf(res.usage).toFixed(4)), calls: res.calls, ms: res.ms, model: modelId() + (isMock() ? " (mock)" : "") };
       job.status = "done";
       console.log(`[ai-cases] ${id} book ${req.caseCount} cases: ${res.book.cases.length} kept, ${res.calls} calls, in=${res.usage.inputTokens} out=${res.usage.outputTokens} ~$${costOf(res.usage).toFixed(3)} ${(res.ms / 1000).toFixed(0)}s model=${modelId()}${isMock() ? " (mock)" : ""}`);
     })

@@ -6,9 +6,9 @@ export const dynamic = "force-dynamic";
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const job = getJob((await ctx.params).id);
   if (!job) return Response.json({ error: "This job has expired. Please generate again." }, { status: 404 });
-  const { status, progress, error, result } = job;
+  const { status, progress, error, result, stats } = job;
   return Response.json(
-    { status, progress, error, result: result ? { book: result.book, outline: result.outline, caseNotes: result.caseNotes, indexes: result.indexes, notes: result.notes } : undefined },
+    { status, progress, error, stats, result: result ? { book: result.book, outline: result.outline, caseNotes: result.caseNotes, indexes: result.indexes, notes: result.notes } : undefined },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

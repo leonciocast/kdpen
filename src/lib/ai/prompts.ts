@@ -16,17 +16,28 @@ Rules you always follow:
 - Evidence words are single English words, UPPERCASE letters only (no spaces, digits, hyphens or apostrophes), ${MIN_WORD} to ${MAX_WORD} letters, concrete nouns that fit the scene. No word may appear inside another word of the same case (forwards or backwards), e.g. not both VINE and VINEYARD.
 - Always answer by calling the provided tool with JSON that matches its schema exactly.`;
 
-export function settingText(setting: string): string {
+// Seeded inspiration for "Surprise me", so every book starts from somewhere new.
+const ERAS = ["the 1890s", "the 1920s", "the 1930s", "the 1950s", "the 1960s", "the 1970s", "the 1980s", "the present day", "the near future", "the 1840s", "the 1910s", "the 2000s"];
+const PLACES = ["a fishing village", "a mountain observatory", "a riverboat", "a botanical garden", "a lighthouse island", "a winter carnival", "a desert railway town", "a floating market", "a vineyard harvest", "an old opera house", "a seaside boarding school", "a clockmaker's street", "a snowbound monastery", "a canal city", "a lakeside spa", "a traveling theatre", "a hill-town bakery fair", "an ice-skating palace", "a museum of maps", "a tea plantation", "a jazz-age airship", "a lantern festival", "a salt marsh farm", "a puppet theatre", "a chess tournament", "a perfume workshop", "a kite festival", "a royal stables"];
+const NAMES = ["English and Scottish", "Irish and Welsh", "Scandinavian", "Italian and French", "Spanish and Portuguese", "Dutch and German", "Greek and Turkish", "Polish and Czech", "a mix from many countries", "Caribbean and British", "Japanese and Korean", "Indian and Persian", "West African and French", "Latin American"];
+
+export function flavorFor(seed: number): string {
+  const pick = <T,>(a: T[], k: number) => a[Math.abs(Math.floor(seed / k)) % a.length];
+  return `${pick(PLACES, 1)} in ${pick(ERAS, 7)}, with ${pick(NAMES, 53)} names`;
+}
+
+export function settingText(setting: string, seed?: number): string {
   const s = SETTINGS.find((x) => x.id === setting);
   if (s) return `${s.name}: ${s.blurb}`;
-  if (!setting || setting === "surprise") return "Surprise me: invent a fresh, specific and atmospheric setting (a place and an era) that suits the tone.";
+  if (!setting || setting === "surprise") return `Surprise me: invent a fresh, specific and atmospheric setting (a place and an era) that suits the tone.${seed !== undefined ? ` Starting idea, use it freely: ${flavorFor(seed)}.` : ""}`;
   return setting;
 }
 
 export function outlinePrompt(r: GenerateRequest, castSize: number): string {
   return `Plan a connected detective book of exactly ${r.caseCount} cases.
-Setting: ${settingText(r.setting)}
-Tone: ${TONE_TEXT[r.tone]}
+Setting: ${settingText(r.setting, r.seed)}
+Tone: ${TONE_TEXT[r.tone]}${r.avoid.length ? `
+These were used recently, so make this book clearly different (new title, place, era and names): ${r.avoid.join("; ")}.` : ""}
 Write:
 - title: the book title (original, at most 8 words).
 - intro: 2 to 3 sentences that set up the overarching mystery for the reader.
@@ -34,7 +45,7 @@ Write:
 - mastermind: the cast member behind the whole storyline.
 - finalAnswer: ${r.storyline ? `the answer the Case Board spells at the end, at most ${r.caseCount} letters (letters and spaces only), usually the mastermind's name or a short phrase like "THE KEEPER LIED".` : `an empty string.`}
 - finaleQuestion: the question on the last page, and epilogue: 2 to 4 sentences revealing the truth.
-- cases: exactly ${r.caseCount} entries in story order, each with a title (at most 6 words, all titles different), the culprit of that case (a cast member; spread culprits across the cast) and a one-line premise. Each case should hint toward the next one, building to the mastermind.`;
+- cases: exactly ${r.caseCount} entries in story order, each with a title (at most 6 words, all titles different), the culprit of that case (a cast member; spread culprits across the cast) and a premise of at most 15 words. Each case should hint toward the next one, building to the mastermind.`;
 }
 
 export function casesPrompt(r: GenerateRequest, o: AiOutline, from: number, to: number, feedback?: Map<number, string[]>): string {
@@ -48,7 +59,6 @@ export function casesPrompt(r: GenerateRequest, o: AiOutline, from: number, to: 
     })
     .join("\n");
   return `Book: "${o.title}". ${o.intro}
-Setting: ${settingText(r.setting)}
 Tone: ${TONE_TEXT[r.tone]}
 Cast (use these exact names):
 ${cast}

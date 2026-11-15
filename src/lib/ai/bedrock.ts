@@ -72,6 +72,8 @@ export interface BedrockOptions {
   retries?: number;
   /** Base backoff (ms); doubles each retry, with jitter. */
   backoffMs?: number;
+  /** Thinking effort (low/medium/high) or "off" to send no effort field. */
+  effort?: string;
 }
 
 export function bedrockLlm(opts: BedrockOptions = {}): Llm {
@@ -84,6 +86,9 @@ export function bedrockLlm(opts: BedrockOptions = {}): Llm {
   // choice also switches to "auto" for the rest of the run.
   const env = process.env.BEDROCK_TOOL_CHOICE;
   let forced = env === "tool" || (env !== "auto" && !/claude-(sonnet|opus|haiku)-[5-9]/.test(modelId));
+  // Less up-front thinking is much faster and cheaper for this kind of writing; our own checks
+  // catch mistakes. Dropped automatically if the model doesn't accept the field.
+  let effort: string | null = (opts.effort ?? process.env.BEDROCK_EFFORT ?? "low") === "off" ? null : (opts.effort ?? process.env.BEDROCK_EFFORT ?? "low");
   return async (req, signal) => {
     const t0 = Date.now();
     let lastErr: unknown;
@@ -93,6 +98,7 @@ export function bedrockLlm(opts: BedrockOptions = {}): Llm {
         system: [{ text: req.system }],
         messages: [{ role: "user", content: [{ text: forced ? req.prompt : `${req.prompt}\n\nAnswer only by calling the ${req.tool.name} tool.` }] }],
         inferenceConfig: { maxTokens: req.maxTokens },
+        ...(effort ? { additionalModelRequestFields: { output_config: { effort } } as never } : {}),
         toolConfig: {
           tools: [{ toolSpec: { name: req.tool.name, description: req.tool.description, inputSchema: { json: req.tool.schema as never } } }],
           toolChoice: forced ? { tool: { name: req.tool.name } } : { auto: {} },
@@ -110,6 +116,12 @@ export function bedrockLlm(opts: BedrockOptions = {}): Llm {
         const err = e as Error & { name?: string; $metadata?: { httpStatusCode?: number } };
         const msg = `${err.name ?? ""} ${err.message ?? ""}`;
         if (signal?.aborted) throw new AiError("Cancelled", "timeout");
+        if (effort && /output_config|effort|additionalModelRequestFields|extraneous key|not permitted/i.test(msg)) {
+          console.warn(`[ai-cases] model ignored effort=${effort}: ${msg.slice(0, 160)}`);
+          effort = null;
+          attempt--;
+          continue;
+        }
         if (forced && /tool_?choice/i.test(msg)) {
           forced = false;
           attempt--;

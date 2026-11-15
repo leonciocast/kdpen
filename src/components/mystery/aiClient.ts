@@ -1,5 +1,5 @@
 /** Browser side of AI cases: status, start + poll a job, rewrite one case. No secrets here. */
-import type { AiProgress } from "@/lib/ai/generate";
+import type { AiProgress, AiStats } from "@/lib/ai/generate";
 import type { AiOutline, GenerateRequest } from "@/lib/ai/schema";
 import type { CaseBook, CaseSpec } from "@/lib/mystery/types";
 
@@ -9,6 +9,7 @@ export interface AiStatus {
   model: string;
 }
 export interface AiResult {
+  stats?: AiStats;
   book: CaseBook;
   outline: AiOutline;
   caseNotes: string[][];
@@ -56,9 +57,9 @@ export function generateBook(options: GenerateRequest, onProgress: (p: AiProgres
       if (stopped) throw new DOMException("Cancelled", "AbortError");
       const s = await fetch(`/api/mystery/generate/${id}`, { cache: "no-store" });
       if (!s.ok) throw new Error(await errorOf(s));
-      const j = (await s.json()) as { status: string; progress: AiProgress; error?: string; result?: AiResult };
+      const j = (await s.json()) as { status: string; progress: AiProgress; error?: string; result?: AiResult; stats?: AiStats };
       onProgress(j.progress);
-      if (j.status === "done" && j.result) return j.result;
+      if (j.status === "done" && j.result) return { ...j.result, stats: j.stats };
       if (j.status === "cancelled") throw new DOMException("Cancelled", "AbortError");
       if (j.status === "failed") throw new Error(j.error ?? "The cases couldn't be written. Please try again.");
     }
