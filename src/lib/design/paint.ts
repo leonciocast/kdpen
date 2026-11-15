@@ -732,16 +732,28 @@ export function framePolygon(pts: P2[], look: Look, unit: number): P2[] {
 }
 
 /** Soft shadow and optional shaded (or white) backing under a shaped grid (drawn before the letters). */
+function isSteppedLook(look: Look) {
+  return look.design.shape.outline === "stepped";
+}
+
+function steppedStroke(look: Look): RGB {
+  const raw = hexToRgb(look.design.shape.outlineColor || "#e67a2e");
+  return look.design.color.grayscale ? toGray(raw) : raw;
+}
+
 export function drawOutlineBacking(pdf: jsPDF, pts: P2[] | P2[][], look: Look, unit: number) {
   const g = look.design.grid;
-  const rings = asRings(pts).map((r) => framePolygon(r, look, unit));
+  const stepped = isSteppedLook(look);
+  // Stepped outlines stay sharp; never fillet the stairs into a curve.
+  const rings = asRings(pts).map((r) => (stepped ? r : framePolygon(r, look, unit)));
   if (g.shadow && g.border !== "none") {
     const o = Math.max(2.5, unit * 0.22);
     fill(pdf, [205, 205, 205]);
     polys(pdf, rings.map((r) => r.map(([x, y]) => [x + o, y + o] as P2)), "F");
   }
-  if (look.design.shape.shade) {
-    // Light grey cut-out, like a classic shaped word-search page. Stays readable in black & white.
+  // The stepped style is outline-only (no grey fill). A white knockout is
+  // still used when a shadow or pattern would otherwise show through.
+  if (look.design.shape.shade && !stepped) {
     fill(pdf, look.design.color.grayscale ? [226, 226, 226] : tint(look.accent, 0.9));
     polys(pdf, rings, "F");
   } else if (g.shadow || look.design.pattern.kind !== "none") {
@@ -754,16 +766,19 @@ export function drawOutlineBacking(pdf: jsPDF, pts: P2[] | P2[][], look: Look, u
 export function drawOutline(pdf: jsPDF, pts: P2[] | P2[][], look: Look, unit: number) {
   const g = look.design.grid;
   if (g.border === "none" || g.frame <= 0) return;
-  const rings = asRings(pts).map((r) => framePolygon(r, look, unit));
-  stroke(pdf, [0, 0, 0]);
+  const stepped = isSteppedLook(look);
+  const rings = asRings(pts).map((r) => (stepped ? r : framePolygon(r, look, unit)));
+  stroke(pdf, stepped ? steppedStroke(look) : [0, 0, 0]);
   pdf.setLineWidth(g.frame);
+  pdf.setLineJoin(stepped ? "miter" : "round");
   withLineStyle(pdf, look, g.frame, () => {
     polys(pdf, rings, "S");
-    if (g.border === "double") {
+    if (!stepped && g.border === "double") {
       pdf.setLineWidth(Math.max(0.4, g.frame * 0.6));
       polys(pdf, rings.map((r) => offsetPolygon(r, Math.max(2.5, g.frame * 2.5))), "S");
     }
   });
+  pdf.setLineJoin("round");
 }
 
 /** Outer frame in the design's border style around box `b`. */

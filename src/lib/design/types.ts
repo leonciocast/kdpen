@@ -60,8 +60,10 @@ export interface Design {
     mix: ShapeMix;
     /** Light shaded silhouette behind the letters (the grey fill of a shaped word search). */
     shade: boolean;
-    /** smooth = the exact artist silhouette; snug = outline hugs letters; blocky = a cell-hugging pixel outline. */
+    /** smooth = the exact artist silhouette; stepped = a thin cell-edge stroke; snug hugs letters; blocky is a padded pixel outline. */
     outline: OutlineStyle;
+    /** Stroke colour for the stepped cell-edge outline (ignored in grayscale books, converted to grey). */
+    outlineColor?: string;
   };
   color: {
     accent: string;

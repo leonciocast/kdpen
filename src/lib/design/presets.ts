@@ -16,8 +16,8 @@ const SORTS: ListSort[] = ["entered", "alpha", "length"];
 const LINES: LineStyle[] = ["solid", "dashed", "dotted"];
 const CELLS: CellStyle[] = ["plain", "boxed", "rounded", "circles"];
 const LIST_BOXES: ListBox[] = ["none", "solid", "rounded", "dashed", "double"];
-const MIXES: ShapeMix[] = ["one", "each", "theme", "animals"];
-const OUTLINES: OutlineStyle[] = ["smooth", "snug", "blocky"];
+const MIXES: ShapeMix[] = ["one", "each", "theme", "animals", "category"];
+const OUTLINES: OutlineStyle[] = ["smooth", "stepped", "snug", "blocky"];
 
 export const DESIGN_OPTIONS = { HEADERS, BADGES, ICONS, PATTERNS, BORDERS, SHADES, NUMBERS, SORTS, LINES, CELLS, LIST_BOXES, MIXES, OUTLINES };
 
@@ -67,7 +67,13 @@ export function sanitizeDesign(input: unknown): Design {
       shadow: bool(g.shadow, d.grid.shadow),
       cells: pick(g.cells, CELLS, d.grid.cells),
     },
-    shape: { kind: pick(s.kind, SHAPE_KEYS, d.shape.kind), mix: pick(s.mix, MIXES, d.shape.mix), shade: bool(s.shade, d.shape.shade), outline: pick(s.outline, OUTLINES, d.shape.outline) },
+    shape: {
+      kind: pick(s.kind, SHAPE_KEYS, d.shape.kind),
+      mix: pick(s.mix, MIXES, d.shape.mix),
+      shade: bool(s.shade, d.shape.shade),
+      outline: pick(s.outline, OUTLINES, d.shape.outline),
+      ...(isHexColor(s.outlineColor) ? { outlineColor: s.outlineColor } : d.shape.outlineColor ? { outlineColor: d.shape.outlineColor } : {}),
+    },
     color: { accent: isHexColor(c.accent) ? c.accent : d.color.accent, grayscale: bool(c.grayscale, d.color.grayscale) },
     pattern: { kind: pick(p.kind, PATTERNS, d.pattern.kind), strength: num(p.strength, 0, 1, d.pattern.strength) },
     pageNumber: pick(i.pageNumber, NUMBERS, d.pageNumber),

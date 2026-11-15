@@ -15,6 +15,7 @@ import PdfPreview from "./PdfPreview";
 import { downloadText } from "./CsvDrop";
 import type { DesignApi } from "./useDesign";
 import { FramePicker, ShapePicker, frameIdOf, shapeLabel, shapesFor } from "./ShapePicker";
+import { DEFAULT_STEPPED_COLOR, OUTLINE_COLORS, defaultOutlineFor, isSteppedShape } from "@/lib/shapes/shapes";
 
 const LABELS: Record<string, string> = {
   rule: "Thin rule", banner: "Bold banner", ribbon: "Ribbon", underline: "Underlined", boxed: "Boxed", tab: "Tab", minimal: "Minimal",
@@ -232,10 +233,47 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
     body: (
       <div className="row g-4">
         <div className="col-lg-7">
-          <ShapePicker tool={tool} design={design} themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { ...d.shape, kind, mix, shade: shade ?? d.shape.shade }))} />
+          <ShapePicker tool={tool} design={design} themes={themes} onChange={(kind, mix, shade) => set((d) => {
+            const familyChange = isSteppedShape(kind) !== isSteppedShape(d.shape.kind);
+            d.shape = {
+              ...d.shape,
+              kind,
+              mix,
+              shade: shade ?? d.shape.shade,
+              outline: familyChange ? defaultOutlineFor(kind) : d.shape.outline,
+              outlineColor: d.shape.outlineColor ?? DEFAULT_STEPPED_COLOR,
+            };
+          })} />
           {tool === "word-search" && (
             <div className="mt-3">
-              <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Artist (smooth)", snug: "Snug (hugs letters)", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => (d.shape.outline = v))} />
+              <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Artist (smooth)", stepped: "Stepped cell outline", snug: "Snug (hugs letters)", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => { d.shape.outline = v; if (v === "stepped") d.shape.shade = false; })} />
+              {design.shape.outline === "stepped" && (
+                <div className="pg-outline-colors mt-2" data-testid="outline-colors">
+                  <span className="form-label small mb-0">Outline colour</span>
+                  <div className="d-flex flex-wrap align-items-center gap-2">
+                    {OUTLINE_COLORS.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`pg-color-chip ${(design.shape.outlineColor || DEFAULT_STEPPED_COLOR).toLowerCase() === c.hex.toLowerCase() ? "active" : ""}`}
+                        style={{ background: c.hex }}
+                        aria-label={c.label}
+                        title={c.label}
+                        data-testid={`outline-color-${c.id}`}
+                        onClick={() => set((d) => { d.shape.outlineColor = c.hex; })}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      className="form-control form-control-color pg-swatch"
+                      aria-label="Custom outline colour"
+                      data-testid="outline-color-custom"
+                      value={design.shape.outlineColor || DEFAULT_STEPPED_COLOR}
+                      onChange={(e) => set((d) => { d.shape.outlineColor = e.target.value; })}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           )}
           {shapeStatus && <div className="pg-shape-status small" aria-live="polite">{shapeStatus}</div>}
@@ -406,7 +444,17 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
           </Section>
 
           <Section title={tool === "sudoku" ? "Frame shape" : "Shape"}>
-            <ShapePicker tool={tool} design={design} compact themes={themes} onChange={(kind, mix, shade) => set((d) => (d.shape = { ...d.shape, kind, mix, shade: shade ?? d.shape.shade }))} />
+            <ShapePicker tool={tool} design={design} compact themes={themes} onChange={(kind, mix, shade) => set((d) => {
+                    const familyChange = isSteppedShape(kind) !== isSteppedShape(d.shape.kind);
+                    d.shape = {
+                      ...d.shape,
+                      kind,
+                      mix,
+                      shade: shade ?? d.shape.shade,
+                      outline: familyChange ? defaultOutlineFor(kind) : d.shape.outline,
+                      outlineColor: d.shape.outlineColor ?? DEFAULT_STEPPED_COLOR,
+                    };
+                  })} />
             {shapeStatus && <div className="pg-shape-status small">{shapeStatus}</div>}
           </Section>
 

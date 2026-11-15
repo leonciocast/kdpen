@@ -1,18 +1,17 @@
 /**
- * Puzzle grid shapes. Every shape is a polygon in a unit box; a puzzle of
- * size N gets a boolean mask of the N×N cells that the shape covers.
- * Animal cells get a letter only when the glyph box plus a small margin sits
- * fully inside the silhouette; thin tips may stay empty grey. Word-search
- * pages default to the exact artist curve ("smooth"), with optional "snug"
- * (inflate/clip so the outline hugs letters and trims empty tips) and
- * "blocky" (cell-hugging pixel outline) styles. Geometric shapes keep a
- * small inset so letters sit inside a decorative frame. Pure (no DOM):
- * shared by the engine, the PDF renderer, the UI and tests.
+ * Puzzle grid shapes. Silhouettes are polygons in a unit box; stepped
+ * shapes are painted onto whole cells. Word-search pages default to the
+ * exact artist curve ("smooth") for silhouettes, or a thin cell-edge
+ * stroke ("stepped") for block shapes. "snug" hugs letters; "blocky" is
+ * a padded pixel outline. Pure (no DOM).
  */
 
 import polygonClipping from "polygon-clipping";
 import { ANIMALS } from "./animals";
 import { mapRect, pathToUnit } from "./silhouettes";
+import { STEPPED_DEFS } from "./stepped";
+import { OBJECT_DEFS } from "./objects";
+import { ANIMAL_GROUP, LEGACY_CATEGORY, THEME_SHAPES, type AnimalGroup, type ShapeCategory } from "./catalog";
 
 
 export type ShapeKey =
@@ -102,7 +101,93 @@ export type ShapeKey =
   | "ostrich"
   | "pelican"
   | "snake"
-  | "scorpion";
+  | "scorpion"
+  | "arch"
+  | "rainbow"
+  | "ubend"
+  | "bowl"
+  | "wave"
+  | "zigzag"
+  | "stairs"
+  | "pyramid"
+  | "stepdiamond"
+  | "stepcircle"
+  | "blockcross"
+  | "blockx"
+  | "blockt"
+  | "blockl"
+  | "arrow"
+  | "bolt"
+  | "blockheart"
+  | "blockstar"
+  | "blockhouse"
+  | "blocktree"
+  | "cup"
+  | "key"
+  | "rocket"
+  | "boxframe"
+  | "ring"
+  | "windowframe"
+  | "sunburst"
+  | "petals"
+  | "checkers"
+  | "corners"
+  | "islands5"
+  | "islands9"
+  | "pear"
+  | "icecream"
+  | "cupcake"
+  | "pizza"
+  | "cherry"
+  | "raindrop"
+  | "moon"
+  | "leaf"
+  | "snowflake"
+  | "gift"
+  | "shamrock"
+  | "car"
+  | "boat"
+  | "airplane"
+  | "guitar"
+  | "crown"
+  | "bulb"
+  | "letterA"
+  | "letterB"
+  | "letterC"
+  | "letterD"
+  | "letterE"
+  | "letterF"
+  | "letterG"
+  | "letterH"
+  | "letterI"
+  | "letterJ"
+  | "letterK"
+  | "letterL"
+  | "letterM"
+  | "letterN"
+  | "letterO"
+  | "letterP"
+  | "letterQ"
+  | "letterR"
+  | "letterS"
+  | "letterT"
+  | "letterU"
+  | "letterV"
+  | "letterW"
+  | "letterX"
+  | "letterY"
+  | "letterZ"
+  | "digit0"
+  | "digit1"
+  | "digit2"
+  | "digit3"
+  | "digit4"
+  | "digit5"
+  | "digit6"
+  | "digit7"
+  | "digit8"
+  | "digit9";
+
 
 export type Pt = [number, number];
 
@@ -113,7 +198,11 @@ export interface ShapeInfo {
   aspect: number;
   /** Seasonal / theme hint shown on the card. */
   tag?: string;
-  group: "basic" | "geometric" | "fun" | "animals";
+  group: "basic" | "geometric" | "fun" | "animals" | "stepped" | "objects";
+  /** Public picker category; every shape has exactly one. */
+  category?: ShapeCategory;
+  /** Animal sub-group, only when category is "animals". */
+  animalGroup?: AnimalGroup;
   /** Smallest recommended N×N canvas (animals need more cells to stay recognisable). */
   minSize?: number;
   /** Extra names used to match a puzzle theme to this shape. */
@@ -122,6 +211,10 @@ export interface ShapeInfo {
   focus?: [number, number, number, number];
   /** Polygon in a unit box [0,1]×[0,1] (x right, y down), before aspect. */
   poly: () => Pt[];
+  /** Optional cell-built mask (stepped / island shapes). */
+  buildMask?: (size: number) => boolean[][];
+  /** Keep every large connected piece instead of just the biggest one. */
+  islands?: boolean;
 }
 
 const TAU = Math.PI * 2;
@@ -190,6 +283,8 @@ function animalShape(a: (typeof ANIMALS)[number]): ShapeInfo {
     label: a.label,
     aspect: a.aspect ?? packed.aspect,
     group: "animals",
+    category: "animals",
+    animalGroup: ANIMAL_GROUP[a.key],
     minSize: a.minSize,
     aliases: a.aliases,
     focus: a.focus ? mapRect(packed.bbox, a.focus) : undefined,
@@ -263,6 +358,31 @@ export const SHAPES: ShapeInfo[] = [
   },
   { key: "cloud", label: "Cloud", aspect: 1.45, group: "fun", poly: () => normalize(radialUnion([[0.5, 0.58, 0.3], [0.27, 0.62, 0.22], [0.73, 0.62, 0.22], [0.38, 0.38, 0.22], [0.63, 0.36, 0.25], [0.5, 0.72, 0.24]], [0.5, 0.56])) },
   ...ANIMAL_SHAPES,
+  ...STEPPED_DEFS.map((d): ShapeInfo => ({
+    key: d.key as ShapeKey,
+    label: d.label,
+    aspect: d.aspect,
+    group: "stepped",
+    category: d.category,
+    minSize: d.minSize,
+    aliases: d.aliases,
+    tag: d.tag,
+    islands: d.islands,
+    buildMask: d.buildMask,
+    poly: () => [[0, 0], [1, 0], [1, 1], [0, 1]],
+  })),
+  ...OBJECT_DEFS.map((d): ShapeInfo => ({
+    key: d.key as ShapeKey,
+    label: d.label,
+    aspect: d.aspect,
+    group: "objects",
+    category: d.category,
+    minSize: d.minSize,
+    aliases: d.aliases,
+    tag: d.tag,
+    focus: d.focus,
+    poly: d.poly,
+  })),
 ];
 
 export const SHAPE_KEYS = SHAPES.map((s) => s.key);
@@ -493,7 +613,7 @@ function chaikin(pts: Pt[], rounds = 2): Pt[] {
 }
 
 /** Clockwise outer (and any hole) loops of a mask, in cell units: cell (r,c) is the square [c,c+1]×[r,r+1]. */
-function maskLoops(mask: Mask): Pt[][] {
+export function maskLoops(mask: Mask): Pt[][] {
   const n = mask.length;
   const used = (r: number, c: number) => !!mask[r]?.[c];
   const outs = new Map<string, Pt[]>();
@@ -816,12 +936,17 @@ const letteredCache = new Map<string, Pt[][]>();
  *   tips are trimmed and the outline hugs the letters.
  * - "blocky": the cell-hugging pixel staircase.
  */
-export type OutlineStyle = "smooth" | "snug" | "blocky";
+export type OutlineStyle = "smooth" | "snug" | "stepped" | "blocky";
 
 export function letteredOutlines(key: ShapeKey | undefined, size: number, style: OutlineStyle = "smooth"): Pt[][] {
   const mask = shapeMask(key, size);
   if (!mask) return [];
   if (style === "blocky") return maskOutlines(mask, CELL_DILATE);
+  if (style === "stepped") return maskLoops(mask);
+  if (shapeInfo(key).buildMask) {
+    // Mask-built shapes have no artist curve; any non-blocky style follows the cell edges.
+    return maskLoops(mask);
+  }
   if (style === "smooth") return [shapeOutline(key, size)];
   const id = `${key}:${size}:snug`;
   const hit = letteredCache.get(id);
@@ -901,7 +1026,7 @@ export type Mask = boolean[][];
  * 1-cell-wide antlers and legs can keep letters; isolated spikes are still
  * removed and thin parts are thickened when a 2×2 fits inside the silhouette.
  */
-function clean(m: Mask, open = 3): Mask {
+function clean(m: Mask, open = 3, opts?: { keepIslands?: boolean; minIsland?: number }): Mask {
   const n = m.length;
   const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
   // Animals (open < 2): 8-connected so diagonal antlers are not eaten from the tips.
@@ -957,7 +1082,32 @@ function clean(m: Mask, open = 3): Mask {
       }
       if (comp.length > best.length) best = comp;
     }
+  const minIsland = opts?.minIsland ?? 12;
   const out: Mask = m.map((row) => row.map(() => false));
+  if (opts?.keepIslands) {
+    const seen2 = m.map((row) => row.map(() => false));
+    for (let r = 0; r < n; r++)
+      for (let c = 0; c < n; c++) {
+        if (!m[r][c] || seen2[r][c]) continue;
+        const comp: [number, number][] = [];
+        const stack: [number, number][] = [[r, c]];
+        seen2[r][c] = true;
+        while (stack.length) {
+          const [a, b] = stack.pop()!;
+          comp.push([a, b]);
+          for (const [dr, dc] of dirs) {
+            const y = a + dr;
+            const x = b + dc;
+            if (on(y, x) && !seen2[y][x]) {
+              seen2[y][x] = true;
+              stack.push([y, x]);
+            }
+          }
+        }
+        if (comp.length >= minIsland) for (const [rr, cc] of comp) out[rr][cc] = true;
+      }
+    return out;
+  }
   for (const [r, c] of best) out[r][c] = true;
   return out;
 }
@@ -970,8 +1120,15 @@ export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null 
   const id = `${key}:${size}`;
   const hit = cache.get(id);
   if (hit) return hit;
+  const info = shapeInfo(key);
+  if (info.buildMask) {
+    const painted = info.buildMask(size);
+    const out = clean(painted, 1, { keepIslands: !!info.islands, minIsland: 12 });
+    cache.set(id, out);
+    return out;
+  }
   const pts = shapeOutline(key, size);
-  const animal = shapeInfo(key).group === "animals";
+  const animal = info.group === "animals";
   const cover = animal ? coverageGrid(pts, size) : null;
   const inCenter = (r: number, c: number) => inside(pts, c + 0.5, r + 0.5);
   const glyphFits = (r: number, c: number) => {
@@ -1070,11 +1227,47 @@ export function roundCorners(pts: Pt[], iterations = 2): Pt[] {
 export const ANIMAL_KEYS: ShapeKey[] = ANIMAL_SHAPES.map((s) => s.key);
 export const isAnimal = (k: ShapeKey | undefined) => !!k && (shapeInfo(k).group === "animals");
 
-export type ShapeCategory = "basic" | "animals" | "objects";
-export function shapeCategory(s: ShapeInfo): ShapeCategory {
-  if (s.group === "animals") return "animals";
-  if (s.group === "fun") return "objects";
-  return "basic";
+export type { ShapeCategory, AnimalGroup } from "./catalog";
+export { CATEGORIES, ANIMAL_GROUPS, THEME_SHAPES, OUTLINE_COLORS, DEFAULT_STEPPED_COLOR } from "./catalog";
+
+export function shapeCategory(s: ShapeInfo | ShapeKey): ShapeCategory {
+  const info = typeof s === "string" ? shapeInfo(s) : s;
+  if (info.category) return info.category;
+  if (info.group === "animals") return "animals";
+  return LEGACY_CATEGORY[info.key] ?? "basic";
+}
+
+export function animalGroupOf(k: ShapeKey | ShapeInfo): AnimalGroup | undefined {
+  const info = typeof k === "string" ? shapeInfo(k) : k;
+  return info.animalGroup ?? ANIMAL_GROUP[info.key];
+}
+
+export function isSteppedShape(k: ShapeKey | undefined): boolean {
+  return !!k && !!shapeInfo(k).buildMask;
+}
+
+export function defaultOutlineFor(k: ShapeKey | undefined): OutlineStyle {
+  return isSteppedShape(k) ? "stepped" : "smooth";
+}
+
+export function shapesInCategory(cat: ShapeCategory, allowed?: ShapeKey[]): ShapeKey[] {
+  return SHAPES.filter((s) => shapeCategory(s) === cat && (!allowed || allowed.includes(s.key))).map((s) => s.key);
+}
+
+/** Several shapes that fit a theme, for the picker "Suggested" row. */
+export function suggestShapesForTheme(theme: string | undefined, allowed?: ShapeKey[], limit = 8): ShapeKey[] {
+  const t = (theme ?? "").toLowerCase();
+  const out: ShapeKey[] = [];
+  const add = (k: string) => {
+    if (!k || out.includes(k as ShapeKey)) return;
+    if (allowed && !allowed.includes(k as ShapeKey)) return;
+    if (!BY_KEY.has(k as ShapeKey)) return;
+    out.push(k as ShapeKey);
+  };
+  const direct = suggestShapeForTheme(theme, allowed);
+  if (direct) add(direct);
+  for (const row of THEME_SHAPES) if (row.match.test(t)) row.keys.forEach(add);
+  return out.slice(0, limit);
 }
 
 function normName(s: string): string {
@@ -1103,22 +1296,30 @@ export function suggestShapeForTheme(theme: string | undefined, allowed?: ShapeK
 /**
  * Shapes that make good crosswords. Measured over the standard 12-word fruit
  * set (4 seeds): triangle, diamond, star, tree, pentagon, tall rectangle,
- * and any animal that drops more than one word, so they are not offered.
+ * and any animal or new form that drops more than one word across four seeds, so they are not offered.
  */
-export const CROSSWORD_SHAPES: ShapeKey[] = [
-  "square", "rounded", "landscape", "circle", "oval", "octagon", "hexagon", "heart", "egg", "apple", "pumpkin", "house", "cloud",
-  ...ANIMAL_KEYS.filter((k) => !(["monkey"] as ShapeKey[]).includes(k)),
-];
+const CROSSWORD_SKIP = new Set<ShapeKey>([
+  "triangle", "diamond", "star", "tree", "pentagon", "portrait", "monkey",
+  "sunburst", "petals", "checkers", "corners", "islands5", "islands9",
+  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((c) => `letter${c}` as ShapeKey),
+  ..."0123456789".split("").map((c) => `digit${c}` as ShapeKey),
+  "rainbow", "wave", "zigzag", "airplane", "bowl", "icecream",
+]);
+export const CROSSWORD_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !CROSSWORD_SKIP.has(k) && !shapeInfo(k).islands);
 
 /** Shapes used when "mix shapes" is on (basics plus a rotation of favourite animals). */
 export const MIX_SET: ShapeKey[] = ["circle", "heart", "star", "hexagon", "diamond", "cloud", "octagon", "egg", "apple", "rounded", "elephant", "dolphin", "cat", "owl", "fish", "butterfly", "dog", "penguin", "rabbit", "whale"];
 
-export type ShapeMix = "one" | "each" | "theme" | "animals";
+export type ShapeMix = "one" | "each" | "theme" | "animals" | "category";
 
 /** The shape of puzzle `index` (theme order index `themeIndex`) for a design's shape choice. */
 export function shapeFor(choice: { kind: ShapeKey; mix: ShapeMix }, index: number, themeIndex = 0, allowed?: ShapeKey[]): ShapeKey {
   if (choice.mix === "animals") {
     const set = ANIMAL_KEYS.filter((s) => !allowed || allowed.includes(s));
+    return set.length ? set[index % set.length] : (allowed?.[0] ?? "square");
+  }
+  if (choice.mix === "category") {
+    const set = shapesInCategory(shapeCategory(choice.kind), allowed);
     return set.length ? set[index % set.length] : (allowed?.[0] ?? "square");
   }
   const set = allowed ? MIX_SET.filter((s) => allowed.includes(s)) : MIX_SET;
@@ -1157,8 +1358,21 @@ export function shapeStartSize(shape: ShapeKey | undefined, base: number, longes
  * Animals whose silhouette would dwarf the grid (giraffe, flamingo, antlers, etc.)
  * are left out so the page stays print-friendly; the rest place the 9×9 in the body.
  */
-const SUDOKU_SKIP: ShapeKey[] = [];
-export const SUDOKU_SHAPES: ShapeKey[] = ["square", "rounded", "circle", "octagon", "hexagon", ...ANIMAL_KEYS.filter((k) => !SUDOKU_SKIP.includes(k))];
+/** Sudoku uses the shape as a decorative frame around a 9×9; skip forms that would dwarf or fragment it. */
+const SUDOKU_SKIP = new Set<ShapeKey>([
+  ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((c) => `letter${c}` as ShapeKey),
+  ..."0123456789".split("").map((c) => `digit${c}` as ShapeKey),
+  "sunburst", "petals", "checkers", "corners", "islands5", "islands9",
+  "rainbow", "wave", "zigzag", "bolt", "rocket", "key", "stairs", "arch", "ubend", "bowl", "pyramid",
+  "blockx", "blockt", "blockl", "arrow", "windowframe", "boxframe", "ring",
+  "snowflake", "leaf", "guitar", "airplane", "pizza",
+]);
+export const SUDOKU_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => {
+  if (SUDOKU_SKIP.has(k) || shapeInfo(k).islands || shapeInfo(k).buildMask) return false;
+  if (k === "square" || k === "rounded" || k === "circle" || k === "octagon" || k === "hexagon") return true;
+  if (isAnimal(k)) return true;
+  return ["pear", "icecream", "cupcake", "cherry", "raindrop", "moon", "gift", "shamrock", "car", "boat", "bulb", "crown", "apple", "heart", "egg", "pumpkin", "house", "cloud"].includes(k);
+});
 
 /**
  * Frame outline (cell units, grid at 0..n) for a sudoku: the shape scaled

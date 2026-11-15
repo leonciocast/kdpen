@@ -2,7 +2,7 @@
 import React from "react";
 import { Cell, LetterGrid, Placement, placementCells } from "@/lib/wordsearch/engine";
 import { placementCapsule, pointsToSvgPath } from "@/lib/wordsearch/geometry";
-import { OUTLINE_PAD, ShapeKey, maskBox, letteredOutlines, shapeMask } from "@/lib/shapes/shapes";
+import { OUTLINE_PAD, OutlineStyle, ShapeKey, defaultOutlineFor, maskBox, letteredOutlines, shapeMask } from "@/lib/shapes/shapes";
 
 export type SolutionStyle = "hidden" | "color" | "bw";
 
@@ -27,6 +27,8 @@ export interface PuzzleGridProps {
   blockedCells?: Set<string>;
   maxWidth?: number;
   id?: string;
+  outlineStyle?: OutlineStyle;
+  outlineColor?: string;
 }
 
 const CELL = 32;
@@ -48,6 +50,8 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   blockedCells,
   maxWidth = 640,
   id,
+  outlineStyle,
+  outlineColor,
 }) => {
   const pad = 6;
   const side = size * CELL;
@@ -55,8 +59,9 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
   const on = (r: number, c: number) => !mask || !!mask[r]?.[c];
   let view = `${-pad - 2} ${-pad - 2} ${side + pad * 2 + 4} ${side + pad * 2 + 4}`;
   let outlinePath: string | null = null;
+  const style = outlineStyle ?? defaultOutlineFor(shape);
   if (mask) {
-    const rings = letteredOutlines(shape, size).map((ring) => ring.map(([x, y]) => [x * CELL, y * CELL] as [number, number]));
+    const rings = letteredOutlines(shape, size, style).map((ring) => ring.map(([x, y]) => [x * CELL, y * CELL] as [number, number]));
     const pts = rings[0] ?? [];
     outlinePath = rings.map((ring) => "M" + ring.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L") + "Z").join("");
     const [r0, c0, r1, c1] = maskBox(mask, size);
@@ -88,7 +93,7 @@ const PuzzleGrid: React.FC<PuzzleGridProps> = ({
       onMouseLeave={() => onCellHover?.(null)}
     >
       {outlinePath ? (
-        <path d={outlinePath} fill="#fff" fillRule="evenodd" stroke="#000" strokeWidth={2.5} strokeLinejoin="round" data-testid="grid-outline" />
+        <path d={outlinePath} fill={style === "stepped" ? "none" : "#fff"} fillRule="evenodd" stroke={style === "stepped" ? (outlineColor || "#e67a2e") : "#000"} strokeWidth={2.5} strokeLinejoin={style === "stepped" ? "miter" : "round"} data-testid="grid-outline" />
       ) : (
         <rect x={-pad} y={-pad} width={side + pad * 2} height={side + pad * 2} fill="#fff" stroke="#000" strokeWidth={2.5} />
       )}

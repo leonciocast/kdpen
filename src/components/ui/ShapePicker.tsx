@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { BsCheckCircleFill, BsSearch } from "react-icons/bs";
-import { CROSSWORD_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeCategory, ShapeKey, ShapeMix, maskBox, shapeCategory, shapeInfo, shapeMask, shapeOutline, suggestShapeForTheme, sudokuFrame } from "@/lib/shapes/shapes";
+import { ANIMAL_GROUPS, CATEGORIES, CROSSWORD_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeCategory, ShapeKey, ShapeMix, animalGroupOf, isSteppedShape, letteredOutlines, maskBox, shapeCategory, shapeInfo, shapeMask, shapeOutline, suggestShapesForTheme, sudokuFrame } from "@/lib/shapes/shapes";
 import type { Design, ToolKind } from "@/lib/design/types";
 
 /** Shapes each tool can use (crossword: only shapes that still give well-connected crosswords; sudoku: frames around the 9×9). */
@@ -27,6 +27,10 @@ function fillet(pts: P[], r: number): P[] {
     const b = pts[(i + 1) % n];
     const la = Math.hypot(a[0] - p[0], a[1] - p[1]);
     const lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
+    if (la < 1e-6 || lb < 1e-6) {
+      out.push(p);
+      continue;
+    }
     const rr = Math.min(r, la * 0.45, lb * 0.45);
     const p1: P = [p[0] + ((a[0] - p[0]) / la) * rr, p[1] + ((a[1] - p[1]) / la) * rr];
     const p2: P = [p[0] + ((b[0] - p[0]) / lb) * rr, p[1] + ((b[1] - p[1]) / lb) * rr];
@@ -36,11 +40,11 @@ function fillet(pts: P[], r: number): P[] {
       out.push([u * u * p1[0] + 2 * u * t * p[0] + t * t * p2[0], u * u * p1[1] + 2 * u * t * p[1] + t * t * p2[1]]);
     }
   }
-  return out;
+  return out.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
 }
 
 /** A real mini preview: the shape's mask with letters / cells, and the outline in the frame style. */
-export function ShapeThumb({ shape, tool, grid, size = 12, shade = false }: { shape: ShapeKey; tool: ToolKind; grid: Design["grid"]; size?: number; shade?: boolean }) {
+export function ShapeThumb({ shape, tool, grid, size = 12, shade = false, outlineStyle, outlineColor }: { shape: ShapeKey; tool: ToolKind; grid: Design["grid"]; size?: number; shade?: boolean; outlineStyle?: Design["shape"]["outline"]; outlineColor?: string }) {
   const C = 10;
   const sw = Math.max(0.8, grid.frame * 0.75);
   const dash = grid.line === "dashed" ? `${sw * 3} ${sw * 2}` : grid.line === "dotted" ? `0.1 ${sw * 2.6}` : undefined;
@@ -92,11 +96,15 @@ export function ShapeThumb({ shape, tool, grid, size = 12, shade = false }: { sh
     );
   }
   const mask = shapeMask(shape, size);
-  const outline = shapeOutline(shape, size).map(([x, y]) => [x * C, y * C] as P);
-  const pts = grid.border === "rounded" ? fillet(outline, C * 0.9) : outline;
+  const stepped = outlineStyle === "stepped" || (!outlineStyle && isSteppedShape(shape));
+  const style = outlineStyle ?? (isSteppedShape(shape) ? "stepped" : "smooth");
+  const rings = (stepped || isSteppedShape(shape) ? letteredOutlines(shape, size, stepped ? "stepped" : style) : [shapeOutline(shape, size)])
+    .map((ring) => ring.map(([x, y]) => [x * C, y * C] as P));
+  const outline = rings[0] ?? [];
+  const pts = !stepped && grid.border === "rounded" ? fillet(outline, C * 0.9) : outline;
   const [r0, c0, r1, c1] = maskBox(mask, size);
-  const xs = pts.map((p) => p[0]);
-  const ys = pts.map((p) => p[1]);
+  const xs = rings.flatMap((r) => r.map((p) => p[0]));
+  const ys = rings.flatMap((r) => r.map((p) => p[1]));
   const pad = grid.border === "double" ? 9 : 5;
   const x0 = Math.min(...xs, (c0 - OUTLINE_PAD) * C) - pad;
   const y0 = Math.min(...ys, (r0 - OUTLINE_PAD) * C) - pad;
@@ -133,9 +141,11 @@ export function ShapeThumb({ shape, tool, grid, size = 12, shade = false }: { sh
   const noBorder = grid.border === "none" || grid.frame <= 0;
   const square = shape === "square";
   const rectPts: P[] = [[-OUTLINE_PAD * C, -OUTLINE_PAD * C], [(size + OUTLINE_PAD) * C, -OUTLINE_PAD * C], [(size + OUTLINE_PAD) * C, (size + OUTLINE_PAD) * C], [-OUTLINE_PAD * C, (size + OUTLINE_PAD) * C]];
-  const shapePts = square ? (grid.border === "rounded" ? fillet(rectPts, C * 0.45) : rectPts) : pts;
+  const shapePts = square ? (grid.border === "rounded" && !stepped ? fillet(rectPts, C * 0.45) : rectPts) : pts;
+  const allRings = square ? [shapePts] : (rings.length ? rings.map((r, i) => (i === 0 ? pts : r)) : [shapePts]);
+  const d = allRings.map(path).join("");
+  const strokeColor = stepped ? (outlineColor || "#e67a2e") : "#111";
   const scale = (k: number): P[] => {
-    // Outer line of a double frame: grow about the centre.
     const cx = (Math.min(...shapePts.map((p) => p[0])) + Math.max(...shapePts.map((p) => p[0]))) / 2;
     const cy = (Math.min(...shapePts.map((p) => p[1])) + Math.max(...shapePts.map((p) => p[1]))) / 2;
     const w = Math.max(...shapePts.map((p) => p[0])) - Math.min(...shapePts.map((p) => p[0]));
@@ -145,26 +155,60 @@ export function ShapeThumb({ shape, tool, grid, size = 12, shade = false }: { sh
   return (
     <svg viewBox={`${x0.toFixed(1)} ${y0.toFixed(1)} ${(x1 - x0).toFixed(1)} ${(y1 - y0).toFixed(1)}`} className="pg-shape-svg" aria-hidden>
       {grid.shadow && !noBorder && <path d={path(shapePts.map(([x, y]) => [x + 3, y + 3]))} fill="#d1d5db" />}
-      <path d={path(shapePts)} fill={shade ? "#e2e2e2" : "#fff"} />
+      <path d={d} fill={stepped || !shade ? "#fff" : "#e2e2e2"} fillRule="evenodd" />
       {lines}
       {items}
-      {!noBorder && <path d={path(shapePts)} fill="none" stroke="#111" strokeWidth={sw} strokeDasharray={dash} strokeLinecap={cap} strokeLinejoin="round" />}
-      {!noBorder && grid.border === "double" && <path d={path(scale(Math.max(3, sw * 2.6)))} fill="none" stroke="#111" strokeWidth={Math.max(0.5, sw * 0.6)} strokeDasharray={dash} strokeLinecap={cap} />}
+      {!noBorder && <path d={d} fill="none" stroke={strokeColor} strokeWidth={sw} strokeDasharray={dash} strokeLinecap={cap} strokeLinejoin={stepped ? "miter" : "round"} />}
+      {!noBorder && !stepped && grid.border === "double" && <path d={path(scale(Math.max(3, sw * 2.6)))} fill="none" stroke="#111" strokeWidth={Math.max(0.5, sw * 0.6)} strokeDasharray={dash} strokeLinecap={cap} />}
     </svg>
   );
 }
 
-const CATS: { id: ShapeCategory; label: string }[] = [
-  { id: "basic", label: "Basic shapes" },
-  { id: "animals", label: "Animals" },
-  { id: "objects", label: "Holiday & objects" },
-];
+const RECENT_KEY = "puzzle-generator.recent-shapes.v1";
+const MAX_RECENT = 8;
+
+const recentListeners = new Set<() => void>();
+let recentSnap: ShapeKey[] = [];
+let recentSnapKey = "";
+
+function loadRecent(): ShapeKey[] {
+  try {
+    if (typeof localStorage === "undefined") return [];
+    const raw = JSON.parse(localStorage.getItem(RECENT_KEY) || "[]");
+    if (!Array.isArray(raw)) return [];
+    return raw.filter((k): k is ShapeKey => SHAPES.some((s) => s.key === k)).slice(0, MAX_RECENT);
+  } catch {
+    return [];
+  }
+}
+
+function getRecentSnapshot(): ShapeKey[] {
+  const keys = loadRecent();
+  const id = keys.join(",");
+  if (id !== recentSnapKey) {
+    recentSnap = keys;
+    recentSnapKey = id;
+  }
+  return recentSnap;
+}
+
+function subscribeRecent(cb: () => void) {
+  recentListeners.add(cb);
+  return () => { recentListeners.delete(cb); };
+}
+
+function writeRecent(k: ShapeKey) {
+  const next = [k, ...loadRecent().filter((x) => x !== k)].slice(0, MAX_RECENT);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* ignore */ }
+  recentListeners.forEach((fn) => fn());
+}
 
 const MIX_LABELS: Record<ShapeMix, string> = {
   one: "Same shape",
   each: "Mix: new shape each puzzle",
   theme: "Mix: one per theme",
   animals: "Mix: random animals",
+  category: "Mix: random from category",
 };
 
 export function ShapePicker({
@@ -183,31 +227,91 @@ export function ShapePicker({
   const allowed = shapesFor(tool);
   const mix = design.shape.mix;
   const current = allowed.includes(design.shape.kind) ? design.shape.kind : "square";
-  let suggested: { theme: string; key: ShapeKey } | null = null;
-  for (const t of themes) {
-    const hit = suggestShapeForTheme(t, allowed);
-    if (hit && hit !== current) {
-      suggested = { theme: t, key: hit };
-      break;
-    }
-  }
   const [tab, setTab] = React.useState<ShapeCategory>(() => shapeCategory(shapeInfo(current)));
+  const [animalTab, setAnimalTab] = React.useState(() => animalGroupOf(current) ?? "farm");
   const [query, setQuery] = React.useState("");
+  const recent = React.useSyncExternalStore(subscribeRecent, getRecentSnapshot, () => recentSnap);
+
   const q = query.trim().toLowerCase();
   const matches = (s: (typeof SHAPES)[number]) => {
     if (!allowed.includes(s.key)) return false;
     if (!q) return true;
-    const blob = [s.key, s.label, s.tag, ...(s.aliases ?? [])].join(" ").toLowerCase();
+    const blob = [s.key, s.label, s.tag, s.animalGroup, shapeCategory(s), ...(s.aliases ?? [])].join(" ").toLowerCase();
     return blob.includes(q);
   };
-  const visibleCats = CATS.filter((c) => SHAPES.some((s) => shapeCategory(s) === c.id && matches(s)));
+
+  const counts = Object.fromEntries(CATEGORIES.map((c) => [c.id, SHAPES.filter((s) => shapeCategory(s) === c.id && allowed.includes(s.key)).length])) as Record<ShapeCategory, number>;
+  const visibleCats = CATEGORIES.filter((c) => counts[c.id] > 0 && SHAPES.some((s) => shapeCategory(s) === c.id && matches(s)));
   const activeCat = q ? null : visibleCats.some((c) => c.id === tab) ? tab : visibleCats[0]?.id ?? "basic";
+
+  const allowedKey = allowed.join(",");
+  const themeKey = themes.join(" ");
+  const suggested = React.useMemo(() => {
+    const keys: ShapeKey[] = [];
+    for (const theme of themes) {
+      for (const k of suggestShapesForTheme(theme, allowed, 6)) if (!keys.includes(k)) keys.push(k);
+    }
+    return keys.slice(0, 8);
+    // allowedKey / themeKey recompute when the lists change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [themeKey, allowedKey]);
+
+  const pick = (k: ShapeKey, nextMix: ShapeMix = "one") => {
+    writeRecent(k);
+    const shade = isSteppedShape(k) ? false : shapeInfo(k).group === "animals" ? true : design.shape.shade;
+    onChange(k, nextMix, shade);
+    setTab(shapeCategory(k));
+    const g = animalGroupOf(k);
+    if (g) setAnimalTab(g);
+  };
+
+  const card = (s: (typeof SHAPES)[number], opts?: { small?: boolean }) => {
+    const selectable = mix === "one" || mix === "category";
+    const active = (mix === "one" || mix === "category") && current === s.key;
+    return (
+      <button
+        key={s.key}
+        type="button"
+        role="radio"
+        aria-checked={active}
+        disabled={!selectable}
+        className={`pg-shape-card ${active ? "active" : ""} ${opts?.small ? "mini" : ""}`}
+        onClick={() => pick(s.key, mix === "category" ? "category" : "one")}
+        data-testid={`shape-${s.key}`}
+        title={s.label}
+      >
+        <ShapeThumb
+          shape={s.key}
+          tool={tool}
+          grid={{ ...design.grid, frame: Math.max(design.grid.frame, 1.2), border: design.grid.border === "none" ? "square" : design.grid.border }}
+          size={shapeCategory(s) === "clusters" || shapeCategory(s) === "letters" ? 16 : 12}
+          shade={!isSteppedShape(s.key) && (s.group === "animals" || design.shape.shade)}
+          outlineStyle={isSteppedShape(s.key) ? "stepped" : design.shape.outline}
+          outlineColor={design.shape.outlineColor}
+        />
+        <span className="pg-shape-name">
+          {s.label}
+          {active && <BsCheckCircleFill className="pg-template-check" aria-label="Selected" />}
+        </span>
+        {s.tag && !compact && !opts?.small && <span className="pg-shape-tag">{s.tag}</span>}
+      </button>
+    );
+  };
+
+  const listFor = (cat: ShapeCategory) => {
+    let list = SHAPES.filter((s) => shapeCategory(s) === cat && matches(s));
+    if (cat === "animals" && !q) {
+      const g = ANIMAL_GROUPS.some((x) => x.id === animalTab) ? animalTab : "farm";
+      list = list.filter((s) => animalGroupOf(s) === g);
+    }
+    return list;
+  };
 
   return (
     <div data-testid="shape-picker">
       {tool !== "sudoku" && (
         <div className="pg-seg mb-3" role="radiogroup" aria-label="Shape for each puzzle">
-          {(["one", "each", "theme", "animals"] as ShapeMix[]).map((m) => (
+          {(["one", "each", "theme", "animals", "category"] as ShapeMix[]).map((m) => (
             <button key={m} type="button" role="radio" aria-checked={mix === m} className={mix === m ? "active" : ""} onClick={() => onChange(current, m, design.shape.shade)} data-testid={`shape-mix-${m}`}>
               {MIX_LABELS[m]}
             </button>
@@ -215,70 +319,73 @@ export function ShapePicker({
         </div>
       )}
       <div className="form-check form-switch mb-3">
-        <input className="form-check-input" type="checkbox" id="shape-shade" checked={design.shape.shade} onChange={(e) => onChange(current, mix, e.target.checked)} data-testid="shape-shade" />
+        <input className="form-check-input" type="checkbox" id="shape-shade" checked={design.shape.shade && design.shape.outline !== "stepped"} onChange={(e) => onChange(current, mix, e.target.checked)} data-testid="shape-shade" disabled={design.shape.outline === "stepped"} />
         <label className="form-check-label" htmlFor="shape-shade">
-          Light shaded silhouette
+          Light shaded silhouette{design.shape.outline === "stepped" ? " (off for stepped outlines)" : ""}
         </label>
       </div>
-      {suggested && mix === "one" && (
-        <div className="pg-shape-suggest" data-testid="shape-suggest">
-          Your theme is “{suggested.theme}”.
-          <button type="button" className="btn btn-sm btn-outline-primary ms-2" onClick={() => { onChange(suggested.key, "one", true); setTab(shapeCategory(shapeInfo(suggested.key))); }} data-testid="shape-suggest-apply">
-            Use the {shapeInfo(suggested.key).label.toLowerCase()} shape
-          </button>
+      {!!suggested.length && mix === "one" && (
+        <div className="pg-shape-row" data-testid="shape-suggest">
+          <div className="pg-shape-group">Suggested for your theme</div>
+          <div className={`pg-shape-grid compact`} role="list" aria-label="Suggested shapes">
+            {suggested.map((k) => card(shapeInfo(k), { small: true }))}
+          </div>
+        </div>
+      )}
+      {!!recent.length && (
+        <div className="pg-shape-row" data-testid="shape-recent">
+          <div className="pg-shape-group">Recently used</div>
+          <div className={`pg-shape-grid compact`} role="list" aria-label="Recently used shapes">
+            {recent.filter((k) => allowed.includes(k)).slice(0, 8).map((k) => card(shapeInfo(k), { small: true }))}
+          </div>
         </div>
       )}
       <div className="pg-shape-toolbar">
-          <div className="pg-seg" role="tablist" aria-label="Shape category">
-            {CATS.filter((c) => SHAPES.some((s) => shapeCategory(s) === c.id && allowed.includes(s.key))).map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                role="tab"
-                aria-selected={!q && activeCat === c.id}
-                className={!q && activeCat === c.id ? "active" : ""}
-                onClick={() => { setTab(c.id); setQuery(""); }}
-                data-testid={`shape-cat-${c.id}`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
+        <div className="pg-seg pg-shape-cats" role="tablist" aria-label="Shape category">
+          {CATEGORIES.filter((c) => counts[c.id] > 0).map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              role="tab"
+              aria-selected={!q && activeCat === c.id}
+              className={!q && activeCat === c.id ? "active" : ""}
+              onClick={() => { setTab(c.id); setQuery(""); }}
+              data-testid={`shape-cat-${c.id}`}
+            >
+              {c.label} <span className="pg-shape-count">{counts[c.id]}</span>
+            </button>
+          ))}
+        </div>
         <label className="pg-shape-search">
           <BsSearch aria-hidden />
-          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search animals and shapes" aria-label="Search animals and shapes" data-testid="shape-search" />
+          <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search all shapes" aria-label="Search all shapes" data-testid="shape-search" />
         </label>
       </div>
-      {(q ? CATS.filter((c) => visibleCats.some((v) => v.id === c.id)) : CATS.filter((c) => c.id === activeCat)).map((c) => {
-        const list = SHAPES.filter((s) => shapeCategory(s) === c.id && matches(s));
+      {!q && activeCat === "animals" && (
+        <div className="pg-seg pg-shape-subcats mb-3" role="tablist" aria-label="Animal group">
+          {ANIMAL_GROUPS.map((g) => (
+            <button
+              key={g.id}
+              type="button"
+              role="tab"
+              aria-selected={animalTab === g.id}
+              className={animalTab === g.id ? "active" : ""}
+              onClick={() => setAnimalTab(g.id)}
+              data-testid={`shape-subcat-${g.id}`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {(q ? visibleCats : CATEGORIES.filter((c) => c.id === activeCat)).map((c) => {
+        const list = listFor(c.id);
         if (!list.length) return null;
         return (
           <div key={c.id} className="mb-3">
-            {q && <div className="pg-shape-group">{c.label}</div>}
-            <div className={`pg-shape-grid ${compact ? "compact" : ""}`} role="radiogroup" aria-label={`${c.label} shapes`}>
-              {list.map((s) => {
-                const active = mix === "one" && current === s.key;
-                return (
-                  <button
-                    key={s.key}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    disabled={mix !== "one"}
-                    className={`pg-shape-card ${active ? "active" : ""}`}
-                    onClick={() => onChange(s.key, "one", s.group === "animals" ? true : design.shape.shade)}
-                    data-testid={`shape-${s.key}`}
-                    title={s.label}
-                  >
-                    <ShapeThumb shape={s.key} tool={tool} grid={{ ...design.grid, frame: Math.max(design.grid.frame, 1.2), border: design.grid.border === "none" ? "square" : design.grid.border }} shade={s.group === "animals" || design.shape.shade} />
-                    <span className="pg-shape-name">
-                      {s.label}
-                      {active && <BsCheckCircleFill className="pg-template-check" aria-label="Selected" />}
-                    </span>
-                    {s.tag && !compact && <span className="pg-shape-tag">{s.tag}</span>}
-                  </button>
-                );
-              })}
+            {q && <div className="pg-shape-group">{c.label} ({list.length})</div>}
+            <div className={`pg-shape-grid ${compact || c.id === "letters" ? "compact" : ""}`} role="radiogroup" aria-label={`${c.label} shapes`}>
+              {list.map((s) => card(s))}
             </div>
           </div>
         );

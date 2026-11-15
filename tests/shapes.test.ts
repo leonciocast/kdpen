@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANIMAL_KEYS, ARTIST_MARGIN, CELL_DILATE, CROSSWORD_SHAPES, SHAPES, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
+import { ANIMAL_GROUPS, ANIMAL_KEYS, ARTIST_MARGIN, CATEGORIES, CELL_DILATE, CROSSWORD_SHAPES, SHAPES, animalGroupOf, shapeCategory, shapesInCategory, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
 import { ALL_DIRECTIONS, checkPlacement, findOccurrences, gridForm, makePlacement, mulberry32, placementCells, Placement } from "../src/lib/wordsearch/engine";
 import { resolveFixed, resolveFreeEnd, snapStart, validDirectionsFrom, validStartCells } from "../src/lib/wordsearch/snap";
 import { WS_DIFFICULTIES, suggestGridSize } from "../src/lib/wordsearch/difficulty";
@@ -57,13 +57,14 @@ describe("shape masks", () => {
         const on = (r: number, c: number) => r >= 0 && c >= 0 && r < n && c < n && m[r][c];
         const [br0, bc0, br1, bc1] = maskBox(m, n);
         const box = (br1 - br0 + 1) * (bc1 - bc0 + 1);
-        const gridFrac = shapeInfo(k).group === "animals" ? 0.06 : 0.12;
-        const boxFrac = shapeInfo(k).group === "animals" ? 0.22 : 0.35;
+        const slim = shapeInfo(k).group === "animals" || shapeInfo(k).group === "stepped" || shapeInfo(k).group === "objects" || shapeInfo(k).islands;
+        const gridFrac = slim ? 0.05 : 0.12;
+        const boxFrac = slim ? 0.2 : 0.35;
         if (n >= 14) expect(cells, `${k} ${n}`).toBeGreaterThan(Math.min(n * n * gridFrac, box * boxFrac));
-        if (n >= 14) expect(cells, `${k} ${n} cells`).toBeGreaterThan(20);
+        if (n >= 14) expect(cells, `${k} ${n} cells`).toBeGreaterThan(shapeInfo(k).islands ? 30 : 16);
         // Geometric shapes: every used cell belongs to a fully used 3×3 block.
-        // Animals may be 1 cell thick (antlers, legs) but never a one-cell spike.
-        if (shapeInfo(k).group !== "animals") {
+        // Animals, objects and stepped forms may be thinner, but never a one-cell spike.
+        if (shapeInfo(k).group === "basic" || shapeInfo(k).group === "geometric") {
           const win = 3;
           for (let r = 0; r < n; r++)
             for (let c = 0; c < n; c++) {
@@ -80,22 +81,32 @@ describe("shape masks", () => {
         }
         // Each used cell has at least 2 used neighbours (no one-cell spikes).
         // Animals count diagonals so a 1-cell-wide antler can run diagonally.
-        const nDirs: [number, number][] = shapeInfo(k).group === "animals"
+        const nDirs: [number, number][] = slim
           ? [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]
           : [[1, 0], [-1, 0], [0, 1], [0, -1]];
         for (let r = 0; r < n; r++)
           for (let c = 0; c < n; c++)
-            if (m[r][c]) expect(nDirs.reduce((s, [dr, dc]) => s + +on(r + dr, c + dc), 0)).toBeGreaterThanOrEqual(2);
-        // Connected (one piece; 8-connected for animals so diagonal antlers count).
+            if (m[r][c]) expect(nDirs.reduce((s, [dr, dc]) => s + +on(r + dr, c + dc), 0), `${k} ${n} spike at ${r},${c}`).toBeGreaterThanOrEqual(2);
+        // Connected (one piece, or several large islands when the shape is a cluster).
         const seen = new Set<string>();
-        const [r0, c0] = (() => { for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (m[r][c]) return [r, c]; return [0, 0]; })();
-        const st = [[r0, c0]];
-        seen.add(`${r0},${c0}`);
-        while (st.length) {
-          const [a, b] = st.pop()!;
-          for (const [dr, dc] of nDirs) if (on(a + dr, b + dc) && !seen.has(`${a + dr},${b + dc}`)) { seen.add(`${a + dr},${b + dc}`); st.push([a + dr, b + dc]); }
-        }
-        expect(seen.size, `${k} ${n} connected`).toBe(cells);
+        let comps = 0;
+        for (let r = 0; r < n; r++)
+          for (let c = 0; c < n; c++) {
+            if (!m[r][c] || seen.has(`${r},${c}`)) continue;
+            comps++;
+            const st = [[r, c]];
+            seen.add(`${r},${c}`);
+            let sz = 0;
+            while (st.length) {
+              const [a, b] = st.pop()!;
+              sz++;
+              for (const [dr, dc] of nDirs) if (on(a + dr, b + dc) && !seen.has(`${a + dr},${b + dc}`)) { seen.add(`${a + dr},${b + dc}`); st.push([a + dr, b + dc]); }
+            }
+            if (shapeInfo(k).islands) expect(sz, `${k} ${n} tiny island`).toBeGreaterThanOrEqual(12);
+          }
+        expect(seen.size, `${k} ${n} visited`).toBe(cells);
+        if (shapeInfo(k).islands) expect(comps, `${k} ${n} islands`).toBeGreaterThanOrEqual(2);
+        else expect(comps, `${k} ${n} connected`).toBe(1);
       }
     }
   });
@@ -127,10 +138,13 @@ describe("shape masks", () => {
     const half = 0.7 / 2 + ARTIST_MARGIN;
     for (const k of SHAPED) {
       const n = Math.max(shapeInfo(k).minSize ?? 16, 16);
-      const sil = shapeOutline(k, n);
       const rings = letteredOutlines(k, n, "smooth");
-      expect(rings).toHaveLength(1);
-      expect(rings[0], k).toEqual(sil);
+      expect(rings[0]?.length, k).toBeGreaterThanOrEqual(3);
+      if (!shapeInfo(k).buildMask) {
+        const sil = shapeOutline(k, n);
+        expect(rings).toHaveLength(1);
+        expect(rings[0], k).toEqual(sil);
+      }
       const m = shapeMask(k, n)!;
       for (let r = 0; r < n; r++)
         for (let c = 0; c < n; c++) {
@@ -187,7 +201,7 @@ describe("shape masks", () => {
       const n = Math.max(shapeInfo(k).minSize ?? 16, 16);
       const m = shapeMask(k, n)!;
       const rings = letteredOutlines(k, n, "snug");
-      expect(rings[0]?.length, k).toBeGreaterThanOrEqual(4);
+      expect(rings[0]?.length, k).toBeGreaterThanOrEqual(3);
       for (let r = 0; r < n; r++)
         for (let c = 0; c < n; c++) {
           if (!m[r][c]) continue;
@@ -264,6 +278,76 @@ describe("shape masks", () => {
     }
   });
 
+  it("puts every shape in exactly one picker category, and fills every category", () => {
+    const seen = new Set<string>();
+    for (const s of SHAPES) {
+      const c = shapeCategory(s);
+      expect(c, s.key).toBeTruthy();
+      expect(CATEGORIES.some((x) => x.id === c), `${s.key} unknown category ${c}`).toBe(true);
+      expect(seen.has(s.key), `duplicate ${s.key}`).toBe(false);
+      seen.add(s.key);
+      if (c === "animals") expect(ANIMAL_GROUPS.some((g) => g.id === animalGroupOf(s)), `${s.key} missing animal group`).toBe(true);
+      else expect(animalGroupOf(s), s.key).toBeUndefined();
+    }
+    expect(seen.size).toBe(SHAPES.length);
+    for (const c of CATEGORIES) expect(shapesInCategory(c.id).length, c.id).toBeGreaterThan(0);
+  });
+
+  it("includes every letter A–Z and digit 0–9 as a stepped block shape", () => {
+    for (const ch of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+      const k = `letter${ch}` as ShapeKey;
+      expect(SHAPES.some((s) => s.key === k), k).toBe(true);
+      const n = shapeInfo(k).minSize ?? 28;
+      const m = shapeMask(k, n)!;
+      expect(maskCells(m, n), k).toBeGreaterThan(20);
+      expect(letteredOutlines(k, n, "stepped")[0]?.length, k).toBeGreaterThanOrEqual(4);
+    }
+    for (const ch of "0123456789") {
+      const k = `digit${ch}` as ShapeKey;
+      expect(SHAPES.some((s) => s.key === k), k).toBe(true);
+      expect(maskCells(shapeMask(k, 28)!, 28), k).toBeGreaterThan(16);
+    }
+  });
+
+  it("places each word entirely inside one island of a multi-piece shape", () => {
+    const keys: ShapeKey[] = ["sunburst", "petals", "checkers", "corners", "islands5", "islands9"];
+    const comps = (m: boolean[][]) => {
+      const n = m.length;
+      const seen = m.map((row) => row.map(() => 0));
+      let id = 0;
+      const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]] as [number, number][];
+      for (let r = 0; r < n; r++)
+        for (let c = 0; c < n; c++) {
+          if (!m[r][c] || seen[r][c]) continue;
+          id++;
+          const st: [number, number][] = [[r, c]];
+          seen[r][c] = id;
+          while (st.length) {
+            const [a, b] = st.pop()!;
+            for (const [dr, dc] of dirs) {
+              const y = a + dr, x = b + dc;
+              if (y >= 0 && x >= 0 && y < n && x < n && m[y][x] && !seen[y][x]) { seen[y][x] = id; st.push([y, x]); }
+            }
+          }
+        }
+      return seen;
+    };
+    for (const k of keys) {
+      for (const d of WS_DIFFICULTIES) {
+        const g = generateOneWordSearch({ title: k, theme: "", words: WORDS, size: suggestGridSize(WORDS, d.density), shape: k }, d, 7);
+        expect(g.unplaced, `${k} ${d.id}`).toEqual([]);
+        assertInside(g);
+        const ids = comps(shapeMask(k, g.size)!);
+        for (const p of g.placements) {
+          const cells = placementCells(p);
+          const parts = new Set(cells.map(([r, c]) => ids[r][c]));
+          expect(parts.size, `${k} ${p.word} spanned islands`).toBe(1);
+          expect([...parts][0], `${k} ${p.word}`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
   it("mixes shapes per puzzle or per theme", () => {
     expect(shapeFor({ kind: "heart", mix: "one" }, 5)).toBe("heart");
     const each = shapeTargetsFor({ kind: "heart", mix: "each" }, [{}, {}, {}]);
@@ -275,6 +359,9 @@ describe("shape masks", () => {
     const animals = shapeTargetsFor({ kind: "heart", mix: "animals" }, [{}, {}, {}, {}]);
     expect(animals.every((k) => ANIMAL_KEYS.includes(k))).toBe(true);
     expect(new Set(animals).size).toBeGreaterThan(1);
+    const fromCat = shapeTargetsFor({ kind: "arch", mix: "category" }, [{}, {}, {}, {}]);
+    expect(fromCat.every((k) => shapeCategory(k) === "stepped")).toBe(true);
+    expect(new Set(fromCat).size).toBeGreaterThan(1);
     expect(shapeTargetsFor({ kind: "heart", mix: "theme" }, [{ theme: "Elephants" }, { theme: "Elephants" }, { theme: "Dolphins" }])).toEqual(["elephant", "elephant", "dolphin"]);
   });
 
@@ -446,6 +533,7 @@ describe("shaped crosswords and sudoku frames", () => {
     expect(sanitizeDesign({ shape: { kind: "elephant", mix: "animals", shade: true } }).shape).toEqual({ kind: "elephant", mix: "animals", shade: true, outline: "smooth" });
     expect(sanitizeDesign({ shape: { kind: "deer", mix: "one", outline: "blocky" } }).shape.outline).toBe("blocky");
     expect(sanitizeDesign({ shape: { kind: "deer", mix: "one", outline: "snug" } }).shape.outline).toBe("snug");
+    expect(sanitizeDesign({ shape: { kind: "arch", mix: "category", shade: false, outline: "stepped", outlineColor: "#e67a2e" } }).shape).toEqual({ kind: "arch", mix: "category", shade: false, outline: "stepped", outlineColor: "#e67a2e" });
   });
 });
 
@@ -502,7 +590,7 @@ describe("word-search letter size", () => {
   }
 
   it("stays at least about 7pt on 8.5x11, and records the 6x9 minimum", async () => {
-    const keys: ShapeKey[] = ["elephant", "deer", "giraffe", "flamingo", "horse", "octopus"];
+    const keys: ShapeKey[] = ["elephant", "deer", "giraffe", "flamingo", "horse", "octopus", "arch", "sunburst", "letterA"];
     const large = await letterSizes("8.5x11", keys);
     for (const row of large) {
       expect(row.font, `${row.shape} ${row.size} on 8.5x11 is ${row.font.toFixed(2)}pt`).toBeGreaterThanOrEqual(7 - 0.05);

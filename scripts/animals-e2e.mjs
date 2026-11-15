@@ -96,9 +96,17 @@ check((await page.$('[data-testid="shape-shade"]')) !== null, "ws: shaded silhou
 await shot("picker-basic");
 await page.click('[data-testid="shape-cat-animals"]');
 await pause(300);
-check((await page.$('[data-testid="shape-elephant"]')) !== null, "ws: elephant is in the Animals tab");
-const animalCards = await page.$$eval('[data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid^="shape-cat"]):not([data-testid="shape-picker"]):not([data-testid="shape-search"]):not([data-testid="shape-shade"]):not([data-testid^="shape-suggest"])', (els) => els.length);
-check(animalCards >= 40, `ws: many animals are listed (${animalCards})`);
+const animalGroups = ["farm", "safari", "pets", "forest", "birds", "ocean", "bugs", "fantasy"];
+const animalKeys = new Set();
+for (const g of animalGroups) {
+  if (await page.$(`[data-testid="shape-subcat-${g}"]`)) {
+    await page.click(`[data-testid="shape-subcat-${g}"]`);
+    await pause(120);
+    (await page.$$eval('[data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid^="shape-cat"]):not([data-testid^="shape-subcat"]):not([data-testid="shape-picker"]):not([data-testid="shape-search"]):not([data-testid="shape-shade"]):not([data-testid^="shape-suggest"]):not([data-testid="shape-recent"])', (els) => els.map((e) => e.dataset.testid))).forEach((k) => animalKeys.add(k));
+  }
+}
+check(animalKeys.has("shape-elephant"), "ws: elephant is in the Animals tab");
+check(animalKeys.size >= 40, `ws: many animals are listed (${animalKeys.size})`);
 await page.fill('[data-testid="shape-search"]', "eleph");
 await pause(300);
 check((await page.$('[data-testid="shape-elephant"]')) !== null, "ws: search finds elephant");
@@ -151,7 +159,9 @@ await next();
 check((await q()) === "shape", "cw: Pick a shape");
 check((await page.$('[data-testid="shape-suggest"]')) !== null, "cw: theme 'Owls' suggests the owl shape");
 await shot("cw-suggest-owl");
-await page.click('[data-testid="shape-suggest-apply"]');
+const owlBtn = (await page.$('[data-testid="shape-suggest"] [data-testid="shape-owl"]')) || (await page.$('[data-testid="shape-owl"]'));
+check(!!owlBtn, "cw: owl is available to pick");
+await owlBtn.click();
 await page.waitForSelector('[data-testid="reshape-done"]:has-text("owl")', { timeout: 60000 });
 await shot("cw-owl-picked");
 await next();
@@ -181,6 +191,8 @@ await next();
 check((await q()) === "shape", "sd: Pick a frame shape");
 await page.click('[data-testid="shape-cat-animals"]');
 await pause(250);
+if (await page.$('[data-testid="shape-subcat-birds"]')) await page.click('[data-testid="shape-subcat-birds"]');
+await pause(150);
 sig = await previewSig();
 const sdAnimal = (await page.$('[data-testid="shape-penguin"]')) ? "penguin" : "owl";
 await page.click(`[data-testid="shape-${sdAnimal}"]`);

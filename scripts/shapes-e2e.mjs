@@ -74,17 +74,28 @@ async function exportPdf(name) {
   return file;
 }
 
-const shapeCardSel = '[data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid^="shape-cat"]):not([data-testid="shape-picker"]):not([data-testid="shape-search"]):not([data-testid="shape-shade"]):not([data-testid^="shape-suggest"])';
+const shapeCardSel = '[data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid^="shape-cat"]):not([data-testid^="shape-subcat"]):not([data-testid="shape-picker"]):not([data-testid="shape-search"]):not([data-testid="shape-shade"]):not([data-testid^="shape-suggest"]):not([data-testid="shape-recent"])';
+const CATS = ["basic", "stepped", "hollow", "clusters", "letters", "animals", "nature", "holiday", "food", "objects"];
 const openCat = async (id) => {
   await page.click(`[data-testid="shape-cat-${id}"]`);
   await pause(200);
 };
 const allShapeCards = async () => {
   const keys = new Set();
-  for (const cat of ["basic", "animals", "objects"]) {
+  for (const cat of CATS) {
     if (await page.$(`[data-testid="shape-cat-${cat}"]`)) {
       await openCat(cat);
-      (await page.$$eval(shapeCardSel, (els) => els.map((e) => e.dataset.testid))).forEach((k) => keys.add(k));
+      if (cat === "animals") {
+        for (const g of ["farm", "safari", "pets", "forest", "birds", "ocean", "bugs", "fantasy"]) {
+          if (await page.$(`[data-testid="shape-subcat-${g}"]`)) {
+            await page.click(`[data-testid="shape-subcat-${g}"]`);
+            await pause(120);
+            (await page.$$eval(shapeCardSel, (els) => els.map((e) => e.dataset.testid))).forEach((k) => keys.add(k));
+          }
+        }
+      } else {
+        (await page.$$eval(shapeCardSel, (els) => els.map((e) => e.dataset.testid))).forEach((k) => keys.add(k));
+      }
     }
   }
   return [...keys];
@@ -121,7 +132,7 @@ await openCat("basic");
 check((await page.$$('[data-testid="shape-picker"] svg.pg-shape-svg')).length >= 10, "ws: every visible shape card has a mini preview");
 await shot("ws_01_shape_question");
 let sig = await previewSig();
-await openCat("objects");
+await openCat("holiday");
 await page.click('[data-testid="shape-heart"]');
 await page.waitForSelector('[data-testid="reshape-done"]:has-text("heart")', { timeout: 60000 });
 await waitPreview(sig);
@@ -135,7 +146,7 @@ await page.waitForSelector('[data-testid="reshape-done"]:has-text("mixed")', { t
 await waitPreview(sig);
 await shot("ws_03_mixed");
 await page.click('[data-testid="shape-mix-one"]');
-await openCat("objects");
+await openCat("holiday");
 await page.click('[data-testid="shape-heart"]');
 await page.waitForSelector('[data-testid="reshape-done"]:has-text("heart")', { timeout: 60000 });
 await next();
@@ -264,8 +275,10 @@ await waitPreview();
 await next();
 check((await q()) === "shape", "sd: template → Pick a frame shape");
 check((await page.innerText("[data-question]")).includes("must stay a 9×9 square"), "sd: honest note that sudoku stays square");
-if (await page.$('[data-testid="shape-cat-objects"]')) await openCat("objects");
-check((await page.$$('[data-testid="shape-heart"]')).length === 0, "sd: only frame shapes offered");
+if (await page.$('[data-testid="shape-cat-letters"]')) errors.push("sd: letter shapes should not be offered as sudoku frames");
+if (await page.$('[data-testid="shape-cat-holiday"]')) await openCat("holiday");
+check((await page.$$('[data-testid="shape-heart"]')).length > 0, "sd: classic silhouettes are still offered as frames");
+if (await page.$('[data-testid="shape-cat-clusters"]')) errors.push("sd: island clusters should not be offered as sudoku frames");
 await openCat("basic");
 sig = await previewSig();
 await page.click('[data-testid="shape-circle"]');
