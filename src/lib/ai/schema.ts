@@ -25,7 +25,7 @@ export const GenerateRequest = z.object({
   maxWord: z.number().int().min(5).max(15).default(MAX_WORD),
   seed: z.number().int().optional(),
   /** Recent book titles and settings to steer away from (keeps each book different). */
-  avoid: z.array(z.string().trim().max(90)).max(12).default([]),
+  avoid: z.array(z.string().trim().transform((s) => s.slice(0, 140))).transform((a) => a.slice(0, 10)).default([]),
   locale: z.string().max(10).optional(),
 });
 export type GenerateRequest = z.infer<typeof GenerateRequest>;

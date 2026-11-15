@@ -244,7 +244,7 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
   const recentAi = (): string[] => readJson<{ list: string[] }>(AI_RECENT_KEY, { list: [] }).list.slice(0, 8);
   const rememberAi = (r: AiResult) => {
     try {
-      const line = `${r.book.title} (${r.book.intro.split(/(?<=\.)\s/)[0].slice(0, 70)})`;
+      const line = `${r.book.title} (${r.book.intro.split(/(?<=\.)\s/)[0].slice(0, 70)})`.slice(0, 130);
       localStorage.setItem(AI_RECENT_KEY, JSON.stringify({ list: [line, ...recentAi()].slice(0, 8) }));
     } catch {
       /* private mode */
@@ -314,7 +314,7 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
             <AiProgressPanel p={aiRun.progress} onCancel={() => aiRun.cancel()} />
           ) : (
             <div className="pg-ai-hero">
-              <MagicButton onGo={() => void aiGenerate()} />
+              <MagicButton onGo={() => void aiGenerate()} replaces={aiBook?.book.title} />
               <div className="pg-ai-hero-meta" data-testid="my-ai-defaults">
                 {describePrefs(aiPrefs)}
                 {ai?.mock ? " · test mode" : ""}
@@ -403,7 +403,7 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
               {aiBook.book.finale.phrase ? ` · the Case Board spells ${aiBook.book.finale.phrase}` : ""}
             </span>
             <span className="pg-ai-summary-actions">
-              <MagicButton size="sm" replaces={aiBook.book.title} onGo={() => void aiGenerate()} />
+              <MagicButton size="sm" replaces={aiBook.book.title} onGo={() => void aiGenerate()} testId="my-ai-magic-review" />
               <ThemeMenu
                 label="More actions for this mystery"
                 testId="my-ai-menu"

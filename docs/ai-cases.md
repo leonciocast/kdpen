@@ -7,17 +7,31 @@ The model runs in **your AWS account** through Amazon Bedrock. Keys stay on the 
 
 ## How it works
 
+When AWS is set up, the Murder Mystery flow opens on **Your next mystery** with one
+**✨ New mystery** button (24 cases, Family, surprise setting by default). Setting, tone and count sit
+behind a quiet **Customize** disclosure and are remembered; The Saltmere Lantern, pasting and the
+template settings are under **Other ways to get cases** (and the Saltmere Lantern is the default when
+AI isn't configured). The button is also on the review screen and after building; with a book on
+screen it asks "Replace “…”?" first. Each book gets a random seed, a seeded starting idea for a
+surprise setting (place, era, names), and the last 8 titles are kept in the browser and sent as
+`avoid`, so books don't repeat.
+
 1. The browser posts the options to `POST /api/mystery/generate`
    (`caseCount` up to 200, `setting` or `"surprise"`, `tone` family/teens/noir, difficulty, layers).
 2. The server asks the model for an **outline** (title, intro, cast with traits, mastermind,
-   final answer, one line per case), then writes the cases in **batches of 8** (2 at a time), using
-   the Bedrock **Converse** API with a JSON tool schema.
+   final answer, one line per case), then writes the cases in **small batches of 3–4, all in parallel**
+   (up to `AI_CONCURRENCY`, default 6), using the Bedrock **Converse** API with a JSON tool schema and
+   low thinking effort (`BEDROCK_EFFORT`, default `low`; `off` to drop it — it is dropped
+   automatically if the model refuses it). A real 6-case book took 23 s and cost $0.06
+   (before: 3 cases in 155 s).
 3. Every case is validated (zod), repaired locally where possible (letters only, length 3–11,
    no word inside another, culprit among the suspects…), checked for unsuitable words, and built
    with the puzzle engine. Cases that still fail are sent back with the exact problem, up to 2 times.
-4. The browser polls `GET /api/mystery/generate/{id}` for progress ("Writing case 7 of 24…") and the
-   result, then shows the review screen (notes behind a disclosure, **Regenerate this case** →
-   `POST /api/mystery/regenerate-case`, **Regenerate all**, **Edit as text**).
+4. The browser polls `GET /api/mystery/generate/{id}` for progress (the book title and case titles as
+   soon as the outline is in, ticked off as they're written, "N of M cases") and the result plus
+   `stats` (`inputTokens`, `outputTokens`, `costUsd`, `calls`, `ms`, `model`), then shows the review
+   screen (notes and cost behind a disclosure; ⋯ per case: **Regenerate this case** →
+   `POST /api/mystery/regenerate-case`, Remove; ⋯ for the book: Customize, **Edit as text**).
 
 Limits: 20 requests per IP per 10 minutes, 2 books at a time per IP, 200 cases per book,
 3 minutes per model call, 20 minutes per book. Throttling is retried with exponential backoff.
