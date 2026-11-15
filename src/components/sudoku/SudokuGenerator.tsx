@@ -46,6 +46,8 @@ export default function SudokuGenerator() {
   const { step, goTo, flow: stage } = useStages(STEPS.length);
   const [genKey, setGenKey] = useState("");
   const [mix, setMix] = useState<SudokuMix>({ easy: 10, medium: 0, hard: 0, expert: 0 });
+  // Remember "Choose my own numbers" so going Back shows that choice as picked.
+  const [ownMix, setOwnMix] = useState(false);
   const [puzzles, setPuzzles] = useState<SudokuPuzzle[]>([]);
   const [active, setActive] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
@@ -112,9 +114,10 @@ export default function SudokuGenerator() {
         <ChoiceCards
           label="Puzzle mix"
           cols={3}
-          value={presetOf ? presetOf.label : null}
+          value={presetOf ? presetOf.label : ownMix ? "custom" : null}
           onPick={(v) => {
             const q = QUICK.find((x) => x.label === v);
+            setOwnMix(!q);
             if (q) setMix(q.mix);
             stage(0).setSub("counts");
           }}
