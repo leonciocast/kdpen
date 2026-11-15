@@ -765,20 +765,34 @@ export function drawOutlineBacking(pdf: jsPDF, pts: P2[] | P2[][], look: Look, u
 /** Outline of any shape in the design's frame style (thickness, double, dashed, dotted, rounded). */
 export function drawOutline(pdf: jsPDF, pts: P2[] | P2[][], look: Look, unit: number) {
   const g = look.design.grid;
-  if (g.border === "none" || g.frame <= 0) return;
   const stepped = isSteppedLook(look);
+  // The stepped cell-edge stroke is the shape outline itself; it still draws
+  // when the frame picker is set to "No outline".
+  if (!stepped && (g.border === "none" || g.frame <= 0)) return;
   const rings = asRings(pts).map((r) => (stepped ? r : framePolygon(r, look, unit)));
-  stroke(pdf, stepped ? steppedStroke(look) : [0, 0, 0]);
+  if (stepped) {
+    const width = Math.max(0.9, Math.min(1.45, unit * 0.12));
+    stroke(pdf, steppedStroke(look));
+    pdf.setLineWidth(width);
+    pdf.setLineJoin("miter");
+    pdf.setLineMiterLimit(2.5);
+    pdf.setLineCap("butt");
+    pdf.setLineDashPattern([], 0);
+    polys(pdf, rings, "S");
+    pdf.setLineJoin("round");
+    pdf.setLineCap("butt");
+    return;
+  }
+  stroke(pdf, [0, 0, 0]);
   pdf.setLineWidth(g.frame);
-  pdf.setLineJoin(stepped ? "miter" : "round");
+  pdf.setLineJoin("round");
   withLineStyle(pdf, look, g.frame, () => {
     polys(pdf, rings, "S");
-    if (!stepped && g.border === "double") {
+    if (g.border === "double") {
       pdf.setLineWidth(Math.max(0.4, g.frame * 0.6));
       polys(pdf, rings.map((r) => offsetPolygon(r, Math.max(2.5, g.frame * 2.5))), "S");
     }
   });
-  pdf.setLineJoin("round");
 }
 
 /** Outer frame in the design's border style around box `b`. */

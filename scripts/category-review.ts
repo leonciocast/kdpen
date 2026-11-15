@@ -49,6 +49,7 @@ const steppedDesign = (): Design => {
   const x = templateDesign("classic");
   x.shape = { kind: "arch", mix: "one", shade: false, outline: "stepped", outlineColor: "#e67a2e" };
   x.grid = { ...x.grid, border: "none", frame: 1.6, line: "solid", shadow: false };
+  x.color = { ...x.color, grayscale: false };
   return x;
 };
 
@@ -56,6 +57,7 @@ const smoothDesign = (kind: ShapeKey): Design => {
   const x = templateDesign("classic");
   x.shape = { kind, mix: "one", shade: true, outline: "smooth" };
   x.grid = { ...x.grid, border: "square", frame: 1.6, line: "solid" };
+  x.color = { ...x.color, grayscale: false };
   return x;
 };
 
@@ -95,6 +97,7 @@ pageOf("arch", "page-arch", steppedDesign());
 pageOf("ring", "page-ring", steppedDesign());
 pageOf("letterS", "page-letterS", steppedDesign());
 pageOf("apple", "page-apple", smoothDesign("apple"));
+pageOf("car", "page-car", smoothDesign("car"));
 
 // 10k-word book with random stepped / letter / cluster shapes.
 const rng = mulberry32(13);

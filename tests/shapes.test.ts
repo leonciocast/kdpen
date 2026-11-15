@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ANIMAL_GROUPS, ANIMAL_KEYS, ARTIST_MARGIN, CATEGORIES, CELL_DILATE, CROSSWORD_SHAPES, SHAPES, animalGroupOf, shapeCategory, shapesInCategory, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, shapeInfo, shapeMask, shapeOutline, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
+import { ANIMAL_GROUPS, ANIMAL_KEYS, ARTIST_MARGIN, CATEGORIES, CELL_DILATE, CROSSWORD_SHAPES, SHAPES, animalGroupOf, shapeCategory, shapesInCategory, SUDOKU_SHAPES, ShapeKey, fillRatio, longestRun, maskBox, maskCells, letteredOutlines, maskOutline, maskOutlines, maskLoops, shapeInfo, shapeMask, shapeOutline, steppedOutlines, shapedGrid, shapeFor, shapeTargetsFor, suggestShapeForTheme, sudokuFrame } from "../src/lib/shapes/shapes";
 import { ALL_DIRECTIONS, checkPlacement, findOccurrences, gridForm, makePlacement, mulberry32, placementCells, Placement } from "../src/lib/wordsearch/engine";
 import { resolveFixed, resolveFreeEnd, snapStart, validDirectionsFrom, validStartCells } from "../src/lib/wordsearch/snap";
 import { WS_DIFFICULTIES, suggestGridSize } from "../src/lib/wordsearch/difficulty";
@@ -348,6 +348,70 @@ describe("shape masks", () => {
     }
   });
 
+  it("stepped outlines emit a path for every island, including holes", () => {
+    const cases: { key: ShapeKey; minIslands: number; holes?: boolean }[] = [
+      { key: "sunburst", minIslands: 9 },
+      { key: "petals", minIslands: 7 },
+      { key: "checkers", minIslands: 5 },
+      { key: "corners", minIslands: 5 },
+      { key: "islands5", minIslands: 5 },
+      { key: "islands9", minIslands: 9 },
+      { key: "arch", minIslands: 1 },
+      { key: "letterS", minIslands: 1 },
+      { key: "letterA", minIslands: 1 },
+      { key: "ring", minIslands: 1, holes: true },
+      { key: "windowframe", minIslands: 1, holes: true },
+      { key: "boxframe", minIslands: 1, holes: true },
+    ];
+    const area = (pts: [number, number][]) => {
+      let a = 0;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j][0] - pts[i][0]) * (pts[j][1] + pts[i][1]);
+      return a / 2;
+    };
+    for (const { key, minIslands, holes } of cases) {
+      const n = Math.max(shapeInfo(key).minSize ?? 24, 24);
+      const m = shapeMask(key, n)!;
+      const rings = letteredOutlines(key, n, "stepped");
+      expect(rings.length, key).toBeGreaterThanOrEqual(holes ? minIslands + 1 : minIslands);
+      for (const ring of rings) {
+        expect(ring.length, key).toBeGreaterThanOrEqual(4);
+        expect(ring.every(([x, y]) => Number.isFinite(x) && Number.isFinite(y)), key).toBe(true);
+      }
+      const outer = rings.filter((r) => Math.abs(area(r)) > 0.5);
+      expect(outer.length, `${key} outer rings`).toBeGreaterThanOrEqual(minIslands);
+      // Inset rings sit on the lettered side of the cell edge.
+      const raw = maskLoops(m);
+      expect(raw.length, `${key} raw loops`).toBeGreaterThanOrEqual(rings.length);
+    }
+  });
+
+  it("food and object silhouettes stroke as one simple outer path", () => {
+    const keys: ShapeKey[] = ["apple", "pear", "icecream", "cupcake", "pizza", "cherry", "raindrop", "moon", "leaf", "snowflake", "gift", "shamrock", "car", "boat", "airplane", "guitar", "crown", "bulb"];
+    const segsIntersect = (a: [number, number], b: [number, number], c: [number, number], d: [number, number]) => {
+      const cross = (p: [number, number], q: [number, number], r: [number, number]) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]);
+      const d1 = cross(a, b, c), d2 = cross(a, b, d), d3 = cross(c, d, a), d4 = cross(c, d, b);
+      if (d1 === 0 && d2 === 0 && d3 === 0 && d4 === 0) return false;
+      return d1 * d2 < 0 && d3 * d4 < 0;
+    };
+    for (const k of keys) {
+      const n = Math.max(shapeInfo(k).minSize ?? 20, 20);
+      const rings = letteredOutlines(k, n, "smooth");
+      expect(rings.length, k).toBe(1);
+      const pts = rings[0];
+      expect(pts.length, k).toBeGreaterThanOrEqual(8);
+      const m = pts.length;
+      let hits = 0;
+      for (let i = 0; i < m; i++) {
+        const a = pts[i], b = pts[(i + 1) % m];
+        for (let j = i + 2; j < m; j++) {
+          if (i === 0 && j === m - 1) continue;
+          if (segsIntersect(a, b, pts[j], pts[(j + 1) % m])) hits++;
+        }
+      }
+      expect(hits, `${k} self-intersections`).toBe(0);
+    }
+  });
+
   it("mixes shapes per puzzle or per theme", () => {
     expect(shapeFor({ kind: "heart", mix: "one" }, 5)).toBe("heart");
     const each = shapeTargetsFor({ kind: "heart", mix: "each" }, [{}, {}, {}]);
@@ -588,6 +652,30 @@ describe("word-search letter size", () => {
     }
     return out;
   }
+
+  it("stepped cell outline is drawn even when the frame is off", async () => {
+    const g = generateOneWordSearch({ title: "Sun", theme: "", words: WORDS, size: 15, shape: "sunburst" }, WS_DIFFICULTIES[1], 7);
+    const design = templateDesign("classic");
+    design.shape = { kind: "sunburst", mix: "one", shade: false, outline: "stepped", outlineColor: "#e67a2e" };
+    design.grid = { ...design.grid, border: "none", frame: 0, line: "solid", shadow: false };
+    design.color = { ...design.color, grayscale: false };
+    const book = buildWordSearchBook([g], { trim: "8.5x11", bleed: false, answersPerPage: 1, frontMatter: null, extras: NO_EXTRAS, design }, nodeFonts());
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(book.pdf.output("arraybuffer")) }).promise;
+    let orange = 0;
+    let stroked = 0;
+    for (let i = 1; i <= doc.numPages; i++) {
+      const ops = await (await doc.getPage(i)).getOperatorList();
+      for (let k = 0; k < ops.fnArray.length; k++) {
+        if (ops.fnArray[k] === 91 && ops.argsArray[k]?.[0] === 20) stroked++;
+        if (ops.fnArray[k] === 58 && String(ops.argsArray[k]).toLowerCase().includes("e67a2e")) orange++;
+      }
+    }
+    expect(orange, "orange #e67a2e stroke is in the PDF").toBeGreaterThan(0);
+    expect(stroked, "stroked outline paths").toBeGreaterThan(0);
+    const rings = letteredOutlines("sunburst", g.size, "stepped");
+    expect(rings.length).toBeGreaterThanOrEqual(9);
+  });
 
   it("stays at least about 7pt on 8.5x11, and records the 6x9 minimum", async () => {
     const keys: ShapeKey[] = ["elephant", "deer", "giraffe", "flamingo", "horse", "octopus", "arch", "sunburst", "letterA"];

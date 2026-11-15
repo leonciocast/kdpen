@@ -10,7 +10,7 @@ import polygonClipping from "polygon-clipping";
 import { ANIMALS } from "./animals";
 import { mapRect, pathToUnit } from "./silhouettes";
 import { STEPPED_DEFS } from "./stepped";
-import { OBJECT_DEFS } from "./objects";
+import { OBJECT_DEFS, applePoly } from "./objects";
 import { ANIMAL_GROUP, LEGACY_CATEGORY, THEME_SHAPES, type AnimalGroup, type ShapeCategory } from "./catalog";
 
 
@@ -354,7 +354,7 @@ export const SHAPES: ShapeInfo[] = [
     aspect: 1,
     tag: "Back to school",
     group: "fun",
-    poly: () => normalize(curve(140, (t) => { const r = 1 - 0.16 * Math.exp(-((Math.atan2(Math.sin(t + Math.PI / 2), Math.cos(t + Math.PI / 2))) ** 2) / 0.12) - 0.06 * Math.exp(-((Math.atan2(Math.sin(t - Math.PI / 2), Math.cos(t - Math.PI / 2))) ** 2) / 0.1); return [Math.cos(t) * r * 1.04, Math.sin(t) * r]; })),
+    poly: applePoly,
   },
   { key: "cloud", label: "Cloud", aspect: 1.45, group: "fun", poly: () => normalize(radialUnion([[0.5, 0.58, 0.3], [0.27, 0.62, 0.22], [0.73, 0.62, 0.22], [0.38, 0.38, 0.22], [0.63, 0.36, 0.25], [0.5, 0.72, 0.24]], [0.5, 0.56])) },
   ...ANIMAL_SHAPES,
@@ -938,14 +938,25 @@ const letteredCache = new Map<string, Pt[][]>();
  */
 export type OutlineStyle = "smooth" | "snug" | "stepped" | "blocky";
 
+/** Inset of a stepped cell-edge stroke, in cells, so letters never touch the line. */
+export const STEPPED_INSET = 0.12;
+
+/** Exact cell-edge loops, inset slightly so a thin stroke stays off the letters. */
+export function steppedOutlines(mask: Mask, inset = STEPPED_INSET): Pt[][] {
+  return maskLoops(mask)
+    .map((L) => offsetPoly(L, -inset))
+    .map((L) => dropClose(L))
+    .filter((L) => L.length >= 4);
+}
+
 export function letteredOutlines(key: ShapeKey | undefined, size: number, style: OutlineStyle = "smooth"): Pt[][] {
   const mask = shapeMask(key, size);
   if (!mask) return [];
   if (style === "blocky") return maskOutlines(mask, CELL_DILATE);
-  if (style === "stepped") return maskLoops(mask);
+  if (style === "stepped") return steppedOutlines(mask);
   if (shapeInfo(key).buildMask) {
-    // Mask-built shapes have no artist curve; any non-blocky style follows the cell edges.
-    return maskLoops(mask);
+    // Mask-built shapes have no artist curve; smooth/snug follow the inset cell edges.
+    return steppedOutlines(mask);
   }
   if (style === "smooth") return [shapeOutline(key, size)];
   const id = `${key}:${size}:snug`;
@@ -1129,6 +1140,8 @@ export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null 
   }
   const pts = shapeOutline(key, size);
   const animal = info.group === "animals";
+  const object = info.group === "objects";
+  const loose = animal || object;
   const cover = animal ? coverageGrid(pts, size) : null;
   const inCenter = (r: number, c: number) => inside(pts, c + 0.5, r + 0.5);
   const glyphFits = (r: number, c: number) => {
@@ -1140,11 +1153,11 @@ export function shapeMask(key: ShapeKey | undefined, size: number): Mask | null 
   };
   const m: Mask = Array.from({ length: size }, (_, r) =>
     Array.from({ length: size }, (_, c) => {
-      if (animal) return glyphFits(r, c);
+      if (loose) return glyphFits(r, c);
       return inCenter(r, c) && edgeDistance(pts, c + 0.5, r + 0.5) >= INSET - 1e-6;
     }),
   );
-  const open = animal ? 1 : 3;
+  const open = loose ? 1 : 3;
   if (animal) {
     // Keep the 20% coverage + thickening path as a fallback only for cells
     // that also pass the glyph test (it never adds overflowing letters).
@@ -1303,7 +1316,7 @@ const CROSSWORD_SKIP = new Set<ShapeKey>([
   "sunburst", "petals", "checkers", "corners", "islands5", "islands9",
   ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map((c) => `letter${c}` as ShapeKey),
   ..."0123456789".split("").map((c) => `digit${c}` as ShapeKey),
-  "rainbow", "wave", "zigzag", "airplane", "bowl", "icecream",
+  "rainbow", "wave", "zigzag", "airplane", "bowl", "icecream", "moon", "boat",
 ]);
 export const CROSSWORD_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !CROSSWORD_SKIP.has(k) && !shapeInfo(k).islands);
 
