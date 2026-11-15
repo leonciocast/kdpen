@@ -24,6 +24,7 @@ import {
   type Rng,
 } from "../wordsearch/engine";
 import { shapedGrid, type ShapeKey } from "../shapes/shapes";
+import { allowedWordDirections, scanGrid } from "../wordsearch/blocklist";
 
 /** A cell that is part of the grid but holds no letter (only when an exact fit was impossible). */
 export const BLANK = "·";
@@ -99,7 +100,7 @@ function flexOptions(g: GridArg, grid: LetterGrid, word: string, dirs: Direction
   const n = gsize(g);
   const letters = gridForm(word);
   const byNew = new Map<number, Placement[]>();
-  for (const dir of dirs) {
+  for (const dir of allowedWordDirections(letters, dirs)) {
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         const cells = cellsOf(r, c, dir, letters.length);
@@ -137,6 +138,8 @@ function finish(g: GridArg, placements: Placement[], message: string, blanksAllo
   blanks.forEach(([r, c]) => (grid[r][c] = BLANK));
   // Every hidden word must read exactly once in the finished grid.
   for (const p of placements) if (findOccurrences(grid, p.letters).length !== 1) return null;
+  // No blocked word may form where words and message letters meet (in any direction): try another layout.
+  if (scanGrid(grid, placements.map(placementCells)).length) return null;
   return { size: gsize(g), mask: typeof g === "number" ? null : g.mask, grid, placements, messageCells, blanks };
 }
 

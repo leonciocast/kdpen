@@ -6,6 +6,7 @@
  */
 
 import { longestRun } from "../shapes/shapes";
+import { allowedWordDirections, scanGrid } from "./blocklist";
 
 export type DirectionKey = "E" | "W" | "S" | "N" | "SE" | "NW" | "NE" | "SW";
 
@@ -341,7 +342,7 @@ function candidatesFor(
   const size = gsize(g);
   const letters = gridForm(word);
   const out: { p: Placement; score: number }[] = [];
-  for (const dir of dirs) {
+  for (const dir of allowedWordDirections(letters, dirs)) {
     const d = DIRECTIONS[dir];
     for (let r = 0; r < size; r++) {
       const er = r + d.dr * (letters.length - 1);
@@ -481,6 +482,9 @@ export interface FillResult {
 
 export type DecoyLevel = "none" | "letters" | "fragments";
 
+/** Shown (never with the word itself) when crossing answers spell a blocked word. */
+export const BLOCKED_WARNING = "Two answer words cross into an unsuitable word; generate again or move a word.";
+
 /**
  * Fill every empty cell with a random letter, re-rolling filler cells that
  * would create an extra copy of any listed word.
@@ -515,8 +519,17 @@ export function fillGrid(g: GridArg, placements: Placement[], rng: Rng, maxRound
   }
 
   const warnings = new Set<string>();
+  const wordCells = placements.map(placementCells);
   for (let round = 0; round < maxRounds; round++) {
     const reroll = new Set<string>();
+    // A blocked word spelled with filler letters: re-roll one of them. (One made only of
+    // crossing answer letters can't be fixed here; generatePuzzle re-places the words.)
+    for (const hit of scanGrid(grid, wordCells)) {
+      const fillers = hit.cells.filter(([r, c]) => isFiller[r][c]);
+      if (!fillers.length) continue;
+      const [r, c] = fillers[Math.floor(rng() * fillers.length)];
+      reroll.add(`${r},${c}`);
+    }
     for (const p of placements) {
       const own = cellKey(placementCells(p));
       for (const occ of findOccurrences(grid, p.letters)) {
@@ -539,6 +552,7 @@ export function fillGrid(g: GridArg, placements: Placement[], rng: Rng, maxRound
     }
     if (round === maxRounds - 1) warnings.add("Could not remove every accidental extra copy of a word.");
   }
+  if (scanGrid(grid, wordCells).length) warnings.add(BLOCKED_WARNING);
   return { grid: grid as string[][], warnings: Array.from(warnings) };
 }
 
@@ -569,6 +583,13 @@ export function generatePuzzle(
   for (let i = 0; i < 4; i++) {
     const all = [...fixed, ...result.placements];
     if (!hasPlacedDuplicates(buildLetterGrid(size, all), all)) break;
+    const retry = autoPlace(size, fixed, toPlace, dirs, rng, opts);
+    if (retry.placements.length >= result.placements.length) result = retry;
+  }
+  // Answers that cross into a blocked word (no filler letter to change): re-place them.
+  for (let i = 0; i < 8; i++) {
+    const all = [...fixed, ...result.placements];
+    if (!scanGrid(buildLetterGrid(size, all), all.map(placementCells), "break").length) break;
     const retry = autoPlace(size, fixed, toPlace, dirs, rng, opts);
     if (retry.placements.length >= result.placements.length) result = retry;
   }
