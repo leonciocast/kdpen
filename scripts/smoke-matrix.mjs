@@ -53,7 +53,7 @@ if (TOOLS.includes("mystery")) {
   add("mystery", { source: "starter", count: 18, diff: "medium", layers: "missing", style: "dossier", plan: "manual", actions: "manual-pick,fill-random,clear", trim: "8.5x11" });
   add("mystery", { source: "starter", count: 24, diff: "hard", layers: "none", style: "clean", plan: "surprise", actions: "shuffle,pin-category", trim: "6x9" });
   add("mystery", { source: "paste", diff: "medium", layers: "all", style: "dossier", plan: "pick", cats: "basic,food,nature", trim: "8.5x11", seeded: true });
-  add("mystery", { source: "theme", settings: "hotel,train,circus", themeCount: 10, diff: "easy", layers: "storyline", style: "clean", plan: "one", oneShape: "letterB", trim: "8.5x11", buildFirst: false });
+  add("mystery", { source: "theme", settings: "hotel,train,circus", themeCount: 10, diff: "easy", layers: "storyline-only", style: "clean", plan: "one", oneShape: "letterB", trim: "8.5x11", buildFirst: false });
   add("mystery", { source: "theme", settings: "manor,museum,liner,lodge,vineyard", themeCount: 30, diff: "hard", layers: "all", style: "dossier", plan: "manual", actions: "manual-pick,apply-rest", trim: "6x9", bleed: true });
   add("mystery", { source: "starter", count: 12, diff: "medium", layers: "all", style: "dossier", plan: "pick", cats: "holiday,objects,hollow", backAndForth: true, trim: "8.5x11" });
 }
@@ -130,17 +130,18 @@ async function run(browser, spec, idx) {
   const has = async (sel) => !!(await page.$(sel));
   const tid = (id) => `[data-testid="${id}"]`;
   const click = async (id, ms = 300) => {
-    await page.click(id.startsWith("[") || id.startsWith("#") || id.includes(" ") ? id : tid(id), { timeout: 20000 });
+    await page.click(id.startsWith("[") || id.startsWith("#") || id.startsWith(".") || id.includes(" ") ? id : tid(id), { timeout: 20000 });
     await pause(ms);
   };
-  const nextOk = () => page.isEnabled(tid("wizard-next")).catch(() => false);
+  const NEXT_BTN = ".pg-wizard-footer .pg-footer-right > button.btn-primary";
+  const nextOk = () => page.isEnabled(NEXT_BTN, { timeout: 2000 }).catch(() => false);
   const next = async () => {
     const t = Date.now();
     while (!(await nextOk())) {
       if (Date.now() - t > 120000) throw new Error(`Next stayed disabled on "${await q()}"`);
       await pause(300);
     }
-    await click("wizard-next");
+    await click(NEXT_BTN);
   };
   const back = () => click("wizard-back");
   const fitted = async () => {
@@ -153,7 +154,9 @@ async function run(browser, spec, idx) {
     if (!spec.backAndForth || !coin(0.5, r)) return;
     const k = await q();
     await back();
-    await next();
+    // A choice-card question has no Next: picking the kept answer again moves on.
+    if (await has(NEXT_BTN)) await next();
+    else await click('.pg-choice-card[aria-checked="true"]', 600);
     if ((await q()) !== k) problems.push(`flow: back/next from "${k}" landed on "${await q()}"`);
   };
   const step = (s) => log.push(s);
@@ -279,11 +282,11 @@ async function run(browser, spec, idx) {
         await fitted();
         await wobble();
         await next();
-      } else if (k === "frame" || k === "tune") {
+      } else if (k === "frame") {
         const cells = await page.$$('[data-testid^="cells-"]');
         if (cells.length && coin(0.5, r)) await pick(cells, r).click(), await pause(300);
         await next();
-      } else if (await has(tid("design-keep"))) {
+      } else if (k === "tune" || (await has(tid("design-keep")))) {
         if (coin(0.5, r)) await click("design-keep", 600);
         else {
           await click("design-customize", 800);
@@ -349,10 +352,16 @@ async function run(browser, spec, idx) {
     }
     await click(`my-diff-${spec.diff}`);
     if ((await q()) === "difficulty") await next();
-    const want = { all: [1, 1, 1], none: [0, 0, 0], message: [1, 0, 0], missing: [0, 1, 0], storyline: [0, 0, 1] }[spec.layers ?? "all"];
+    const want = { all: [1, 1, 1], none: [0, 0, 0], message: [1, 0, 0], missing: [0, 1, 0], storyline: [0, 1, 1], "storyline-only": [0, 0, 1] }[spec.layers ?? "all"];
     for (const [j, key] of ["hiddenMessage", "missingEvidence", "storyline"].entries()) {
       const on = await page.isChecked(tid(`my-${key}`));
       if (!!want[j] !== on) await page.click(tid(`my-${key}`)), await pause(150);
+    }
+    if (spec.layers === "storyline-only") {
+      // The Case Board needs letters to come from somewhere: the step must explain that and block Next.
+      const hint = (await page.textContent(tid("wizard-hint"))) ?? "";
+      if ((await nextOk()) || !/Case Board needs/.test(hint)) problems.push("layers: storyline alone was not blocked with a clear hint");
+      await page.click(tid("my-missingEvidence")), await pause(150);
     }
     if (await has(tid("my-phrase"))) {
       const n = spec.source === "paste" ? 2 : spec.source === "theme" ? spec.themeCount : spec.count;
