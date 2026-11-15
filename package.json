@@ -14,6 +14,7 @@
     "prebuild": "node scripts/copy-vendor.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-runtime": "^3.1169.0",
     "bootstrap": "^5.3.9",
     "jspdf": "^4.2.1",
     "next": "^16.4.6",
@@ -24,7 +25,8 @@
     "react-dom": "^19.3.1",
     "react-icons": "^5.7.0",
     "react-toastify": "^11.2.0",
-    "sudoku-gen": "^1.0.2"
+    "sudoku-gen": "^1.0.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
