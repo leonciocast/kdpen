@@ -1,13 +1,14 @@
 "use client";
 import React from "react";
 import { BsCheckCircleFill, BsSearch } from "react-icons/bs";
-import { ANIMAL_GROUPS, CATEGORIES, CROSSWORD_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeCategory, ShapeKey, animalGroupOf, isSteppedShape, letteredOutlines, maskBox, shapeCategory, shapeInfo, shapeMask, shapeOutline, suggestShapesForTheme, sudokuFrame } from "@/lib/shapes/shapes";
+import { ANIMAL_GROUPS, CATEGORIES, CROSSWORD_SHAPES, MYSTERY_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeCategory, ShapeKey, animalGroupOf, isSteppedShape, letteredOutlines, maskBox, shapeCategory, shapeInfo, shapeMask, shapeOutline, suggestShapesForTheme, sudokuFrame } from "@/lib/shapes/shapes";
 import type { Design, ToolKind } from "@/lib/design/types";
 
 /** Shapes each tool can use (crossword: only shapes that still give well-connected crosswords; sudoku: frames around the 9×9). */
 export function shapesFor(tool: ToolKind): ShapeKey[] {
   if (tool === "crossword") return CROSSWORD_SHAPES;
   if (tool === "sudoku") return SUDOKU_SHAPES;
+  if (tool === "mystery") return MYSTERY_SHAPES;
   return SHAPES.map((s) => s.key);
 }
 
@@ -387,6 +388,11 @@ export function ShapePicker({
         );
       })}
       {q && !visibleCats.length && <p className="small text-muted mb-0">No shapes match “{query}”.</p>}
+      {tool === "mystery" && (
+        <p className="pg-shape-note" data-testid="shape-mystery-note">
+          Only shapes that fit a whole case are shown. Thin letters and numbers, island patterns and a few long animals can’t hold the evidence and an exact hidden message.
+        </p>
+      )}
     </div>
   );
 }

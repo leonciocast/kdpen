@@ -19,7 +19,7 @@ export const SALTMERE_CAST: Person[] = [
 ];
 
 /** Shorter final phrases for smaller books (all true to the story). */
-export const SALTMERE_PHRASES = ["THE KEEPER ODETTE MARSH LIED", "KEEPER ODETTE MARSH LIED", "ODETTE MARSH LIED", "THE KEEPER LIED", "ODETTE MARSH", "THE KEEPER", "ODETTE"];
+export const SALTMERE_PHRASES = ["THE KEEPER ODETTE MARSH LIED", "KEEPER ODETTE MARSH LIED", "ODETTE MARSH LIED", "THE KEEPER LIED", "ODETTE MARSH", "THE KEEPER", "ODETTE", "MARSH", "LIED"];
 
 export const SALTMERE: CaseBook = {
   title: "The Saltmere Lantern",
@@ -255,7 +255,8 @@ export const SALTMERE: CaseBook = {
 /** Phrase that fits a book with `cases` key cases. */
 export function phraseFor(cases: number, phrases = SALTMERE_PHRASES): string {
   const letters = (p: string) => p.replace(/[^A-Z]/g, "").length;
-  return phrases.find((p) => letters(p) <= cases) ?? phrases[phrases.length - 1];
+  // Too few cases for any answer: no Case Board (an empty phrase turns it off).
+  return phrases.find((p) => letters(p) <= cases) ?? "";
 }
 
 /**

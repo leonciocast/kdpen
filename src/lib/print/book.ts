@@ -484,7 +484,9 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
         break;
     }
     pdf.setTextColor(0, 0, 0);
-    if (numbered.has(kind)) drawPageNumber(pdf, design.pageNumber, page, ctx.box.x + ctx.box.w / 2, H - (spec.bottom * PT) / 2, look, s);
+    // Centred in the bottom margin, but never closer to the edge than KDP's minimum (0.25", or 0.375" with bleed).
+    const safe = (spec.bleed ? 0.375 : 0.25) * PT + 10.5 * s;
+    if (numbered.has(kind)) drawPageNumber(pdf, design.pageNumber, page, ctx.box.x + ctx.box.w / 2, H - Math.max((spec.bottom * PT) / 2, safe), look, s);
     opts.onPage?.(page, kinds.length);
   });
   return { pdf, kinds, pageCount: kinds.length, contentPages: kinds.filter((k) => k !== "blank").length, spec };

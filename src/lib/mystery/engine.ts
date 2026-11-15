@@ -8,6 +8,7 @@ import {
   autoPlace,
   buildLetterGrid,
   cellsOf,
+  fillGrid,
   findOccurrences,
   gridForm,
   gsize,
@@ -52,6 +53,8 @@ export interface CaseGridInput {
   /** Smallest/largest grid side to try. */
   minSize?: number;
   maxSize?: number;
+  /** Give up after this long (ms). */
+  timeLimitMs?: number;
 }
 
 export interface CaseGrid {
@@ -154,8 +157,29 @@ export function generateCaseGrid(input: CaseGridInput): CaseGrid {
   const letters = lengths.reduce((a, b) => a + b, 0);
   const longest = Math.max(...lengths);
   const minSize = Math.max(input.minSize ?? 6, longest);
-  const maxSize = input.maxSize ?? 22;
-  const start = Math.max(minSize, Math.ceil(Math.sqrt((letters * 0.85 + shortest) / (input.shape && input.shape !== "square" ? 0.72 : 1))) - 1);
+  const maxSize = input.maxSize ?? 26;
+  const shaped = !!input.shape && input.shape !== "square";
+  const longestMsg = Math.max(...wordings.map((w) => w.letters.length));
+  if (longestMsg === 0) return fillerCase(input, all, words, letters, longest, minSize, maxSize, shaped);
+  // Cells the grid needs: at least the word letters (with some overlap) plus the shortest
+  // message, and not so many that the leftover letters can't be filled by the longest one.
+  const fewest = shortest + Math.ceil(letters * 0.55);
+  const most = letters + longestMsg + 14;
+  const sizes: number[] = [];
+  for (let n = minSize; n <= maxSize && sizes.length < (shaped ? 10 : 5); n++) {
+    const g = shapedGrid(n, input.shape) as GridArg;
+    const cells = countCells(g);
+    if (cells < fewest || longestLine(g) < longest) continue;
+    if (cells > most && sizes.length) break;
+    sizes.push(n);
+  }
+  if (!sizes.length) throw new Error("Couldn't fit this case's words and message into a grid. Try fewer or shorter words.");
+  // Roughly the natural size first, then the others nearest to it.
+  const ideal = Math.sqrt(letters * 0.85 + shortest);
+  const natural = sizes.find((n) => countCells(shapedGrid(n, input.shape) as GridArg) >= ideal * ideal) ?? sizes[0];
+  sizes.sort((a, b) => Math.abs(a - natural) - Math.abs(b - natural) || a - b);
+  const t0 = Date.now();
+  const limit = input.timeLimitMs ?? (shaped ? 2500 : 4000);
   const rng = mulberry32(input.seed);
   let fallback: CaseGrid | null = null;
 
@@ -166,13 +190,13 @@ export function generateCaseGrid(input: CaseGridInput): CaseGrid {
     .sort((a, b) => a.len - b.len);
 
   for (const blanksAllowed of [12, 400]) {
-    const shaped = !!input.shape && input.shape !== "square";
-    for (let n = start; n <= Math.min(maxSize, start + (shaped ? 8 : 4)); n++) {
+    // Most of the time goes to exact fits; the rest to the "a few dotted squares" rescue.
+    const deadline = t0 + limit * (blanksAllowed === 12 ? 0.7 : 1);
+    for (const n of sizes) {
+      if (Date.now() > deadline) break;
       const g = shapedGrid(n, input.shape) as GridArg;
-      if (longestLine(g) < longest) continue;
       const cells = countCells(g);
-      if (cells < shortest + Math.ceil(letters * 0.55)) continue;
-      for (let attempt = 0; attempt < 10; attempt++) {
+      for (let attempt = 0; attempt < 10 && Date.now() <= deadline; attempt++) {
         const flex = flexPool.length ? flexPool[Math.floor(rng() * Math.min(flexPool.length, 4))] : null;
         const rest = flex ? all.filter((_, i) => i !== flex.i) : all;
         // Overlaps free up cells: share letters when the grid is tight, avoid it when roomy.
@@ -221,6 +245,31 @@ export function generateCaseGrid(input: CaseGridInput): CaseGrid {
   throw new Error("Couldn't fit this case's words and message into a grid. Try fewer or shorter words.");
 }
 
+/**
+ * No hidden message: a normal word search. Every word (and the missing evidence) is
+ * hidden once and the other cells get random letters that don't spell a second copy.
+ */
+function fillerCase(input: CaseGridInput, all: string[], words: string[], letters: number, longest: number, minSize: number, maxSize: number, shaped: boolean): CaseGrid {
+  const rng = mulberry32(input.seed);
+  const t0 = Date.now();
+  const limit = input.timeLimitMs ?? (shaped ? 2500 : 4000);
+  // Roomy enough to place everything comfortably, like a classic puzzle.
+  for (let n = minSize; n <= maxSize && Date.now() - t0 < limit; n++) {
+    const g = shapedGrid(n, input.shape) as GridArg;
+    if (longestLine(g) < longest || countCells(g) < letters * 1.25) continue;
+    for (let attempt = 0; attempt < 4 && Date.now() - t0 < limit; attempt++) {
+      const placed = autoPlace(g, [], all, input.dirs, rng, { overlapWeight: 0.2, timeLimitMs: 250, maxSteps: 4000 });
+      if (placed.unplaced.length) continue;
+      const ps = orderPlacements(placed.placements, words, input.extra);
+      const filled = fillGrid(g, ps, rng);
+      const grid = filled.grid.map((row) => row.slice());
+      if (!ps.every((p) => findOccurrences(grid as LetterGrid, p.letters).length === 1)) continue;
+      return { size: gsize(g), mask: typeof g === "number" ? null : g.mask, grid, ...split(ps, input.extra), messageCells: [], blanks: [], seed: input.seed, messageIndex: 0, message: "" };
+    }
+  }
+  throw new Error("Couldn't fit this case's words into a grid. Try fewer or shorter words.");
+}
+
 function orderPlacements(ps: Placement[], words: string[], extra?: string): Placement[] {
   const pos = (w: string) => (extra !== undefined && w === extra ? words.length : words.indexOf(w));
   return ps.slice().sort((a, b) => pos(a.word) - pos(b.word));
@@ -261,6 +310,7 @@ export function checkCaseGrid(grid: string[][], words: string[], extra: string |
     }),
   );
   const want = messageLetters(message);
-  if (leftover !== want) problems.push(`Leftover letters read "${leftover}", expected "${want}".`);
+  // No hidden message: the leftover cells are ordinary filler letters.
+  if (want && leftover !== want) problems.push(`Leftover letters read "${leftover}", expected "${want}".`);
   return { ok: problems.length === 0, problems, leftover };
 }

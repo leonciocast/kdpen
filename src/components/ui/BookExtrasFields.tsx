@@ -12,7 +12,7 @@ const TOGGLES: { key: "belongsTo" | "toc" | "howTo" | "thankYou"; label: string;
 ];
 
 /** Optional front and back matter for a book. */
-export default function BookExtrasFields({ extras, setExtras }: { extras: BookExtras; setExtras: (e: BookExtras) => void }) {
+export default function BookExtrasFields({ extras, setExtras, howToLabel }: { extras: BookExtras; setExtras: (e: BookExtras) => void; howToLabel?: string }) {
   const set = (patch: Partial<BookExtras>) => setExtras({ ...extras, ...patch });
   return (
     <div className="d-grid gap-2">
@@ -22,7 +22,7 @@ export default function BookExtrasFields({ extras, setExtras }: { extras: BookEx
             <div className="form-check form-switch">
               <input className="form-check-input" type="checkbox" id={`ex-${t.key}`} checked={extras[t.key]} onChange={(e) => set({ [t.key]: e.target.checked })} data-testid={`extra-${t.key}`} />
               <label className="form-check-label" htmlFor={`ex-${t.key}`}>
-                {t.label} <InfoTip text={t.tip} />
+                {t.key === "howTo" && howToLabel ? howToLabel : t.label} <InfoTip text={t.key === "howTo" && howToLabel ? "The rules step by step, plus a small solved example." : t.tip} />
               </label>
             </div>
           </div>

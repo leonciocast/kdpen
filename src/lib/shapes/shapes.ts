@@ -1341,6 +1341,22 @@ const CROSSWORD_SKIP = new Set<ShapeKey>([
 ]);
 export const CROSSWORD_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !CROSSWORD_SKIP.has(k) && !shapeInfo(k).islands);
 
+/**
+ * Shapes that hold a murder-mystery case (about 14 evidence words, a missing word and a
+ * leftover message that must come out exactly). Measured over the starter and templated
+ * cases at easy and hard (anything that needed a square fallback more than once): thin
+ * letters and digits, island patterns, the zigzag and the animals that need very large
+ * grids to fit the evidence are not offered. Any case that still doesn't fit its shape
+ * falls back to a square grid with a note.
+ */
+const MYSTERY_SKIP = new Set<ShapeKey>([
+  "zigzag", "wave", "checkers", "islands9", "blockx", "snowflake",
+  "unicorn", "monkey", "duck", "swan", "turkey", "parrot", "bat", "fish", "whale", "dolphin", "shark", "lobster", "trex", "longneck", "scorpion", "fox", "pelican", "moose", "ostrich",
+  "letterC", "letterF", "letterK", "letterI", "letterJ", "letterL", "letterP", "letterS", "letterT", "letterV", "letterX", "letterY", "letterZ",
+  "digit1", "digit2", "digit3", "digit4", "digit7", "digit8",
+]);
+export const MYSTERY_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !MYSTERY_SKIP.has(k));
+
 /** Shapes used when "mix shapes" is on (basics plus a rotation of favourite animals). */
 export const MIX_SET: ShapeKey[] = ["circle", "heart", "star", "hexagon", "diamond", "cloud", "octagon", "egg", "apple", "rounded", "elephant", "dolphin", "cat", "owl", "fish", "butterfly", "dog", "penguin", "rabbit", "whale"];
 

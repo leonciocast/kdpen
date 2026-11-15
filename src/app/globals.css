@@ -773,3 +773,5 @@ a { text-underline-offset: 2px; }
 .pg-case-key { display: flex; gap: .5rem; align-items: center; color: var(--pg-muted); margin-top: .9rem; }
 .pg-keybox { display: inline-flex; align-items: flex-start; justify-content: flex-start; width: 1.6rem; height: 1.6rem; border: 1.5px solid var(--case); border-radius: 4px; font-size: .62rem; font-weight: 800; color: var(--case); padding: .05rem .15rem; flex-shrink: 0; }
 .pg-case-lead { margin: 1rem 0 0; text-align: center; color: var(--pg-muted); font-size: .86rem; font-family: "DejaVu Serif", Georgia, serif; }
+
+.pg-shape-note { margin: .75rem 0 0; font-size: .8rem; color: var(--pg-muted); }

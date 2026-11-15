@@ -12,7 +12,7 @@ import { ChoiceCards, FINISH, FlowCtl, Question, QuestionFlow } from "@/componen
 import { planSummary } from "@/components/ui/ShapePlan";
 import { JobCancelled, startJob } from "@/lib/jobs/client";
 import type { Progress } from "@/lib/jobs/types";
-import { shapeTargetsFor, type ShapeKey } from "@/lib/shapes/shapes";
+import { MYSTERY_SHAPES, shapeTargetsFor, type ShapeKey } from "@/lib/shapes/shapes";
 import { planSignature } from "@/lib/shapes/plan";
 import { DEFAULT_EXTRAS } from "@/lib/print/book";
 import { DEFAULT_FRONT_MATTER } from "@/lib/print/frontMatter";
@@ -33,6 +33,14 @@ const STEPS = [{ label: "Cases" }, { label: "Mystery settings" }, { label: "Buil
 export const MYSTERY_NAME = "Murder Mystery Word Search";
 type Source = "starter" | "paste" | "theme";
 const MAX_CASES = 200;
+
+/** A build error in plain words (never a stack trace or an internal message). */
+function friendlyBuildError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e ?? "");
+  const m = msg.match(/^Case (\d+) \((.*?)\):/);
+  if (m) return `Case ${m[1]} (“${m[2]}”) has too many or too long words to fit a grid with its hidden message. Remove a word or two, or use a shorter message, then build again.`;
+  return "The cases couldn't be built this time. Please try again; if it keeps happening, change a setting and rebuild.";
+}
 
 function genericBook(cases: CaseSpec[], cast: CaseBook["cast"], phrase: string, title = "The Case Files"): CaseBook {
   return {
@@ -95,14 +103,14 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
   const caseCount = plan?.cases.length ?? 0;
   const phraseLen = plan ? phraseLetters(plan.phrase).length : 0;
   const phraseProblem = settings.storyline && source !== "starter" && plan && (phraseLen === 0 ? "Type a final answer for the Case Board." : phraseLen > caseCount ? `The final answer has ${phraseLen} letters but the book has ${plural(caseCount, "case")}. Use a shorter answer or more cases.` : "");
-  const shapes = (d: Design): (ShapeKey | undefined)[] => (plan ? shapeTargetsFor(d.shape, plan.cases.map(() => ({}))).map((k) => (k === "square" ? undefined : k)) : []);
+  const shapes = (d: Design): (ShapeKey | undefined)[] => (plan ? shapeTargetsFor(d.shape, plan.cases.map(() => ({})), MYSTERY_SHAPES).map((k) => (k === "square" ? undefined : k)) : []);
   const sigFor = (d: Design) => JSON.stringify([plan?.cases, plan?.phrase, plan?.book.cast, settings, shapes(d)]);
   const sig = sigFor(rawDesign.design);
   const fresh = !!result && result.sig === sig;
   const cases = useMemo(() => (result ? result.items.filter((i) => i.kind === "case").map((i) => (i as { case: MysteryCase }).case) : []), [result]);
 
-  const build = async (d: Design = rawDesign.design): Promise<boolean> => {
-    if (!plan) return false;
+  const build = async (d: Design = rawDesign.design): Promise<"ok" | "failed" | "cancelled"> => {
+    if (!plan) return "failed";
     running?.cancel();
     const job = startJob({ type: "my-generate", input: { book: plan.book, cases: plan.cases, phrase: plan.phrase, settings, shapes: shapes(d), seed: 20261115 } }, (p) => setRunning((r) => (r ? { ...r, progress: p } : r)));
     setRunning({ progress: null, cancel: job.cancel });
@@ -113,10 +121,11 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
       setView(0);
       if (out.problems.length) toast.error(`Some checks failed: ${out.problems[0]}`);
       else toast.success(`${plural(caseCount, "case file")} built and checked (${((performance.now() - t0) / 1000).toFixed(1)}s).`);
-      return true;
+      return "ok";
     } catch (e) {
-      if (!(e instanceof JobCancelled)) toast.error(`Sorry, the cases couldn't be built: ${(e as Error).message}`);
-      return false;
+      if (e instanceof JobCancelled) return "cancelled";
+      toast.error(friendlyBuildError(e));
+      return "failed";
     } finally {
       setRunning((r) => (r && r.cancel === job.cancel ? null : r));
     }
@@ -125,9 +134,17 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
   const designApi = {
     ...rawDesign,
     setDesign: (d: Design) => {
-      const before = planSignature(rawDesign.design.shape);
+      const prev = rawDesign.design;
+      const before = planSignature(prev.shape);
       rawDesign.setDesign(d);
-      if (result && planSignature(d.shape) !== before) void build(d);
+      if (result && planSignature(d.shape) !== before)
+        void build(d).then((r) => {
+          // Keep the book usable: go back to the shapes that worked.
+          if (r === "failed") {
+            rawDesign.setDesign(prev);
+            toast.info("Kept the previous shapes, so every case still checks out.");
+          }
+        });
     },
   };
 
@@ -534,9 +551,32 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
     },
   ];
 
-  const shapeStatus = running && step === 3 ? <span data-testid="reshape-progress">Fitting your cases into the new shape{running.progress ? `: ${running.progress.done} of ${running.progress.total}` : "…"}</span> : cases.length ? <span data-testid="reshape-done">Cases use: {planSummary(rawDesign.design, "mystery", cases.length)}. Every message still fits exactly.</span> : null;
+  const squared = result && fresh ? result.warnings.filter((w) => w.includes("uses a square grid")).length : 0;
+  const shapeStatus = running && step === 3 ? <span data-testid="reshape-progress">Fitting your cases into the new shape{running.progress ? `: ${running.progress.done} of ${running.progress.total}` : "…"}</span> : cases.length ? <span data-testid="reshape-done">Cases use: {planSummary(rawDesign.design, "mystery", cases.length)}. Every message still fits exactly.{squared ? ` ${plural(squared, "case")} kept a square grid: ${squared === 1 ? "its" : "their"} evidence doesn't fit the shape.` : ""}</span> : null;
   const planList = useMemo(() => (plan?.cases ?? []).map((c) => ({ title: c.title })), [plan]);
   const maxReachable = !plan ? 0 : !fresh ? 2 : 4;
+  // Book preview names: the Case Board and Case Closed pages aren't case files.
+  const items = result?.items;
+  const naming = useMemo(
+    () => ({
+      labels: { howto: "How to solve" },
+      itemName: (i: number) => {
+        const it = items?.[i];
+        return !it ? undefined : it.kind === "board" ? "Case Board" : it.kind === "finale" ? "Case closed" : `Case ${it.case.number}`;
+      },
+    }),
+    [items],
+  );
+  const itemsText = useMemo(() => {
+    const extra = items ? items.filter((i) => i.kind !== "case").length : 0;
+    return (n: number) => {
+      const files = n - extra;
+      const parts = [plural(files, "case file")];
+      if (items?.some((i) => i.kind === "board")) parts.push("the Case Board");
+      if (items?.some((i) => i.kind === "finale")) parts.push("Case Closed");
+      return `${parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0]}, each with its answer`;
+    };
+  }, [items]);
   const flow0 = (i: number): FlowCtl => (i === 0 ? { ...flow(0), onBackOut: onChangeType } : flow(i));
   const sections = result ? (result.items.some((i) => i.kind === "board") ? 3 : 1) : 1;
 
@@ -565,6 +605,8 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
             tool="mystery"
             toolDefaults={{ title: "Murder Mystery Word Search", subtitle: `${caseCount} Detective Cases to Solve` }}
             itemNoun="case page"
+            naming={naming}
+            itemsText={itemsText}
             itemCount={fresh ? result!.items.length : 0}
             sectionCount={sections}
             design={designApi.design}

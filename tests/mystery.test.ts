@@ -145,3 +145,32 @@ describe("case-file PDF", () => {
       expect(BLANK).toBe("·");
     }, 60000);
 });
+
+describe("shapes for mystery cases", () => {
+  test("only shapes that hold a case are offered", async () => {
+    const { MYSTERY_SHAPES } = await import("../src/lib/shapes/shapes");
+    for (const k of ["letterL", "letterT", "digit1", "checkers", "islands9", "zigzag", "longneck"]) expect(MYSTERY_SHAPES).not.toContain(k);
+    for (const k of ["heart", "pear", "letterB", "letterE", "dragon", "bee"]) expect(MYSTERY_SHAPES).toContain(k);
+  });
+  test("a shape that can't hold the evidence falls back to a square grid instead of failing", () => {
+    // The original bug: Surprise me gave case 7 a thin shape, the whole build threw and an error toast appeared.
+    const out = generateMystery({ book: SALTMERE, cases: starterCases(2), phrase: "", settings: DEFAULT_MYSTERY_SETTINGS, shapes: starterCases(2).map(() => "letterL" as const), seed: 7 });
+    expect(out.problems).toEqual([]);
+    expect(out.warnings.some((w) => w.includes("square grid"))).toBe(true);
+  }, 120000);
+  test("words inside other words are left off with a note, never found twice", () => {
+    const book = scaffoldBook({ settings: ["vineyard", "circus"], count: 30, seed: 5 }, "CASE CLOSED");
+    book.cases[0] = { ...book.cases[0], words: [...book.cases[0].words.slice(0, 10), "VINE", "VINEYARD"] };
+    const out = generateMystery({ book, cases: book.cases, phrase: "CASE CLOSED", settings: DEFAULT_MYSTERY_SETTINGS, seed: 3 });
+    expect(out.problems).toEqual([]);
+    expect(cases(out.items)[0].words).not.toContain("VINE");
+  }, 120000);
+  test("no hidden message: ordinary filler letters, no dotted squares", () => {
+    const out = generateMystery({ book: SALTMERE, cases: starterCases(6), phrase: "", settings: { ...DEFAULT_MYSTERY_SETTINGS, hiddenMessage: false, storyline: false }, seed: 1 });
+    expect(out.problems).toEqual([]);
+    expect(cases(out.items).every((c) => c.blanks.length === 0 && c.grid.flat().every((v) => v === "" || /^[A-Z]$/.test(v)))).toBe(true);
+  });
+  test("small starter books never get an answer longer than the case count", () => {
+    for (let n = 1; n <= 24; n++) expect(phraseLetters(phraseFor(n)).length).toBeLessThanOrEqual(n);
+  });
+});

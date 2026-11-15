@@ -150,11 +150,17 @@ function puzzlePage(it: CrosswordItem, number: number, headerText: string): Page
       cluesH = clueColumns(pdf, look, it.cw, box.x, 0, box.w - 16, size, false);
     }
     const lpad = listBoxPad(look);
-    const availH = box.y + box.h - top - cluesH - 30 * s - lpad * 2;
     const geo = cwGeometry(it.cw);
     const extW = geo.ext.x1 - geo.ext.x0;
     const extH = geo.ext.y1 - geo.ext.y0;
-    const cell = Math.max(10, Math.min((box.w - 10) / extW, availH / extH, 34 * s));
+    // The grid gets what the clues leave; it never pushes the clues off the page.
+    const cellFor = () => Math.min((box.w - 10) / extW, (box.y + box.h - top - cluesH - 30 * s - lpad * 2) / extH, 34 * s);
+    let cell = cellFor();
+    while (cell < 14 * s && size > 6.5) {
+      size -= 0.5;
+      cluesH = clueColumns(pdf, look, it.cw, box.x, 0, box.w - 16, size, false);
+      cell = cellFor();
+    }
     const gw = cell * extW;
     const gh = cell * extH;
     const gx = box.x + (box.w - gw) / 2 - geo.ext.x0 * cell;

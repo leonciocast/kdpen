@@ -21,7 +21,7 @@ import InfoTip from "./InfoTip";
 import BookExtrasFields from "./BookExtrasFields";
 import JobProgress from "./JobProgress";
 import BookPreview, { PreviewPdf, Sorter } from "./preview/BookPreview";
-import { CheckFix, Slot, applyOrderFix, arrangementSignature, defaultSlots, describePages, isDefaultOrder, readinessChecks, reorderPuzzles, restoreDeleted, seededShuffle } from "@/lib/print/arrange";
+import { CheckFix, PageNaming, Slot, applyOrderFix, arrangementSignature, defaultSlots, describePages, isDefaultOrder, readinessChecks, reorderPuzzles, restoreDeleted, seededShuffle } from "@/lib/print/arrange";
 
 type PerPage = 1 | 2 | 4 | 6;
 
@@ -67,6 +67,10 @@ interface Props {
   perPageChoice?: boolean;
   defaultAnswersPerPage?: PerPage;
   flow: FlowCtl;
+  /** Page names for the preview (e.g. "How to solve", "Case Board"). */
+  naming?: PageNaming;
+  /** Replaces the KDP check's "N puzzles, each with its answer" line. */
+  itemsText?: (items: number) => string;
 }
 
 interface Arranged {
@@ -83,7 +87,7 @@ interface Built {
   url: string;
 }
 
-export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, sectionCount, design, items, fileBase, disabledReason, perPageChoice, defaultAnswersPerPage = 4, flow }: Props) {
+export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, sectionCount, design, items, fileBase, disabledReason, perPageChoice, defaultAnswersPerPage = 4, flow, naming, itemsText }: Props) {
   const { fm, update, reset } = useFrontMatter(tool, toolDefaults);
   const [includeFm, setIncludeFm] = useSticky(`${tool}.fm`, true);
   const [trim, setTrim] = useSticky<TrimKey>(`${tool}.trim`, "8.5x11");
@@ -130,7 +134,7 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
   const custom = arr && arr.sig === sig ? arr : null;
   const staleOrder = !!arr && arr.sig !== sig && !isDefaultOrder(arr.slots, defaults);
   const slots = custom?.slots ?? defaults;
-  const desc = useMemo(() => describePages(slots, shape, extras, pad, itemNoun[0].toUpperCase() + itemNoun.slice(1)), [slots, shape, extras, pad, itemNoun]);
+  const desc = useMemo(() => describePages(slots, shape, extras, pad, itemNoun[0].toUpperCase() + itemNoun.slice(1), naming), [slots, shape, extras, pad, itemNoun, naming]);
   const arranged = !!custom && !isDefaultOrder(custom.slots, defaults);
   const changeSlots = (next: Slot[]) => setArr({ sig, slots: next, past: [...(custom?.past ?? []), slots].slice(-100), future: [] });
   const undo = () => {
@@ -254,8 +258,8 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
   }, [slots, shape, tool, sectionCount, itemNoun, sig, custom]);
 
   const checks = useMemo(
-    () => readinessChecks({ pages: desc.pages, frontMatter, padForKdp: pad, originalItems: itemCount, items: desc.resolved.itemOrder.length, unit: itemNoun }),
-    [desc, frontMatter, pad, itemCount, itemNoun],
+    () => readinessChecks({ pages: desc.pages, frontMatter, padForKdp: pad, originalItems: itemCount, items: desc.resolved.itemOrder.length, unit: itemNoun, itemsText }),
+    [desc, frontMatter, pad, itemCount, itemNoun, itemsText],
   );
   const onFix = (f: CheckFix) => {
     if (f === "size" || f === "title" || f === "extras") flow.setSub(f);
@@ -356,7 +360,7 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
     optional: true,
     lead: `A “This book belongs to” page, contents, how to play, notes and more. ${extrasOn} ${extrasOn === 1 ? "is" : "are"} turned on already.`,
     skipLabel: "Skip, keep these",
-    body: <BookExtrasFields extras={extras} setExtras={setExtras} />,
+    body: <BookExtrasFields extras={extras} setExtras={setExtras} howToLabel={naming?.labels?.howto ? `${naming.labels.howto} page` : undefined} />,
   };
 
   const previewQ: Question = {

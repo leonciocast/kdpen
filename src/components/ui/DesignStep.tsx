@@ -141,7 +141,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
     fn(d);
     setDesign(d);
   };
-  const tabs = TABS.filter((t) => t.find(kinds) >= 0);
+  const tabs = TABS.filter((t) => t.find(kinds) >= 0).map((t) => (tool === "mystery" ? { ...t, label: t.id === "howto" ? "How to solve" : t.id === "puzzle" ? "Case file" : t.label } : t));
   const current = tabs.find((t) => t.id === tab) ?? tabs[0];
   const pageIndex = current ? current.find(kinds) : 0;
 

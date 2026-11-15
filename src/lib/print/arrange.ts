@@ -227,7 +227,14 @@ export function sectionOf(kind: SlotKind): SectionKey {
 const range = (a: number, b: number) => (a === b ? `${a}` : `${a}–${b}`);
 
 /** Every final page of the book, in order, with labels and printed numbers. */
-export function describePages(input: Slot[], shape: ContentShape, extras: { padWithNotes: boolean }, padForKdp?: boolean, unit = "Puzzle"): { pages: PageInfo[]; resolved: Resolved } {
+export interface PageNaming {
+  /** Replace the default label of a page kind (e.g. "How to solve"). */
+  labels?: Partial<Record<SlotKind, string>>;
+  /** Name for a one-item puzzle page, by the item's original index (0-based). */
+  itemName?: (item: number) => string | undefined;
+}
+
+export function describePages(input: Slot[], shape: ContentShape, extras: { padWithNotes: boolean }, padForKdp?: boolean, unit = "Puzzle", naming: PageNaming = {}): { pages: PageInfo[]; resolved: Resolved } {
   const resolved = resolveSlots(input, shape);
   const padded = pad(resolved.slots.map((s) => ({ item: s, kind: (s.kind === "puzzle" || s.kind === "solution" ? "content" : s.kind) as BookPageKind })), extras, padForKdp);
   let puzzleIdx = 0;
@@ -239,12 +246,13 @@ export function describePages(input: Slot[], shape: ContentShape, extras: { padW
   const pages = padded.map((p, i): PageInfo => {
     const slot = p.item;
     const kind: SlotKind = slot ? slot.kind : (p.kind as SlotKind);
-    const info: PageInfo = { key: slot ? slot.id : `filler-${fillerNo++}`, slot, kind, filler: p.filler, section: sectionOf(kind), label: KIND_LABEL[kind], page: i + 1, numbered: NUMBERED.has(kind) };
+    const info: PageInfo = { key: slot ? slot.id : `filler-${fillerNo++}`, slot, kind, filler: p.filler, section: sectionOf(kind), label: naming.labels?.[kind] ?? KIND_LABEL[kind], page: i + 1, numbered: NUMBERED.has(kind) };
     if (kind === "puzzle") {
       const size = resolved.puzzlePageSizes[puzzleIdx++] ?? 1;
       info.numbers = [itemNo + 1, itemNo + size];
       itemNo += size;
-      info.label = size > 1 ? `${unit}s ${range(itemNo - size + 1, itemNo)}` : `${unit} ${itemNo}`;
+      const named = size === 1 && slot?.ref !== undefined ? naming.itemName?.(slot.ref) : undefined;
+      info.label = named ?? (size > 1 ? `${unit}s ${range(itemNo - size + 1, itemNo)}` : `${unit} ${itemNo}`);
     } else if (kind === "solution") {
       const a = solIdx * ans + 1;
       const b = Math.min(total, (solIdx + 1) * ans);
@@ -342,6 +350,8 @@ export interface ReadinessInput {
   originalItems: number;
   items: number;
   unit?: string;
+  /** Replaces the "N puzzles, each with its answer" line (e.g. to name special pages). */
+  itemsText?: (items: number) => string;
 }
 
 export function readinessChecks(r: ReadinessInput): ReadinessCheck[] {
@@ -359,7 +369,7 @@ export function readinessChecks(r: ReadinessInput): ReadinessCheck[] {
     const ph = [fm.author, fm.imprint].some((v) => v.trim() === "Your Name" || v.trim() === "Your Imprint");
     out.push(ph ? { id: "placeholder", level: "warn", text: "Title page still says “Your Name” or “Your Imprint”", fix: "title", fixLabel: "Edit title page" } : { id: "placeholder", level: "ok", text: "No placeholder text on the title page" });
   }
-  out.push(r.items > 0 ? { id: "puzzles", level: "ok", text: `${r.items} ${unit}${r.items === 1 ? "" : "s"}, each with its answer` } : { id: "puzzles", level: "error", text: `The book has no ${unit}s` });
+  out.push(r.items > 0 ? { id: "puzzles", level: "ok", text: r.itemsText?.(r.items) ?? `${r.items} ${unit}${r.items === 1 ? "" : "s"}, each with its answer` } : { id: "puzzles", level: "error", text: `The book has no ${unit}s` });
   if (r.items < r.originalItems) out.push({ id: "deleted", level: "info", text: `${r.originalItems - r.items} ${unit}${r.originalItems - r.items === 1 ? "" : "s"} removed (answers removed too)`, fix: "undo-delete", fixLabel: "Bring back" });
   const firstSol = r.pages.findIndex((p) => p.kind === "solution");
   const lastPuz = r.pages.map((p) => p.kind).lastIndexOf("puzzle");

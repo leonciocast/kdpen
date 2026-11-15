@@ -553,8 +553,12 @@ function answersPage(entries: Entry[], first: boolean, per: number): PageRendere
         const c = e.case;
         const info = solutionLines(c);
         // Wrap each line to measure.
+        pdf.setFont(SANS, "bold");
         pdf.setFontSize(fs);
-        const wrapped = info.map(([k2, v]) => [k2, pdf.splitTextToSize(v, slotW - 60 * s * (fs / (9 * s))) as string[]] as const);
+        const kw = Math.max(...info.map(([k2]) => pdf.getTextWidth(k2.toUpperCase()))) + 6 * s;
+        pdf.setFont(SANS, "normal");
+        const wrapAt = (kx0: number) => info.map(([k2, v]) => [k2, pdf.splitTextToSize(v, sx + slotW - (kx0 + kw) - 2 * s) as string[]] as const);
+        let wrapped = wrapAt(sx + 2 * s);
         const infoH = wrapped.reduce((a, [, l]) => a + l.length * lead, 0) + 6 * s;
         const labelH = 18 * s;
         const pz = casePuzzle(c);
@@ -568,10 +572,13 @@ function answersPage(entries: Entry[], first: boolean, per: number): PageRendere
         const em = new Set(c.messageCells.map(([r, cc]) => `${r},${cc}`));
         drawWordSearchGrid(pdf, look, pz, gx, gy, cell, { answers: true, dashed: c.extra ? [c.extra as Placement] : [], emphasis: em });
         let y = gy + geo.ext.y1 * cell + 4 * s + fs;
-        pdf.setFont(SANS, "bold");
+        // Line the labels up with the grid's left edge when the values still fit there.
+        let kx = sx + Math.max(0, (slotW - extW * cell) / 2) + 2 * s;
+        pdf.setFont(SANS, "normal");
         pdf.setFontSize(fs);
-        const kw = Math.max(...wrapped.map(([k2]) => pdf.getTextWidth(k2.toUpperCase()))) + 6 * s;
-        const kx = sx + Math.max(0, (slotW - extW * cell) / 2) + 2 * s;
+        const aligned = wrapAt(kx);
+        if (aligned.every(([, l], i) => l.length === wrapped[i][1].length)) wrapped = aligned;
+        else kx = sx + 2 * s;
         const vx = kx + kw;
         for (const [k2, l] of wrapped) {
           pdf.setFont(SANS, "bold");
@@ -601,10 +608,12 @@ function answersPage(entries: Entry[], first: boolean, per: number): PageRendere
         });
         y += 8 * s;
         const keys = e.keys.slice().sort((a, b2) => a.box - b2.box);
-        const cc = Math.max(2, Math.floor(slotW / (62 * s)));
-        const cw = slotW / cc;
         pdf.setFont(SANS, "normal");
         pdf.setFontSize(fs * 0.95);
+        // As many columns as the widest entry allows, so nothing runs past the slot.
+        const widest = Math.max(...keys.map((kk) => pdf.getTextWidth(`${kk.box}. ${kk.letter}  (case ${kk.case})`))) + 10 * s;
+        const cc = Math.max(1, Math.min(4, Math.floor((slotW - 6 * s) / widest)));
+        const cw = (slotW - 6 * s) / cc;
         pdf.setTextColor(40, 40, 40);
         const rh = Math.min(lead * 1.15, (sy + slotH - y) / Math.ceil(keys.length / cc));
         keys.forEach((kk, i) => pdf.text(`${kk.box}. ${kk.letter}  (case ${kk.case})`, sx + (i % cc) * cw + 6 * s, y + Math.floor(i / cc) * rh));

@@ -162,7 +162,7 @@ export const SETTINGS: Setting[] = [
     events: ["the harvest festival", "the grand tasting", "the family picnic", "the barrel auction"],
     valuables: ["prize ribbon", "secret recipe", "antique corkscrew", "deed to the land"],
     machines: ["grape press", "bottling machine", "cellar door"],
-    words: ["VINEYARD", "GRAPES", "BARREL", "CELLAR", "HARVEST", "CORK", "BOTTLE", "VINE", "ORCHARD", "TRELLIS", "PRESS", "COURTYARD", "TASTING", "LABEL", "OAK", "VINTAGE", "BASKET", "SUNSHINE", "PICNIC", "CHATEAU", "TERRACE", "CASK", "HILLSIDE", "ESTATE", "SHEARS", "JUICE", "CRATE", "PERGOLA"],
+    words: ["VINEYARD", "GRAPES", "BARREL", "CELLAR", "HARVEST", "CORK", "BOTTLE", "TENDRIL", "ORCHARD", "TRELLIS", "PRESS", "COURTYARD", "TASTING", "LABEL", "OAK", "VINTAGE", "BASKET", "SUNSHINE", "PICNIC", "CHATEAU", "TERRACE", "CASK", "HILLSIDE", "ESTATE", "SHEARS", "JUICE", "CRATE", "PERGOLA"],
     missing: [
       { word: "CORKSCREW", clue: "Opens every bottle" },
       { word: "STAIN", clue: "A purple mark on a sleeve" },

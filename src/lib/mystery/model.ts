@@ -4,7 +4,7 @@
  * grid is built and checked.
  */
 import { gridForm, mulberry32 } from "../wordsearch/engine";
-import type { ShapeKey } from "../shapes/shapes";
+import { shapeInfo, type ShapeKey } from "../shapes/shapes";
 import { BLANK, checkCaseGrid, directionsFor, generateCaseGrid, messageLetters } from "./engine";
 import type { CaseBook, CaseKey, CaseSpec, KeySource, MysteryCase, MysteryItem, MysterySettings, Person } from "./types";
 
@@ -130,22 +130,45 @@ export function buildCase(spec: CaseSpec, number: number, cast: Person[], target
     }
   }
   const missing = st.missingEvidence && spec.missing?.word.trim() ? spec.missing : undefined;
-  const words = dedupe(spec.words.filter((w) => !missing || gridForm(w) !== gridForm(missing.word)));
-  let grid = null;
-  let seed = opts.seed;
-  for (let i = 0; i < 6 && !grid; i++) {
-    try {
-      const g = generateCaseGrid({ words, extra: missing?.word.toUpperCase(), message: wordings.length ? wordings : "", dirs: directionsFor(st.difficulty), seed, shape: opts.shape });
-      const check = checkCaseGrid(g.grid, words, missing?.word.toUpperCase(), g.message);
-      if (check.ok) grid = g;
-      else seed = seed * 31 + 7;
-    } catch (e) {
-      if (i === 5) throw new Error(`Case ${number} (${spec.title}): ${(e as Error).message}`);
+  const words: string[] = [];
+  // A word inside another one (forward or backwards, e.g. VINE in VINEYARD) would be found
+  // twice, so it can't be a clean piece of evidence: leave it off the list, with a note.
+  const listed = dedupe(spec.words.filter((w) => !missing || gridForm(w) !== gridForm(missing.word)));
+  const missingForm = missing ? gridForm(missing.word) : "";
+  listed.forEach((w, i) => {
+    const f = gridForm(w);
+    const clash = [...listed.filter((_, j) => j !== i && (listed[j].length > w.length || (listed[j].length === w.length && j < i))), ...(missing ? [missing.word] : [])].find((x) => {
+      const g = gridForm(x);
+      return within(f, g) || (g === missingForm && within(g, f));
+    });
+    if (clash) warnings.push(`Case ${number}: “${w}” was left off the evidence list because it is part of “${clash.toUpperCase()}” and would be found twice.`);
+    else words.push(w);
+  });
+  let grid: ReturnType<typeof generateCaseGrid> | null = null;
+  let shape = opts.shape && opts.shape !== "square" ? opts.shape : undefined;
+  let lastError = "";
+  const attempt = (tries: number, sh: ShapeKey | undefined) => {
+    let seed = opts.seed;
+    for (let i = 0; i < tries && !grid; i++) {
+      try {
+        const g = generateCaseGrid({ words, extra: missing?.word.toUpperCase(), message: wordings.length ? wordings : "", dirs: directionsFor(st.difficulty), seed, shape: sh });
+        if (checkCaseGrid(g.grid, words, missing?.word.toUpperCase(), g.message).ok) grid = g;
+      } catch (e) {
+        lastError = (e as Error).message;
+      }
       seed = seed * 31 + 7;
     }
+  };
+  attempt(shape ? 3 : 6, shape);
+  if (!grid && shape) {
+    // The words don't fit this outline: keep the case, in a plain square grid.
+    warnings.push(`Case ${number}: its evidence doesn't fit the ${shapeInfo(shape).label.toLowerCase()} shape, so it uses a square grid.`);
+    shape = undefined;
+    attempt(6, undefined);
   }
-  if (!grid) throw new Error(`Case ${number} (${spec.title}) couldn't be built.`);
-  if (grid.blanks.length) warnings.push(`Case ${number}: ${grid.blanks.length} empty square${grid.blanks.length === 1 ? "" : "s"} (add a word or two to fill them).`);
+  if (!grid) throw new Error(`Case ${number} (${spec.title}): ${lastError || "couldn't be built."}`);
+  const built = grid as ReturnType<typeof generateCaseGrid>;
+  if (built.blanks.length) warnings.push(`Case ${number}: ${built.blanks.length} empty square${built.blanks.length === 1 ? "" : "s"} (add a word or two to fill them).`);
   let key: CaseKey | undefined;
   if (target) {
     key = chooseKey(target.letter, target.box, { culprit: st.hiddenMessage ? culprit : undefined, missing: missing?.word, title: spec.title }, opts.seed);
@@ -163,19 +186,25 @@ export function buildCase(spec: CaseSpec, number: number, cast: Person[], target
       suspects,
       culprit: st.hiddenMessage ? culprit : undefined,
       trait,
-      message: grid.message,
+      message: built.message,
       key,
       templated: spec.templated,
-      size: grid.size,
-      mask: grid.mask,
-      grid: grid.grid,
-      placements: grid.placements,
-      extra: grid.extra,
-      messageCells: grid.messageCells,
-      blanks: grid.blanks,
-      shape: opts.shape,
+      size: built.size,
+      mask: built.mask,
+      grid: built.grid,
+      placements: built.placements,
+      extra: built.extra,
+      messageCells: built.messageCells,
+      blanks: built.blanks,
+      shape,
     },
   };
+}
+
+/** Whether `a` (or `a` backwards) can be read inside `b`. */
+function within(a: string, b: string): boolean {
+  if (!a || !b || a.length > b.length) return false;
+  return b.includes(a) || b.includes(a.split("").reverse().join(""));
 }
 
 function dedupe(words: string[]): string[] {
