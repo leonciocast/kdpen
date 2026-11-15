@@ -5,6 +5,7 @@ import "./globals.css";
 import Navbar from "@/components/ui/Navbar";
 import Footer from "@/components/ui/Footer";
 import AppToaster from "@/components/ui/AppToaster";
+import UpdateNotice from "@/components/ui/UpdateNotice";
 
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main id="main">{children}</main>
         <Footer />
         <AppToaster />
+        <UpdateNotice />
       </body>
     </html>
   );
