@@ -54,9 +54,12 @@ export function placeNames(text: string): string[] {
   return [...new Set([...text.matchAll(PLACE_RE)].map((m) => m[1].replace(CAP, "").trim()))].filter((p) => p.split(" ").length >= 2);
 }
 /** Places a text names that the book's place name (or the extra text) doesn't. */
-export function strayPlaces(text: string, place: string, also = ""): string[] {
+export function strayPlaces(text: string, place: string, also = "", people: string[] = []): string[] {
   const known = `${place} ${also}`.toLowerCase();
+  const names = people.map((n) => n.toLowerCase());
   return placeNames(text).filter((p) => {
+    // "Gideon Marsh" is a person, not a marsh.
+    if (names.some((n) => n.includes(p.toLowerCase()) || p.toLowerCase().includes(n))) return false;
     const words = p.toLowerCase().split(" ");
     // Same proper name with a different place noun ("Heron Lake" vs "Heron Lake Spa") is fine.
     return !known.includes(p.toLowerCase()) && !known.includes(words[0]);
@@ -125,7 +128,7 @@ export function checkAiCase(c: AiCase, cast: Person[], st: MysterySettings, maxW
     if (t) problems.push(`The missing evidence ${missingWord} is also in ${culprit.name}'s trait “${t}”, which gives it away; pick a different missing word.`);
   }
   if (ctx.place) {
-    const stray = strayPlaces(`${c.story} ${c.lead ?? ""}`, ctx.place);
+    const stray = strayPlaces(`${c.story} ${c.lead ?? ""}`, ctx.place, "", cast.map((p) => p.name));
     if (stray.length) problems.push(`Call the place “${ctx.place}” as in the rest of the book, not “${stray[0]}”.`);
   }
   let lead = c.lead?.trim() || "";
@@ -171,11 +174,12 @@ export function checkOutline(o: AiOutline, caseCount: number, storyline: boolean
   if (bad) problems.push(`The outline ${bad}.`);
   if (cast.length < 3) problems.push("The cast needs at least three people.");
   if (o.place) {
-    const stray = strayPlaces(`${o.title} ${o.intro}`, o.place);
+    const stray = strayPlaces(`${o.title} ${o.intro}`, o.place, "", cast.map((p) => p.name));
     if (stray.length) problems.push(`The place is “${o.place}”; use that exact name in the title and intro instead of “${stray[0]}”.`);
   } else {
-    const inTitle = placeNames(o.title);
-    const inIntro = placeNames(o.intro);
+    const people = cast.map((p) => p.name);
+    const inTitle = placeNames(o.title).filter((p) => strayPlaces(p, "", "", people).length);
+    const inIntro = placeNames(o.intro).filter((p) => strayPlaces(p, "", "", people).length);
     if (inTitle.length && inIntro.length && inTitle.every((p) => strayPlaces(p, inIntro.join(" ")).length))
       problems.push(`The title names “${inTitle[0]}” but the intro names “${inIntro[0]}”; give the place one name (and set "place").`);
   }

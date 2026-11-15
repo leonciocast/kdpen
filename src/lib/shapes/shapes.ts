@@ -1342,16 +1342,18 @@ const CROSSWORD_SKIP = new Set<ShapeKey>([
 export const CROSSWORD_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !CROSSWORD_SKIP.has(k) && !shapeInfo(k).islands);
 
 /**
- * Shapes that hold a murder-mystery case: only compact, solid shapes (see compact.ts for
- * the measured rule: one region, ≥ 50% of the bounding box filled, ≤ 12% thin cells,
- * aspect ≤ 1.7, no real holes), and only ones that fit the starter and templated cases at
- * easy and hard without a square fallback. Precomputed here; tests re-derive the list.
+ * Shapes that hold a murder-mystery case: only compact, solid shapes. The rule is measured
+ * (compact.ts): one region, at least half of the bounding box filled, at most 8% thin cells
+ * (arms, legs, tails 1–2 cells wide), at most 3 spur cells, aspect at most 1.7 and no real
+ * holes, at every case size (70–160 cells). Frames and island clusters are left out even
+ * where they pass at small sizes, and so are compact shapes that don't fit a case without a
+ * square fallback or need more cells than a case has letters (M, W). Precomputed here;
+ * tests re-derive the list.
  */
 const MYSTERY_COMPACT = new Set<ShapeKey>([
-  "square", "rounded", "landscape", "portrait", "circle", "oval", "triangle", "diamond", "pentagon", "hexagon", "octagon", "star", "cross", "heart", "egg",
-  "pumpkin", "tree", "house", "apple", "cloud", "pig", "sheep", "bear", "squirrel", "mouse", "turtle", "bee", "ladybug", "arch", "ubend", "bowl", "stairs",
-  "pyramid", "stepdiamond", "stepcircle", "blockcross", "bolt", "blockheart", "blockhouse", "windowframe", "letterE", "letterH", "letterM", "letterU", "letterW",
-  "digit5", "pear", "icecream", "cupcake", "pizza", "cherry", "raindrop", "leaf", "gift", "car", "bulb",
+  "square", "rounded", "landscape", "portrait", "circle", "oval", "triangle", "diamond", "pentagon", "hexagon", "octagon", "star", "heart", "egg", "pumpkin",
+  "tree", "house", "apple", "cloud", "ladybug", "arch", "ubend", "bowl", "stairs", "pyramid", "stepcircle", "blockcross", "blockheart", "blockhouse", "pear",
+  "icecream", "cupcake", "pizza", "raindrop", "leaf", "shamrock", "bulb",
 ]);
 export const MYSTERY_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => MYSTERY_COMPACT.has(k));
 

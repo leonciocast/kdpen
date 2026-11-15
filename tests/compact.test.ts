@@ -15,6 +15,7 @@ describe("compactness rule", () => {
     const ring = maskCompactness(grid(["#####", "#...#", "#...#", "#####"]));
     expect(ring.holes).toBeGreaterThan(COMPACT_RULE.maxHoles);
     const arm = maskCompactness(grid(["####......", "####......", "##########", "####......"]));
+    expect(maskCompactness(grid(["....#", "#####", "#####", "#####", "#...."])).spurs).toBe(2);
     expect(arm.thin).toBeGreaterThan(COMPACT_RULE.maxThin);
     expect(arm.fill).toBeLessThan(0.6);
     expect(maskCompactness(grid(["##########", "##########", "##########"])).aspect).toBeGreaterThan(COMPACT_RULE.maxAspect);
@@ -25,17 +26,19 @@ describe("compactness rule", () => {
   }, 180000);
 
   test("spread-out shapes from a real book are excluded", () => {
-    for (const k of ["goat", "flamingo", "rooster", "horse", "airplane", "crown", "guitar", "giraffe", "dragon", "cat"] as ShapeKey[]) {
+    for (const k of ["goat", "flamingo", "rooster", "horse", "airplane", "crown", "guitar", "giraffe", "dragon", "cat", "bear", "squirrel", "car", "lemon", "pig", "mouse", "bee"] as ShapeKey[]) {
+      if (!SHAPE_KEYS.includes(k)) continue;
       expect(MYSTERY_SHAPES).not.toContain(k);
       expect(shapeCompactness(k).every(meetsCompactRule), k).toBe(false);
     }
   }, 120000);
 
   test("keeps a good variety", () => {
-    expect(MYSTERY_SHAPES.length).toBeGreaterThanOrEqual(50);
+    expect(MYSTERY_SHAPES.length).toBeGreaterThanOrEqual(35);
     const cats = new Set(MYSTERY_SHAPES.map(shapeCategory));
+    expect(cats.has("hollow") || cats.has("clusters")).toBe(false);
     expect(cats.size).toBeGreaterThanOrEqual(5);
-    expect(MYSTERY_SHAPES.filter((k) => shapeCategory(k) === "animals").length).toBeGreaterThanOrEqual(8);
+    expect(MYSTERY_SHAPES.filter((k) => shapeCategory(k) === "animals").length).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -44,8 +47,8 @@ describe("mystery plans only use compact shapes", () => {
   test("surprise me, categories and page by page", () => {
     expect(ok(shapeTargetsFor({ kind: "square", mix: "each", seed: 11 }, book(60), MYSTERY_SHAPES))).toBe(true);
     expect(ok(shapeTargetsFor({ kind: "square", mix: "pick", cats: ["animals"], seed: 4 }, book(30), MYSTERY_SHAPES))).toBe(true);
-    const manual = shapeTargetsFor({ kind: "heart", mix: "manual", pins: { "0": "bear", "1": "goat", "2": "flamingo" } }, book(4), MYSTERY_SHAPES);
-    expect(manual[0]).toBe("bear");
+    const manual = shapeTargetsFor({ kind: "heart", mix: "manual", pins: { "0": "ladybug", "1": "goat", "2": "flamingo" } }, book(4), MYSTERY_SHAPES);
+    expect(manual[0]).toBe("ladybug");
     expect(manual[3]).toBe("heart");
     expect(ok(manual)).toBe(true);
   });

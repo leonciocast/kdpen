@@ -6,25 +6,26 @@
  * at every size it is measured at:
  *  - it is one 4-connected region (no islands);
  *  - its cells fill at least half of their bounding box;
- *  - at most 12% of its cells are "thin" (not inside any solid 3×3 block, i.e. arms,
+ *  - at most 8% of its cells are "thin" (not inside any solid 3×3 block, i.e. arms,
  *    legs, tails and protrusions only 1–2 cells wide);
+ *  - at most 3 spur cells (cells touching only one other cell: tips of ears, tails, legs);
  *  - its bounding box is no longer than 1.7 : 1;
  *  - enclosed holes are at most 8% of its cell count.
- * It is measured at the sizes a case actually uses (the first size with 120, 160 and 200
- * cells). `MYSTERY_SHAPES` in shapes.ts is the precomputed result; tests re-derive it.
+ * It is measured at every size a case actually uses (cases hold about 70 to 160 cells: the
+ * first grid size with 70, 90, 110, 130 and 160 cells). `MYSTERY_SHAPES` in shapes.ts is the precomputed result; tests re-derive it.
  */
 import { shapeMask, type ShapeKey } from "./shapes";
 
-export const COMPACT_RULE = { minFill: 0.5, maxThin: 0.12, maxAspect: 1.7, maxHoles: 0.08, targets: [120, 160, 200] } as const;
+export const COMPACT_RULE = { minFill: 0.5, maxThin: 0.08, maxSpurs: 3, maxAspect: 1.7, maxHoles: 0.08, targets: [70, 90, 110, 130, 160] } as const;
 
-export type Compactness = { cells: number; components: number; fill: number; thin: number; aspect: number; holes: number };
+export type Compactness = { cells: number; components: number; fill: number; thin: number; spurs: number; aspect: number; holes: number };
 
 export function maskCompactness(m: boolean[][]): Compactness {
   const n = m.length;
   const on = (r: number, c: number) => !!m[r]?.[c];
   const cells: [number, number][] = [];
   for (let r = 0; r < n; r++) for (let c = 0; c < (m[r]?.length ?? 0); c++) if (m[r][c]) cells.push([r, c]);
-  if (!cells.length) return { cells: 0, components: 0, fill: 0, thin: 1, aspect: Infinity, holes: 0 };
+  if (!cells.length) return { cells: 0, components: 0, fill: 0, thin: 1, spurs: 0, aspect: Infinity, holes: 0 };
   const flood = (start: [number, number], pass: (r: number, c: number) => boolean) => {
     const seen = new Set([`${start[0]},${start[1]}`]);
     const st = [start];
@@ -62,20 +63,21 @@ export function maskCompactness(m: boolean[][]): Compactness {
       if (all) for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) core.add(`${r + i},${c + j}`);
     }
   const thin = cells.filter(([r, c]) => !core.has(`${r},${c}`)).length / cells.length;
-  return { cells: cells.length, components, fill: cells.length / (w * h), thin, aspect: Math.max(w / h, h / w), holes: holes / cells.length };
+  const spurs = cells.filter(([r, c]) => [on(r + 1, c), on(r - 1, c), on(r, c + 1), on(r, c - 1)].filter(Boolean).length <= 1).length;
+  return { cells: cells.length, components, fill: cells.length / (w * h), thin, spurs, aspect: Math.max(w / h, h / w), holes: holes / cells.length };
 }
 
 export const meetsCompactRule = (x: Compactness) =>
-  x.components === 1 && x.fill >= COMPACT_RULE.minFill && x.thin <= COMPACT_RULE.maxThin && x.aspect <= COMPACT_RULE.maxAspect && x.holes <= COMPACT_RULE.maxHoles;
+  x.components === 1 && x.fill >= COMPACT_RULE.minFill && x.thin <= COMPACT_RULE.maxThin && x.spurs <= COMPACT_RULE.maxSpurs && x.aspect <= COMPACT_RULE.maxAspect && x.holes <= COMPACT_RULE.maxHoles;
 
 /** Measurements of a shape at the sizes a case uses (square always passes). */
-export function shapeCompactness(key: ShapeKey): Compactness[] {
-  if (key === "square") return [{ cells: 196, components: 1, fill: 1, thin: 0, aspect: 1, holes: 0 }];
+export function shapeCompactness(key: ShapeKey, targets: readonly number[] = COMPACT_RULE.targets): Compactness[] {
+  if (key === "square") return [{ cells: 196, components: 1, fill: 1, thin: 0, spurs: 0, aspect: 1, holes: 0 }];
   const out: Compactness[] = [];
-  let n = 9;
+  let n = 7;
   let m = shapeMask(key, n);
   const count = (x: boolean[][]) => x.reduce((s, row) => s + row.filter(Boolean).length, 0);
-  for (const target of COMPACT_RULE.targets) {
+  for (const target of targets) {
     while (m && n < 44 && count(m) < target) m = shapeMask(key, ++n);
     if (m) out.push(maskCompactness(m));
   }

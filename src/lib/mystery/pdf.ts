@@ -485,8 +485,10 @@ function boardPage(b: BoardItem): PageRenderer {
     pdf.text("Write each case key in its numbered box.", box.x + box.w, y, { align: "right", baseline: "middle" });
     pdf.setTextColor(0, 0, 0);
     y += 12 * s;
-    const per = Math.min(12, b.boxes);
+    // As many boxes per row as fit at a comfortable size, rows balanced (never one box alone).
     const bgap = 5 * s;
+    const maxPer = Math.max(1, Math.floor((box.w + bgap) / (26 * s + bgap)));
+    const per = Math.ceil(b.boxes / Math.ceil(b.boxes / maxPer));
     let size = Math.min(34 * s, (box.w - bgap * (per - 1)) / per);
     const rowsB = Math.ceil(b.boxes / per);
     if (rowsB * (size + bgap) > remaining - 24 * s) size = Math.max(14 * s, (remaining - 24 * s) / rowsB - bgap);
@@ -763,6 +765,10 @@ export interface HowToFlags {
   message: boolean;
   board: boolean;
   checkbox: boolean;
+  /** Some case grids have empty (dotted) squares. */
+  blanks?: boolean;
+  /** Only some cases carry a Case Board key (more cases than board boxes). */
+  someKeyed?: boolean;
 }
 
 export function mysteryHowTo(f: HowToFlags): PageRenderer {
@@ -775,10 +781,10 @@ export function mysteryHowTo(f: HowToFlags): PageRenderer {
     steps.push(["Find the evidence", `Every word on the evidence list is hidden once in the grid, in a straight line. Loop it and ${f.checkbox ? "tick its box" : "cross it off"}.`]);
     if (f.missing) steps.push(["Find the missing evidence", "One more word is hidden but not listed. The clue and its letter count point you to it."]);
     if (f.message) {
-      steps.push(["Read the hidden message", "Cross out every word you found. The letters that are left, read left to right and top to bottom, spell a message. Dotted squares are empty."]);
+      steps.push(["Read the hidden message", `Cross out every word you found. The letters that are left, read left to right and top to bottom, spell a message.${f.blanks ? " Dotted squares are empty." : ""}`]);
       steps.push(["Name the culprit", "The message describes the culprit. Only one suspect fits it."]);
     }
-    if (f.board) steps.push(["Fill the Case Board", "Each case tells you which letter of its answer goes into a numbered box. When the board is full, it reveals who was behind it all."]);
+    if (f.board) steps.push(["Fill the Case Board", `${f.someKeyed ? "Cases with a Case Board key tell you which letter of their" : "Each case tells you which letter of its"} answer goes into a numbered box. When the board is full, it reveals who was behind it all.`]);
     const numR = 10 * s;
     const textX = box.x + numR * 2 + 10 * s;
     const textW = box.w - (textX - box.x);
@@ -830,9 +836,9 @@ export function mysteryHowTo(f: HowToFlags): PageRenderer {
     };
     row("EVIDENCE", demo.words.join(", "));
     if (f.missing) row("MISSING EVIDENCE", `"What a pen leaves behind" (3 letters): INK, looped with a dashed line.`);
-    if (f.message) row("LEFTOVER LETTERS", `The letters in color, read in order, spell ${demo.message.toUpperCase()}.`);
+    if (f.message) row("LEFTOVER LETTERS", `The highlighted letters, read in order, spell ${demo.message.toUpperCase()}.`);
     if (f.message) row("THE CULPRIT", `Only one suspect is a ${/GARDENER/.test(demo.message.toUpperCase()) ? "gardener" : "cook"}, so that suspect is the culprit.`);
-    if (f.board) row("CASE KEY", "\"Box 3: letter 2 of the culprit's first name\". Write that letter in box 3 of the Case Board.");
+    if (f.board) row("CASE KEY", "The notes say \"Case Board · box 3\" and \"Letter 2 of the culprit's first name\". Write that letter in box 3 of the Case Board.");
     pdf.setTextColor(0, 0, 0);
     pdf.setFont(SERIF, "normal");
     pdf.setFontSize(10 * s);
@@ -867,7 +873,7 @@ export function mysteryContent(items: MysteryItem[], answersPerPage: number, sty
     sections,
     solutionsIndex,
     howToTitle: "How to Solve",
-    howTo: mysteryHowTo({ missing: cases.some((c) => c.missing), message: cases.some((c) => c.message), board: items.some((i) => i.kind === "board"), checkbox: design.list.checkbox }),
+    howTo: mysteryHowTo({ missing: cases.some((c) => c.missing), message: cases.some((c) => c.message), board: items.some((i) => i.kind === "board"), checkbox: design.list.checkbox, blanks: cases.some((c) => c.blanks.length > 0), someKeyed: cases.some((c) => !c.key) && cases.some((c) => c.key) }),
     titleDetail: `${cases.length} Murder Mystery Case${cases.length === 1 ? "" : "s"}`,
   };
 }

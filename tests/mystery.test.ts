@@ -187,7 +187,7 @@ describe("shapes for mystery cases", () => {
   test("only shapes that hold a case are offered", async () => {
     const { MYSTERY_SHAPES } = await import("../src/lib/shapes/shapes");
     for (const k of ["letterL", "letterT", "digit1", "checkers", "islands9", "zigzag", "longneck", "goat", "flamingo", "rooster", "crown", "airplane", "dragon", "letterB"]) expect(MYSTERY_SHAPES).not.toContain(k);
-    for (const k of ["heart", "pear", "letterE", "bear", "pig", "bee"]) expect(MYSTERY_SHAPES).toContain(k);
+    for (const k of ["heart", "pear", "cupcake", "pumpkin", "ladybug", "house"]) expect(MYSTERY_SHAPES).toContain(k);
   });
   test("a shape that can't hold the evidence falls back to a square grid instead of failing", () => {
     // The original bug: Surprise me gave case 7 a thin shape, the whole build threw and an error toast appeared.

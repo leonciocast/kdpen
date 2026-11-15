@@ -160,6 +160,7 @@ describe("book-wide checks (found in a real 24-case book)", () => {
   test("one place name: the title and intro can't disagree", () => {
     expect(strayPlaces("The Lantern Baths of Saltwater Lake", "Heron Lake Spa")).toEqual(["Saltwater Lake"]);
     expect(strayPlaces("Steam rose over Heron Lake at dawn in the Grand Hall.", "Heron Lake Spa")).toEqual([]);
+    expect(strayPlaces("Gideon Marsh left his satchel on a bench.", "Heron Lake Spa", "", ["Gideon Marsh"])).toEqual([]);
     const o = { title: "The Lantern Baths of Saltwater Lake", intro: "Guests at Heron Lake Spa whisper about the lanterns.", cast: cast.map((p) => ({ ...p, traits: p.traits.slice(0, 3) })), mastermind: cast[0].name, finalAnswer: "", finaleQuestion: "Who did it?", epilogue: "It was them all along.", cases: [{ title: "One", culprit: cast[0].name, premise: "Odd." }] };
     expect(checkOutline(o, 1, false).problems.join(" ")).toMatch(/one name/);
     expect(checkOutline({ ...o, place: "Heron Lake Spa" }, 1, false).problems.join(" ")).toMatch(/Saltwater Lake/);
