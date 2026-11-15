@@ -3,7 +3,8 @@ import { FONT_KEYS, FontKey } from "./fonts";
 import { isHexColor } from "./color";
 import { DEFAULT_DESIGN, TEMPLATES, templateDesign } from "./templates";
 import type { BadgeShape, CellStyle, Design, GridBorder, GridShade, HeaderStyle, IconKey, LineStyle, ListBox, ListSort, PageNumberStyle, PatternKey, TemplateId } from "./types";
-import { SHAPE_KEYS, OutlineStyle, ShapeMix } from "../shapes/shapes";
+import { SHAPE_KEYS, OutlineStyle, ShapeKey, ShapeMix } from "../shapes/shapes";
+import { MAX_PINS, PLAN_LEAF_IDS, ThemeMode } from "../shapes/plan";
 
 const HEADERS: HeaderStyle[] = ["rule", "banner", "ribbon", "underline", "boxed", "tab", "minimal"];
 const BADGES: BadgeShape[] = ["circle", "rounded", "diamond", "hexagon"];
@@ -16,7 +17,8 @@ const SORTS: ListSort[] = ["entered", "alpha", "length"];
 const LINES: LineStyle[] = ["solid", "dashed", "dotted"];
 const CELLS: CellStyle[] = ["plain", "boxed", "rounded", "circles"];
 const LIST_BOXES: ListBox[] = ["none", "solid", "rounded", "dashed", "double"];
-const MIXES: ShapeMix[] = ["one", "each", "theme", "animals", "category"];
+const MIXES: ShapeMix[] = ["one", "each", "pick", "manual", "theme", "animals", "category"];
+const THEME_MODES: ThemeMode[] = ["off", "match", "group"];
 const OUTLINES: OutlineStyle[] = ["smooth", "stepped", "snug", "blocky"];
 
 export const DESIGN_OPTIONS = { HEADERS, BADGES, ICONS, PATTERNS, BORDERS, SHADES, NUMBERS, SORTS, LINES, CELLS, LIST_BOXES, MIXES, OUTLINES };
@@ -26,6 +28,18 @@ const num = (v: unknown, lo: number, hi: number, fallback: number) => (typeof v 
 const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
 const str = (v: unknown, max: number, fallback: string) => (typeof v === "string" ? v.slice(0, max) : fallback);
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === "object" ? (v as Record<string, unknown>) : {});
+
+/** Optional shape-plan fields: only kept when present and valid. */
+function planFields(s: Record<string, unknown>): { seed?: number; cats?: string[]; pins?: Record<string, ShapeKey>; themes?: ThemeMode } {
+  const out: { seed?: number; cats?: string[]; pins?: Record<string, ShapeKey>; themes?: ThemeMode } = {};
+  if (typeof s.seed === "number" && Number.isFinite(s.seed)) out.seed = Math.abs(Math.floor(s.seed)) % 2147483647;
+  if (Array.isArray(s.cats)) out.cats = [...new Set(s.cats.filter((c): c is string => typeof c === "string" && (c === "animals" || PLAN_LEAF_IDS.includes(c))))];
+  const pins = obj(s.pins);
+  const keep = Object.entries(pins).filter(([i, k]) => /^\d{1,5}$/.test(i) && SHAPE_KEYS.includes(k as ShapeKey)).slice(0, MAX_PINS);
+  if (keep.length) out.pins = Object.fromEntries(keep) as Record<string, ShapeKey>;
+  if (THEME_MODES.includes(s.themes as ThemeMode)) out.themes = s.themes as ThemeMode;
+  return out;
+}
 
 /** Turn anything (old presets, hand-edited JSON) into a complete, safe Design. */
 export function sanitizeDesign(input: unknown): Design {
@@ -73,6 +87,7 @@ export function sanitizeDesign(input: unknown): Design {
       shade: bool(s.shade, d.shape.shade),
       outline: pick(s.outline, OUTLINES, d.shape.outline),
       ...(isHexColor(s.outlineColor) ? { outlineColor: s.outlineColor } : d.shape.outlineColor ? { outlineColor: d.shape.outlineColor } : {}),
+      ...planFields(s),
     },
     color: { accent: isHexColor(c.accent) ? c.accent : d.color.accent, grayscale: bool(c.grayscale, d.color.grayscale) },
     pattern: { kind: pick(p.kind, PATTERNS, d.pattern.kind), strength: num(p.strength, 0, 1, d.pattern.strength) },

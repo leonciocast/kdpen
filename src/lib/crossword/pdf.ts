@@ -31,6 +31,8 @@ export interface CrosswordBookOptions {
   onPage?: (done: number, total: number) => void;
   /** Custom page order from the preview (items must already be in arranged order). */
   slots?: Slot[];
+  /** Number of the first crossword (design preview of a later puzzle). */
+  firstNumber?: number;
 }
 
 /** Outline around a crossword (cell units, grid origin at 0,0) and its drawing extent. */
@@ -237,9 +239,9 @@ export function crosswordHowTo(): PageRenderer {
   };
 }
 
-export function crosswordContent(items: CrosswordItem[], design: Design = DEFAULT_DESIGN, answersPerPage = 2): BookContent {
+export function crosswordContent(items: CrosswordItem[], design: Design = DEFAULT_DESIGN, answersPerPage = 2, firstNumber = 1): BookContent {
   const headerText = design.header.text.trim() || TOOL_HEADER.crossword;
-  const pages: PageRenderer[] = items.map((it, i) => puzzlePage(it, i + 1, headerText));
+  const pages: PageRenderer[] = items.map((it, i) => puzzlePage(it, firstNumber + i, headerText));
   const sections: Section[] = [];
   const themed = items.some((i) => i.theme);
   if (!themed) sections.push({ title: "Crosswords", index: 0 });
@@ -251,7 +253,7 @@ export function crosswordContent(items: CrosswordItem[], design: Design = DEFAUL
     }
   });
   const solutionsIndex = pages.length;
-  for (let i = 0; i < items.length; i += answersPerPage) pages.push(answerPage(items.slice(i, i + answersPerPage).map((it, k) => ({ it, number: i + k + 1 })), i === 0, answersPerPage));
+  for (let i = 0; i < items.length; i += answersPerPage) pages.push(answerPage(items.slice(i, i + answersPerPage).map((it, k) => ({ it, number: firstNumber + i + k })), i === 0, answersPerPage));
   sections.push({ title: "Solutions", index: solutionsIndex });
   return { pages, sections, solutionsIndex, howTo: crosswordHowTo(), titleDetail: `${items.length} Crossword Puzzle${items.length === 1 ? "" : "s"}` };
 }
@@ -265,7 +267,7 @@ export function buildCrosswordBook(items: CrosswordItem[], opts: CrosswordBookOp
     frontMatter: opts.frontMatter,
     extras: opts.extras,
     design,
-    content: crosswordContent(items, design, opts.answersPerPage ?? 2),
+    content: crosswordContent(items, design, opts.answersPerPage ?? 2, opts.firstNumber ?? 1),
     padForKdp: opts.padForKdp,
     fonts,
     volume: opts.volume,

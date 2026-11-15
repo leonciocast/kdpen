@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { BsCheckCircleFill, BsSearch } from "react-icons/bs";
-import { ANIMAL_GROUPS, CATEGORIES, CROSSWORD_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeCategory, ShapeKey, ShapeMix, animalGroupOf, isSteppedShape, letteredOutlines, maskBox, shapeCategory, shapeInfo, shapeMask, shapeOutline, suggestShapesForTheme, sudokuFrame } from "@/lib/shapes/shapes";
+import { ANIMAL_GROUPS, CATEGORIES, CROSSWORD_SHAPES, OUTLINE_PAD, SHAPES, SUDOKU_SHAPES, ShapeCategory, ShapeKey, animalGroupOf, isSteppedShape, letteredOutlines, maskBox, shapeCategory, shapeInfo, shapeMask, shapeOutline, suggestShapesForTheme, sudokuFrame } from "@/lib/shapes/shapes";
 import type { Design, ToolKind } from "@/lib/design/types";
 
 /** Shapes each tool can use (crossword: only shapes that still give well-connected crosswords; sudoku: frames around the 9×9). */
@@ -68,6 +68,7 @@ export function ShapeThumb({ shape, tool, grid, size = 12, shade = false, outlin
       <svg viewBox={`${x0} ${y0} ${x1 - x0} ${y1 - y0}`} className="pg-shape-svg" aria-hidden>
         {grid.shadow && grid.border !== "none" && shape !== "square" && <path d={path(pts.map(([x, y]) => [x + 3, y + 3]))} fill="#d1d5db" />}
         {shape !== "square" && <path d={path(pts)} fill={shade ? "#e2e2e2" : "#fff"} stroke={grid.border === "none" ? "none" : "#111"} strokeWidth={sw} strokeDasharray={dash} strokeLinecap={cap} />}
+        {shape !== "square" && <rect x={0} y={0} width={n * C} height={n * C} fill="#fff" stroke="#111" strokeWidth={1.2} />}
         {grid.cells === "plain" &&
           Array.from({ length: n + 1 }, (_, i) => (
             <g key={i}>
@@ -141,9 +142,9 @@ export function ShapeThumb({ shape, tool, grid, size = 12, shade = false, outlin
   const noBorder = grid.border === "none" || grid.frame <= 0;
   const square = shape === "square";
   const rectPts: P[] = [[-OUTLINE_PAD * C, -OUTLINE_PAD * C], [(size + OUTLINE_PAD) * C, -OUTLINE_PAD * C], [(size + OUTLINE_PAD) * C, (size + OUTLINE_PAD) * C], [-OUTLINE_PAD * C, (size + OUTLINE_PAD) * C]];
-  const shapePts = square ? (grid.border === "rounded" && !stepped ? fillet(rectPts, C * 0.45) : rectPts) : pts;
+  const shapePts = square ? (grid.border === "rounded" && !stepped ? fillet(rectPts, C * 0.45) : rectPts) : pts.length >= 3 ? pts : rectPts;
   const allRings = square ? [shapePts] : (rings.length ? rings.map((r, i) => (i === 0 ? pts : r)) : [shapePts]);
-  const d = allRings.map(path).join("");
+  const d = allRings.filter((r) => r.length >= 3).map(path).join("") || path(rectPts);
   const strokeColor = stepped ? (outlineColor || "#e67a2e") : "#111";
   const scale = (k: number): P[] => {
     const cx = (Math.min(...shapePts.map((p) => p[0])) + Math.max(...shapePts.map((p) => p[0]))) / 2;
@@ -203,34 +204,47 @@ function writeRecent(k: ShapeKey) {
   recentListeners.forEach((fn) => fn());
 }
 
-const MIX_LABELS: Record<ShapeMix, string> = {
-  one: "Same shape",
-  each: "Mix: new shape each puzzle",
-  theme: "Mix: one per theme",
-  animals: "Mix: random animals",
-  category: "Mix: random from category",
-};
-
+/**
+ * One-shape picker: suggested, recently used, category tabs and search.
+ * Used for "one shape for the whole book", for a single page in "page by page",
+ * and for overriding one puzzle of a random plan.
+ */
 export function ShapePicker({
   tool,
   design,
-  onChange,
+  onPick,
+  selected,
   compact,
   themes = [],
+  testId = "shape-picker",
+  follow,
 }: {
   tool: ToolKind;
   design: Design;
-  onChange: (kind: ShapeKey, mix: ShapeMix, shade?: boolean) => void;
+  onPick: (kind: ShapeKey) => void;
+  /** The highlighted shape (defaults to the design's shape). */
+  selected?: ShapeKey;
   compact?: boolean;
   themes?: string[];
+  testId?: string;
+  /** Change this to bring the selected shape's category into view (e.g. when another page is clicked). */
+  follow?: number;
 }) {
   const allowed = shapesFor(tool);
-  const mix = design.shape.mix;
-  const current = allowed.includes(design.shape.kind) ? design.shape.kind : "square";
+  const want = selected ?? design.shape.kind;
+  const current = allowed.includes(want) ? want : "square";
   const [tab, setTab] = React.useState<ShapeCategory>(() => shapeCategory(shapeInfo(current)));
   const [animalTab, setAnimalTab] = React.useState(() => animalGroupOf(current) ?? "farm");
   const [query, setQuery] = React.useState("");
   const recent = React.useSyncExternalStore(subscribeRecent, getRecentSnapshot, () => recentSnap);
+  const [followed, setFollowed] = React.useState(follow);
+  if (follow !== followed) {
+    setFollowed(follow);
+    setTab(shapeCategory(shapeInfo(current)));
+    const g = animalGroupOf(current);
+    if (g) setAnimalTab(g);
+    setQuery("");
+  }
 
   const q = query.trim().toLowerCase();
   const matches = (s: (typeof SHAPES)[number]) => {
@@ -256,27 +270,24 @@ export function ShapePicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [themeKey, allowedKey]);
 
-  const pick = (k: ShapeKey, nextMix: ShapeMix = "one") => {
+  const pick = (k: ShapeKey) => {
     writeRecent(k);
-    const shade = isSteppedShape(k) ? false : shapeInfo(k).group === "animals" ? true : design.shape.shade;
-    onChange(k, nextMix, shade);
+    onPick(k);
     setTab(shapeCategory(k));
     const g = animalGroupOf(k);
     if (g) setAnimalTab(g);
   };
 
   const card = (s: (typeof SHAPES)[number], opts?: { small?: boolean }) => {
-    const selectable = mix === "one" || mix === "category";
-    const active = (mix === "one" || mix === "category") && current === s.key;
+    const active = current === s.key;
     return (
       <button
         key={s.key}
         type="button"
         role="radio"
         aria-checked={active}
-        disabled={!selectable}
         className={`pg-shape-card ${active ? "active" : ""} ${opts?.small ? "mini" : ""}`}
-        onClick={() => pick(s.key, mix === "category" ? "category" : "one")}
+        onClick={() => pick(s.key)}
         data-testid={`shape-${s.key}`}
         title={s.label}
       >
@@ -308,23 +319,8 @@ export function ShapePicker({
   };
 
   return (
-    <div data-testid="shape-picker">
-      {tool !== "sudoku" && (
-        <div className="pg-seg mb-3" role="radiogroup" aria-label="Shape for each puzzle">
-          {(["one", "each", "theme", "animals", "category"] as ShapeMix[]).map((m) => (
-            <button key={m} type="button" role="radio" aria-checked={mix === m} className={mix === m ? "active" : ""} onClick={() => onChange(current, m, design.shape.shade)} data-testid={`shape-mix-${m}`}>
-              {MIX_LABELS[m]}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="form-check form-switch mb-3">
-        <input className="form-check-input" type="checkbox" id="shape-shade" checked={design.shape.shade && design.shape.outline !== "stepped"} onChange={(e) => onChange(current, mix, e.target.checked)} data-testid="shape-shade" disabled={design.shape.outline === "stepped"} />
-        <label className="form-check-label" htmlFor="shape-shade">
-          Light shaded silhouette{design.shape.outline === "stepped" ? " (off for stepped outlines)" : ""}
-        </label>
-      </div>
-      {!!suggested.length && mix === "one" && (
+    <div data-testid={testId}>
+      {!!suggested.length && (
         <div className="pg-shape-row" data-testid="shape-suggest">
           <div className="pg-shape-group">Suggested for your theme</div>
           <div className={`pg-shape-grid compact`} role="list" aria-label="Suggested shapes">

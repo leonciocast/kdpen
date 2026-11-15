@@ -10,7 +10,9 @@ import { useDesign } from "@/components/ui/useDesign";
 import { Stepper } from "@/components/ui/Wizard";
 import { useStages } from "@/components/ui/useStages";
 import { Placement, allowedDirections, autoPlace, checkPlacement, containedWordWarnings, fillGrid, gridForm, mulberry32, randomSeed } from "@/lib/wordsearch/engine";
-import { ShapeKey, shapeInfo, shapeStartSize, shapeTargetsFor, shapedGrid } from "@/lib/shapes/shapes";
+import { ShapeKey, shapeStartSize, shapeTargetsFor, shapedGrid } from "@/lib/shapes/shapes";
+import { planSignature } from "@/lib/shapes/plan";
+import { planSummary } from "@/components/ui/ShapePlan";
 import { LIMITS } from "@/lib/limits";
 import { buildWordSearchBook, BookPuzzle } from "@/lib/wordsearch/pdf";
 import { presetFor } from "@/lib/wordsearch/difficulty";
@@ -241,7 +243,7 @@ export default function WordSearch() {
     ...rawDesignApi,
     setDesign: (d: Design) => {
       rawDesignApi.setDesign(d);
-      if (d.shape.kind !== rawDesignApi.design.shape.kind || d.shape.mix !== rawDesignApi.design.shape.mix) void reshape(d);
+      if (planSignature(d.shape) !== planSignature(rawDesignApi.design.shape)) void reshape(d);
     },
   };
 
@@ -251,17 +253,21 @@ export default function WordSearch() {
     </span>
   ) : finished.length ? (
     <span data-testid="reshape-done">
-      {finished.length === 1 ? "Your puzzle uses" : `All ${finished.length} puzzles use`} {rawDesignApi.design.shape.mix === "one" ? `the ${shapeInfo(rawDesignApi.design.shape.kind).label.toLowerCase()} shape` : rawDesignApi.design.shape.mix === "animals" ? "a different animal each time" : "mixed shapes"}. Every word sits inside it.
+      {rawDesignApi.design.shape.mix === "one" ? `${finished.length === 1 ? "Your puzzle uses" : `All ${finished.length} puzzles use`} the ${planSummary(rawDesignApi.design, "word-search", puzzles.length).toLowerCase()} shape.` : `${plural(finished.length, "puzzle")} fitted to your plan: ${planSummary(rawDesignApi.design, "word-search", puzzles.length)}.`} Every word sits inside its shape.
     </span>
   ) : null;
 
-  const sampleBuilder = (design: Design, fonts: FontData) => {
-    const targets = shapeTargets(design, finished.length ? finished : [{}, {}]);
-    const own = finished.slice(0, 2).map((p, i) => previewFit(p, targets[i]));
-    const items = own.length ? (own.length === 1 ? [own[0], own[0]] : own) : [samplePuzzle(0, targets[0]), samplePuzzle(1, targets[1])];
-    return buildWordSearchBook(items, { trim: "8.5x11", bleed: false, answersPerPage: 2, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Word Search Puzzle Book", subtitle: "Large Print Puzzles for Relaxing Fun" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, padForKdp: false }, fonts);
+  const sampleBuilder = (design: Design, fonts: FontData, focus = 0) => {
+    const list = puzzles.length ? puzzles : [{}, {}];
+    const targets = shapeTargets(design, list);
+    const at = Math.max(0, Math.min(focus, puzzles.length - 1));
+    const pair = [at, at + 1 < puzzles.length ? at + 1 : at];
+    const own = puzzles.length ? pair.map((i) => puzzles[i]).filter((p) => p.grid).map((p) => previewFit(p, targets[puzzles.indexOf(p)])) : [];
+    const items = own.length ? (own.length === 1 ? [own[0], own[0]] : own) : [samplePuzzle(0, targets[0]), samplePuzzle(1, targets[1] ?? targets[0])];
+    return buildWordSearchBook(items, { firstNumber: own.length ? at + 1 : 1, trim: "8.5x11", bleed: false, answersPerPage: 2, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Word Search Puzzle Book", subtitle: "Large Print Puzzles for Relaxing Fun" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, padForKdp: false }, fonts);
   };
 
+  const planList = useMemo(() => puzzles.map((p) => ({ title: p.title, theme: p.theme })), [puzzles]);
   const maxReachable = entries.length === 0 ? 0 : finished.length === 0 ? 2 : 5;
   const exportThemes = useMemo(() => new Set(finished.map((p) => p.theme).filter(Boolean)).size, [finished]);
 
@@ -279,7 +285,7 @@ export default function WordSearch() {
           {step === 3 && (
             <StepReview puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} solution={solution} setSolution={setSolution} reshuffle={reshuffle} regenerate={regenerate} edit={() => goTo(2, "puzzles")} flow={flow(3)} />
           )}
-          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" shapeStatus={shapeStatus} busy={!!refit} flow={flow(4)} themes={[...new Set(finished.map((p) => p.theme).filter((t): t is string => !!t))]} previewKey={`${rawDesignApi.design.shape.kind}:${rawDesignApi.design.shape.mix}:${finished.map((p) => `${p.shape ?? "square"}:${p.size}`).join("|")}`} />}
+          {step === 4 && <DesignStep tool="word-search" api={designApi} buildSample={sampleBuilder} listName="word list" shapeStatus={shapeStatus} busy={!!refit} flow={flow(4)} themes={[...new Set(finished.map((p) => p.theme).filter((t): t is string => !!t))]} previewKey={`${planSignature(rawDesignApi.design.shape)}:${finished.map((p) => `${p.shape ?? "square"}:${p.size}`).join("|")}`} planList={planList} />}
           {step === 5 && (
             <BookExport
               tool="word-search"

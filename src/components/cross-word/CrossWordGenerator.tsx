@@ -24,7 +24,9 @@ import { mulberry32, randomSeed } from "@/lib/wordsearch/engine";
 import { JobCancelled, startJob } from "@/lib/jobs/client";
 import type { Progress } from "@/lib/jobs/types";
 import { LIMITS } from "@/lib/limits";
-import { CROSSWORD_SHAPES, ShapeKey, shapeInfo, shapeTargetsFor } from "@/lib/shapes/shapes";
+import { CROSSWORD_SHAPES, ShapeKey, shapeTargetsFor } from "@/lib/shapes/shapes";
+import { planSignature } from "@/lib/shapes/plan";
+import { planSummary } from "@/components/ui/ShapePlan";
 import { DEFAULT_EXTRAS } from "@/lib/print/book";
 import { DEFAULT_FRONT_MATTER } from "@/lib/print/frontMatter";
 import type { Design } from "@/lib/design/types";
@@ -208,6 +210,7 @@ export default function CrossWordGenerator() {
 
   const puzzle = puzzles[active];
   const usable = useMemo(() => puzzles.filter((p) => p.cw.placements.length > 1), [puzzles]);
+  const planList = useMemo(() => puzzles.map((p) => ({ title: p.title, theme: p.theme })), [puzzles]);
   const maxReachable = entries.length < 2 ? 0 : usable.length ? 3 : 1;
   const themes = useMemo(() => new Set(usable.map((p) => p.theme).filter(Boolean)).size, [usable]);
   const toItem = (p: CwPuzzle): CrosswordItem => ({ cw: p.cw, title: p.title, theme: p.theme });
@@ -236,22 +239,24 @@ export default function CrossWordGenerator() {
     ...rawDesignApi,
     setDesign: (d: Design) => {
       rawDesignApi.setDesign(d);
-      if (d.shape.kind !== rawDesignApi.design.shape.kind || d.shape.mix !== rawDesignApi.design.shape.mix) void reshape(d);
+      if (planSignature(d.shape) !== planSignature(rawDesignApi.design.shape)) void reshape(d);
     },
   };
   const shapeStatus = refit ? (
     <span data-testid="reshape-progress">Building your crosswords inside the new shape{refit.progress ? `: ${refit.progress.done} of ${refit.progress.total}` : "…"}</span>
   ) : usable.length ? (
     <span data-testid="reshape-done">
-      {usable.length === 1 ? "Your crossword uses" : `All ${usable.length} crosswords use`} {rawDesignApi.design.shape.mix === "one" ? `the ${shapeInfo(CROSSWORD_SHAPES.includes(rawDesignApi.design.shape.kind) ? rawDesignApi.design.shape.kind : "square").label.toLowerCase()} shape` : rawDesignApi.design.shape.mix === "animals" ? "a different animal each time" : "mixed shapes"}.
+      {rawDesignApi.design.shape.mix === "one" ? `${usable.length === 1 ? "Your crossword uses" : `All ${usable.length} crosswords use`} the ${planSummary(rawDesignApi.design, "crossword", puzzles.length).toLowerCase()} shape.` : `${plural(usable.length, "crossword")} built to your plan: ${planSummary(rawDesignApi.design, "crossword", puzzles.length)}.`}
     </span>
   ) : null;
 
-  const sampleBuilder = (design: Design, fonts: FontData) => {
-    const targets = shapeTargetsFor(design.shape, usable.length ? usable : [{}, {}], CROSSWORD_SHAPES);
-    const own = usable.slice(0, 2).map((p, i) => previewFit(p, targets[i]));
-    const items = own.length ? (own.length === 1 ? [own[0], own[0]] : own) : [sampleItem(0, targets[0]), sampleItem(1, targets[1])];
-    return buildCrosswordBook(items, { trim: "8.5x11", bleed: false, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Crossword Puzzle Book", subtitle: "Easy Crosswords for Every Day" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, answersPerPage: 2, padForKdp: false }, fonts);
+  const sampleBuilder = (design: Design, fonts: FontData, focus = 0) => {
+    const targets = shapeTargetsFor(design.shape, puzzles.length ? puzzles : [{}, {}], CROSSWORD_SHAPES);
+    const at = Math.max(0, Math.min(focus, puzzles.length - 1));
+    const pair = [at, at + 1 < puzzles.length ? at + 1 : at];
+    const own = puzzles.length ? pair.map((i) => ({ p: puzzles[i], i })).filter(({ p }) => p.cw.placements.length > 1).map(({ p, i }) => previewFit(p, targets[i])) : [];
+    const items = own.length ? (own.length === 1 ? [own[0], own[0]] : own) : [sampleItem(0, targets[0]), sampleItem(1, targets[1] ?? targets[0])];
+    return buildCrosswordBook(items, { firstNumber: own.length ? at + 1 : 1, trim: "8.5x11", bleed: false, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Crossword Puzzle Book", subtitle: "Easy Crosswords for Every Day" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, answersPerPage: 2, padForKdp: false }, fonts);
   };
 
   const typedCount = tidyLines(input, { keepTabs: true }).split("\n").filter(Boolean).length;
@@ -558,7 +563,7 @@ export default function CrossWordGenerator() {
       <div className="pg-card pg-wizard-card">
         {step === 0 && <QuestionFlow flow={stage(0)} questions={wordsQs} />}
         {step === 1 && <QuestionFlow flow={stage(1)} questions={buildQs} />}
-        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" shapeStatus={shapeStatus} busy={!!refit} flow={stage(2)} themes={[...new Set(usable.map((p) => p.theme).filter((x): x is string => !!x))]} previewKey={`${rawDesignApi.design.shape.kind}:${rawDesignApi.design.shape.mix}:${usable.map((p) => p.cw.shape ?? "square").join("|")}`} />}
+        {step === 2 && <DesignStep tool="crossword" api={designApi} buildSample={sampleBuilder} listName="clue list" shapeStatus={shapeStatus} busy={!!refit} flow={stage(2)} themes={[...new Set(usable.map((p) => p.theme).filter((x): x is string => !!x))]} previewKey={`${planSignature(rawDesignApi.design.shape)}:${usable.map((p) => p.cw.shape ?? "square").join("|")}`} planList={planList} />}
         {step === 3 && (
           <BookExport
             tool="crossword"

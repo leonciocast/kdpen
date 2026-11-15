@@ -1,5 +1,6 @@
 import type { FontKey } from "./fonts";
 import type { OutlineStyle, ShapeKey, ShapeMix } from "../shapes/shapes";
+import type { ThemeMode } from "../shapes/plan";
 
 export type HeaderStyle = "rule" | "banner" | "ribbon" | "underline" | "boxed" | "tab" | "minimal";
 export type BadgeShape = "circle" | "rounded" | "diamond" | "hexagon";
@@ -56,8 +57,16 @@ export interface Design {
   /** Grid shape (word search: the letters fill the shape; crossword: words stay inside it; sudoku: a frame around the 9×9). */
   shape: {
     kind: ShapeKey;
-    /** "one" = every puzzle uses `kind`; "each" = a new shape per puzzle; "theme" = one shape per theme; "animals" = a new animal each puzzle. */
+    /** Shape plan: "one" = every puzzle uses `kind`; "each" = surprise me; "pick" = random from `cats`; "manual" = page by page (`pins`, else `kind`). */
     mix: ShapeMix;
+    /** Seed of the random plans, so the preview and the PDF always match. */
+    seed?: number;
+    /** Categories / animal groups for "pick" ("food", "animals:farm"). */
+    cats?: string[];
+    /** Shapes chosen for single puzzles (0-based index as string); kept when the plan is shuffled. */
+    pins?: Record<string, ShapeKey>;
+    /** How themes steer random plans. */
+    themes?: ThemeMode;
     /** Light shaded silhouette behind the letters (the grey fill of a shaped word search). */
     shade: boolean;
     /** smooth = the exact artist silhouette; stepped = a thin cell-edge stroke; snug hugs letters; blocky is a padded pixel outline. */

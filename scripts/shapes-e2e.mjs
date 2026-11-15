@@ -124,7 +124,10 @@ await next(); // -> design
 await waitPreview();
 check((await q()) === "template", "ws: design starts with the template");
 await next();
-check((await q()) === "shape", "ws: template → Pick a shape");
+check((await q()) === "plan", "ws: template → shape plan");
+await page.click('[data-testid="plan-one"]');
+await pause();
+check((await q()) === "shape", "ws: plan → Pick a shape");
 const shapeCards = await allShapeCards();
 check(shapeCards.length >= 80, `ws: a large shape library is offered (${shapeCards.length})`);
 check(shapeCards.includes("shape-elephant") && shapeCards.includes("shape-heart"), "ws: animals and classic shapes are both offered");
@@ -141,11 +144,16 @@ check(!(await page.isDisabled('[data-testid="wizard-next"]')), "ws: Next enabled
 await shot("ws_02_heart_picked");
 // Mixed shapes
 sig = await previewSig();
-await page.click('[data-testid="shape-mix-each"]');
-await page.waitForSelector('[data-testid="reshape-done"]:has-text("mixed")', { timeout: 60000 });
+await page.click('[data-testid="wizard-back"]');
+await pause();
+await page.click('[data-testid="plan-surprise"]');
+await page.waitForSelector('[data-testid="reshape-done"]:has-text("Surprise")', { timeout: 60000 });
 await waitPreview(sig);
 await shot("ws_03_mixed");
-await page.click('[data-testid="shape-mix-one"]');
+await page.click('[data-testid="wizard-back"]');
+await pause();
+await page.click('[data-testid="plan-one"]');
+await pause();
 await openCat("holiday");
 await page.click('[data-testid="shape-heart"]');
 await page.waitForSelector('[data-testid="reshape-done"]:has-text("heart")', { timeout: 60000 });
@@ -232,6 +240,8 @@ await pause(300);
 await next(); // -> design
 await waitPreview();
 await next();
+await page.click('[data-testid="plan-one"]');
+await pause();
 check((await q()) === "shape", "cw: template → Pick a shape");
 check((await page.$$('[data-testid="shape-star"]')).length === 0, "cw: shapes that make poor crosswords are not offered");
 check((await page.$$('[data-testid="shape-circle"]')).length === 1, "cw: circle offered");
@@ -273,6 +283,8 @@ await page.waitForSelector("#sudoku-grid", { timeout: 300000 });
 await next(); // -> design
 await waitPreview();
 await next();
+await page.click('[data-testid="plan-one"]');
+await pause();
 check((await q()) === "shape", "sd: template → Pick a frame shape");
 check((await page.innerText("[data-question]")).includes("must stay a 9×9 square"), "sd: honest note that sudoku stays square");
 if (await page.$('[data-testid="shape-cat-letters"]')) errors.push("sd: letter shapes should not be offered as sudoku frames");

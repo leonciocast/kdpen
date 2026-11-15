@@ -1,3 +1,4 @@
+import type { ShapeKey } from "../shapes/shapes";
 /** Sudoku puzzles (via sudoku-gen) as 9x9 number grids; 0 = blank. */
 import { getSudoku } from "sudoku-gen";
 import { LIMITS } from "../limits";
@@ -10,6 +11,8 @@ export interface SudokuPuzzle {
   difficulty: SudokuDifficulty;
   board: number[][];
   solution: number[][];
+  /** Frame shape for this puzzle (from the design's shape plan); falls back to the design's shape. */
+  shape?: ShapeKey;
 }
 
 const toGrid = (s: string) =>

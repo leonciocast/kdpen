@@ -20,6 +20,7 @@ import type { Progress } from "@/lib/jobs/types";
 import { DEFAULT_EXTRAS } from "@/lib/print/book";
 import { DEFAULT_FRONT_MATTER } from "@/lib/print/frontMatter";
 import type { Design } from "@/lib/design/types";
+import { SUDOKU_SHAPES, shapeTargetsFor } from "@/lib/shapes/shapes";
 import type { FontData } from "@/lib/print/fonts";
 import SudokuGrid from "./SudokuGrid";
 
@@ -80,9 +81,16 @@ export default function SudokuGenerator() {
 
   const puzzle = puzzles[active];
   const levels = useMemo(() => new Set(puzzles.map((p) => p.difficulty)).size, [puzzles]);
-  const sampleBuilder = (design: Design, fonts: FontData) => {
-    const items = puzzles.length >= 2 ? puzzles.slice(0, 4) : samplePuzzles();
-    return buildSudokuBook(items, { trim: "8.5x11", bleed: false, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Sudoku Puzzle Book", subtitle: "Puzzles with Solutions" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, puzzlesPerPage: 2, answersPerPage: 4, padForKdp: false }, fonts);
+  const planList = useMemo(() => puzzles.map((p) => ({ title: capitalize(p.difficulty) })), [puzzles]);
+  /** Every puzzle with the frame its shape plan gives it (preview and PDF use the same list). */
+  const withShapes = (design: Design, list: SudokuPuzzle[]) => {
+    const t = shapeTargetsFor(design.shape, list.map(() => ({})), SUDOKU_SHAPES);
+    return list.map((p, i) => ({ ...p, shape: t[i] }));
+  };
+  const sampleBuilder = (design: Design, fonts: FontData, focus = 0) => {
+    const at = Math.max(0, Math.min(focus, puzzles.length - 2));
+    const items = puzzles.length >= 2 ? withShapes(design, puzzles).slice(at, at + 4) : withShapes(design, samplePuzzles());
+    return buildSudokuBook(items, { firstNumber: puzzles.length >= 2 ? at + 1 : 1, trim: "8.5x11", bleed: false, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Sudoku Puzzle Book", subtitle: "Puzzles with Solutions" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, puzzlesPerPage: 2, answersPerPage: 4, padForKdp: false }, fonts);
   };
   const subtitle = levels > 1 ? "Easy to Hard Puzzles with Solutions" : `${capitalize(puzzles[0]?.difficulty ?? "easy")} Puzzles with Solutions`;
 
@@ -218,7 +226,7 @@ export default function SudokuGenerator() {
       <div className="pg-card pg-wizard-card">
         {step === 0 && <QuestionFlow flow={stage(0)} questions={chooseQs} />}
         {step === 1 && <QuestionFlow flow={stage(1)} questions={reviewQs} />}
-        {step === 2 && <DesignStep tool="sudoku" api={designApi} buildSample={sampleBuilder} flow={stage(2)} />}
+        {step === 2 && <DesignStep tool="sudoku" api={designApi} buildSample={sampleBuilder} flow={stage(2)} planList={planList} />}
         {step === 3 && (
           <BookExport
             tool="sudoku"
@@ -227,7 +235,7 @@ export default function SudokuGenerator() {
             itemCount={puzzles.length}
             sectionCount={Math.max(0, levels - 1)}
             design={designApi.design}
-            items={() => ({ tool: "sudoku", items: puzzles })}
+            items={() => ({ tool: "sudoku", items: withShapes(designApi.design, puzzles) })}
             fileBase="sudoku-book"
             disabledReason={puzzles.length ? undefined : "Generate puzzles first."}
             perPageChoice

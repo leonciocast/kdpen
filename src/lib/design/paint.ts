@@ -666,6 +666,11 @@ export function filletPolygon(pts: P2[], r: number): P2[] {
     const b = pts[(i + 1) % n];
     const la = Math.hypot(a[0] - p[0], a[1] - p[1]);
     const lb = Math.hypot(b[0] - p[0], b[1] - p[1]);
+    // Repeated points (some silhouettes, e.g. boat / airplane) have no corner to round.
+    if (la < 1e-6 || lb < 1e-6) {
+      out.push(p);
+      continue;
+    }
     const rr = Math.min(r, la * 0.45, lb * 0.45);
     const p1: P2 = [p[0] + ((a[0] - p[0]) / la) * rr, p[1] + ((a[1] - p[1]) / la) * rr];
     const p2: P2 = [p[0] + ((b[0] - p[0]) / lb) * rr, p[1] + ((b[1] - p[1]) / lb) * rr];
@@ -676,7 +681,7 @@ export function filletPolygon(pts: P2[], r: number): P2[] {
       out.push([u * u * p1[0] + 2 * u * t * p[0] + t * t * p2[0], u * u * p1[1] + 2 * u * t * p[1] + t * t * p2[1]]);
     }
   }
-  return out;
+  return out.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
 }
 
 function signedArea(pts: P2[]): number {

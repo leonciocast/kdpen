@@ -48,7 +48,9 @@ async function sharedDesignExport(prefix, n) {
   await waitPreview();
   await shot(`${prefix}_${n}a_design_template`);
   await next();
-  await expectQ("shape", `${prefix}: template → shape`);
+  await expectQ("plan", `${prefix}: template → shape plan`);
+  await next();
+  await expectQ("shape", `${prefix}: plan → shape`);
   await waitPreview();
   await shot(`${prefix}_${n}a2_design_shape`);
   await next();

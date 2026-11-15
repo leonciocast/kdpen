@@ -1344,7 +1344,8 @@ export const CROSSWORD_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => !CROSSWORD_
 /** Shapes used when "mix shapes" is on (basics plus a rotation of favourite animals). */
 export const MIX_SET: ShapeKey[] = ["circle", "heart", "star", "hexagon", "diamond", "cloud", "octagon", "egg", "apple", "rounded", "elephant", "dolphin", "cat", "owl", "fish", "butterfly", "dog", "penguin", "rabbit", "whale"];
 
-export type ShapeMix = "one" | "each" | "theme" | "animals" | "category";
+/** "one" = same shape; "each" = surprise me (random from all); "pick" = random from chosen categories; "manual" = page by page. "theme" / "animals" / "category" are older saved values. */
+export type ShapeMix = "one" | "each" | "pick" | "manual" | "theme" | "animals" | "category";
 
 /** The shape of puzzle `index` (theme order index `themeIndex`) for a design's shape choice. */
 export function shapeFor(choice: { kind: ShapeKey; mix: ShapeMix }, index: number, themeIndex = 0, allowed?: ShapeKey[]): ShapeKey {
@@ -1400,6 +1401,8 @@ const SUDOKU_SKIP = new Set<ShapeKey>([
   "rainbow", "wave", "zigzag", "bolt", "rocket", "key", "stairs", "arch", "ubend", "bowl", "pyramid",
   "blockx", "blockt", "blockl", "arrow", "windowframe", "boxframe", "ring",
   "snowflake", "leaf", "guitar", "airplane", "pizza",
+  // Thin frames that would shrink the 9×9 to to about a third of the frame or less (too small to solve on paper).
+  "moon", "crown", "cherry", "icecream", "shamrock", "boat",
 ]);
 export const SUDOKU_SHAPES: ShapeKey[] = SHAPE_KEYS.filter((k) => {
   if (SUDOKU_SKIP.has(k) || shapeInfo(k).islands || shapeInfo(k).buildMask) return false;
@@ -1456,15 +1459,5 @@ export function sudokuFrame(key: ShapeKey | undefined, n = 9): Pt[] {
   return fitted;
 }
 
-/** Shape of every puzzle in a book for a design's shape choice (one shape, or mixed per puzzle / per theme / random animals). */
-export function shapeTargetsFor(choice: { kind: ShapeKey; mix: ShapeMix }, list: { theme?: string }[], allowed?: ShapeKey[]): ShapeKey[] {
-  const themes = Array.from(new Set(list.map((p) => p.theme ?? "")));
-  const suggestIn = choice.mix === "animals" ? ANIMAL_KEYS.filter((s) => !allowed || allowed.includes(s)) : allowed;
-  return list.map((p, i) => {
-    if (choice.mix === "theme" || choice.mix === "animals") {
-      const hit = suggestShapeForTheme(p.theme, suggestIn);
-      if (hit) return hit;
-    }
-    return shapeFor(choice, i, themes.indexOf(p.theme ?? ""), allowed);
-  });
-}
+/** Shape of every puzzle in a book (see ./plan for the seeded random plans). */
+export { shapeTargetsFor } from "./plan";

@@ -29,6 +29,8 @@ export interface SudokuBookOptions {
   pageSizes?: number[];
   /** Custom page order from the preview (items must already be in arranged order). */
   slots?: Slot[];
+  /** Number of the first puzzle (design preview of a later puzzle). */
+  firstNumber?: number;
 }
 
 /** Highlight sets for the how-to diagram. */
@@ -44,7 +46,8 @@ export interface SudokuHighlight {
  * to fit inside); "rounded" rounds the grid's corners.
  */
 export function drawSudokuGrid(pdf: jsPDF, look: Look, p: SudokuPuzzle, x0: number, y0: number, area: number, answers: boolean, hl?: SudokuHighlight) {
-  const kind = SUDOKU_SHAPES.includes(look.design.shape.kind) ? look.design.shape.kind : "square";
+  const want = p.shape ?? look.design.shape.kind;
+  const kind = SUDOKU_SHAPES.includes(want) ? want : "square";
   const framed = kind !== "square" && kind !== "rounded";
   let x = x0;
   let y = y0;
@@ -64,8 +67,13 @@ export function drawSudokuGrid(pdf: jsPDF, look: Look, p: SudokuPuzzle, x0: numb
   const cell = size / 9;
   const g0 = look.design.grid;
   const g = kind === "rounded" ? { ...g0, border: "rounded" as const } : g0;
-  if (outline) drawOutlineBacking(pdf, outline, look, cell);
-  else drawFrameShadow(pdf, { x, y, w: size, h: size }, { ...look, design: { ...look.design, grid: g } }, cell);
+  // The frame is drawn first; the white 9×9 then sits on top, so no outline line ever crosses the numbers
+  // (animals peek out around the grid: head, legs and tail).
+  const outlineLook: Look = { ...look, design: { ...look.design, grid: { ...g, border: g.border === "none" ? "square" : g.border, frame: Math.max(1, g.frame) } } };
+  if (outline) {
+    drawOutlineBacking(pdf, outline, look, cell);
+    drawOutline(pdf, outline, outlineLook, cell);
+  } else drawFrameShadow(pdf, { x, y, w: size, h: size }, { ...look, design: { ...look.design, grid: g } }, cell);
   const shade = look.design.color.grayscale ? ([236, 236, 236] as [number, number, number]) : tint(look.accent, 0.88);
   paint.fill(pdf, [255, 255, 255]);
   pdf.rect(x, y, size, size, "F");
@@ -103,7 +111,6 @@ export function drawSudokuGrid(pdf: jsPDF, look: Look, p: SudokuPuzzle, x0: numb
     paint.stroke(pdf, [0, 0, 0]);
     pdf.setLineWidth(thick);
     pdf.rect(x, y, size, size, "S");
-    drawOutline(pdf, outline, { ...look, design: { ...look.design, grid: { ...g, border: g.border === "none" ? "square" : g.border, frame: Math.max(1, g.frame) } } }, cell);
   } else {
     const frameLook: Look = { ...look, design: { ...look.design, grid: { ...g, border: g.border === "none" ? "square" : g.border, frame: Math.max(thick, g.frame) } } };
     drawFrame(pdf, { x, y, w: size, h: size }, frameLook, cell);
@@ -222,9 +229,9 @@ export function sudokuHowTo(): PageRenderer {
   };
 }
 
-export function sudokuContent(puzzles: SudokuPuzzle[], design: Design = DEFAULT_DESIGN, per: PerPage = 1, answersPer: PerPage = 4, pageSizes?: number[]): BookContent {
+export function sudokuContent(puzzles: SudokuPuzzle[], design: Design = DEFAULT_DESIGN, per: PerPage = 1, answersPer: PerPage = 4, pageSizes?: number[], firstNumber = 1): BookContent {
   const headerText = design.header.text.trim() || TOOL_HEADER.sudoku;
-  const items = puzzles.map((p, i) => ({ p, n: i + 1 }));
+  const items = puzzles.map((p, i) => ({ p, n: firstNumber + i }));
   const pages: PageRenderer[] = [];
   const sections: Section[] = [];
   let last = "";
@@ -253,7 +260,7 @@ export function buildSudokuBook(puzzles: SudokuPuzzle[], opts: SudokuBookOptions
     frontMatter: opts.frontMatter,
     extras: opts.extras,
     design,
-    content: sudokuContent(puzzles, design, opts.puzzlesPerPage, opts.answersPerPage ?? 4, opts.pageSizes),
+    content: sudokuContent(puzzles, design, opts.puzzlesPerPage, opts.answersPerPage ?? 4, opts.pageSizes, opts.firstNumber ?? 1),
     padForKdp: opts.padForKdp,
     fonts,
     volume: opts.volume,

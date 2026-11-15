@@ -14,8 +14,10 @@ import InfoTip from "./InfoTip";
 import PdfPreview from "./PdfPreview";
 import { downloadText } from "./CsvDrop";
 import type { DesignApi } from "./useDesign";
-import { FramePicker, ShapePicker, frameIdOf, shapeLabel, shapesFor } from "./ShapePicker";
-import { DEFAULT_STEPPED_COLOR, OUTLINE_COLORS, defaultOutlineFor, isSteppedShape } from "@/lib/shapes/shapes";
+import { FramePicker, frameIdOf } from "./ShapePicker";
+import { ShapePlanPanel, PlanItem, applyPlanMode, planOptions, planSummary } from "./ShapePlan";
+import { DEFAULT_STEPPED_COLOR, OUTLINE_COLORS } from "@/lib/shapes/shapes";
+import { PlanMode, planCats, planMode } from "@/lib/shapes/plan";
 
 const LABELS: Record<string, string> = {
   rule: "Thin rule", banner: "Bold banner", ribbon: "Ribbon", underline: "Underlined", boxed: "Boxed", tab: "Tab", minimal: "Minimal",
@@ -68,8 +70,8 @@ const customizingByTool = new Map<string, boolean>();
 interface Props {
   tool: ToolKind;
   api: DesignApi;
-  /** Build a small sample book (1 puzzle, its solution and the front pages) with this design. */
-  buildSample: (design: Design, fonts: FontData) => RenderedBook;
+  /** Build a small sample book (the focused puzzle and the next, their solutions and the front pages) with this design. */
+  buildSample: (design: Design, fonts: FontData, focus: number) => RenderedBook;
   /** "word list" / "clue list"; omit when the puzzle has no list (sudoku). */
   listName?: string;
   /** Status of re-fitting the user's puzzles into the chosen shape (word search / crossword). */
@@ -81,6 +83,8 @@ interface Props {
   themes?: string[];
   /** Changes when the puzzles themselves are re-shaped, so the preview reloads. */
   previewKey?: string;
+  /** The book's puzzles in order (title / theme), for the shape plan lineup. */
+  planList?: PlanItem[];
 }
 
 const SHAPE_LEAD: Record<ToolKind, string> = {
@@ -89,7 +93,11 @@ const SHAPE_LEAD: Record<ToolKind, string> = {
   sudoku: "A sudoku must stay a 9×9 square to be solvable, so the shape is a decorative frame around the grid (animals sit the grid in the body). You can also round or circle the cells in the next step.",
 };
 
-export default function DesignStep({ tool, api, buildSample, listName, shapeStatus, busy, flow, themes = [], previewKey }: Props) {
+const NO_ITEMS: PlanItem[] = [];
+
+export default function DesignStep({ tool, api, buildSample, listName, shapeStatus, busy, flow, themes = [], previewKey, planList = NO_ITEMS }: Props) {
+  const [focus, setFocusState] = useState(0);
+  const setFocus = (i: number) => setFocusState(Math.max(0, Math.min(i, Math.max(0, planList.length - 1))));
   const [customizing, setCustomizingState] = useState(() => flow.sub === "customize" || !!customizingByTool.get(tool));
   const setCustomizing = (v: boolean) => {
     customizingByTool.set(tool, v);
@@ -113,7 +121,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
       try {
         const fonts = await fetchFonts(filesFor(familiesFor(design)));
         if (cancelled) return;
-        const book = buildRef.current(design, fonts);
+        const book = buildRef.current(design, fonts, design.shape.mix === "one" ? 0 : focus);
         if (cancelled) return;
         setKinds(book.kinds);
         setBytes(book.pdf.output("arraybuffer"));
@@ -125,7 +133,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
       cancelled = true;
       clearTimeout(t);
     };
-  }, [design, previewKey]);
+  }, [design, previewKey, focus]);
 
   const set = (fn: (d: Design) => void) => {
     const d: Design = JSON.parse(JSON.stringify(design));
@@ -215,35 +223,53 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
     ),
   };
 
-  const allowed = shapesFor(tool);
-  const shapeName =
-    design.shape.mix === "animals" && tool !== "sudoku"
-      ? "Random animals"
-      : design.shape.mix !== "one" && tool !== "sudoku"
-        ? "Mixed shapes"
-        : shapeLabel(allowed.includes(design.shape.kind) ? design.shape.kind : "square");
+  const mode = planMode(design.shape.mix);
+  const noun = tool === "sudoku" ? "frame" : "shape";
+  const pickPlan: Question = {
+    key: "plan",
+    title: tool === "sudoku" ? "How should frames change across your book?" : "How should shapes change across your book?",
+    lead: tool === "sudoku" ? "Keep one frame for every sudoku, or let every page wear a different one." : "Keep one shape for every puzzle, or give every page its own. You can change this any time.",
+    wide: true,
+    hint: `Plan: ${planOptions(tool).find((o) => o.value === mode)?.title}`,
+    body: (
+      <ChoiceCards<PlanMode>
+        label="Shape plan"
+        value={mode}
+        cols={2}
+        onPick={(m) => {
+          set((d) => applyPlanMode(d, m, tool, planList));
+          flow.setSub("shape");
+        }}
+        options={planOptions(tool)}
+      />
+    ),
+  };
+
+  const shapeTitles: Record<PlanMode, string> = {
+    one: tool === "sudoku" ? "Pick a frame shape" : "Pick a shape",
+    surprise: `Your surprise ${noun} lineup`,
+    pick: "Choose the categories to mix",
+    manual: `Pick a ${noun} for each page`,
+  };
+  const shapeLeads: Record<PlanMode, string> = {
+    one: SHAPE_LEAD[tool],
+    surprise: `Every puzzle gets a different ${noun} from all categories. Shuffle for a new mix, or click a puzzle to pin the ${noun} you want.`,
+    pick: `Each puzzle gets a different ${noun} from the categories you tick. Click a puzzle in the lineup to pin a ${noun} to it.`,
+    manual: `Click a puzzle, then click its ${noun}. We jump to the next puzzle for you. Pages you skip use the default ${noun}.`,
+  };
+  const catsMissing = mode === "pick" && !planCats(design.shape).length;
   const pickShape: Question = {
     key: "shape",
     wide: true,
-    title: tool === "sudoku" ? "Pick a frame shape" : "Pick a shape",
-    lead: SHAPE_LEAD[tool],
-    hint: busy ? "Fitting your puzzles into the shape…" : `Shape: ${shapeName}`,
-    canNext: !busy,
-    blockedHint: "Fitting your puzzles into the shape…",
+    title: shapeTitles[mode],
+    lead: shapeLeads[mode],
+    hint: busy ? "Fitting your puzzles into the shapes…" : `${tool === "sudoku" ? "Frame" : "Shape"}: ${planSummary(design, tool, planList.length)}`,
+    canNext: !busy && !catsMissing,
+    blockedHint: catsMissing ? "Pick at least one category" : "Fitting your puzzles into the shapes…",
     body: (
       <div className="row g-4">
         <div className="col-lg-7">
-          <ShapePicker tool={tool} design={design} themes={themes} onChange={(kind, mix, shade) => set((d) => {
-            const familyChange = isSteppedShape(kind) !== isSteppedShape(d.shape.kind);
-            d.shape = {
-              ...d.shape,
-              kind,
-              mix,
-              shade: shade ?? d.shape.shade,
-              outline: familyChange ? defaultOutlineFor(kind) : d.shape.outline,
-              outlineColor: d.shape.outlineColor ?? DEFAULT_STEPPED_COLOR,
-            };
-          })} />
+          <ShapePlanPanel tool={tool} design={design} set={set} list={planList} themes={themes} focus={focus} setFocus={setFocus} />
           {tool === "word-search" && (
             <div className="mt-3">
               <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Artist (smooth)", stepped: "Stepped cell outline", snug: "Snug (hugs letters)", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => { d.shape.outline = v; if (v === "stepped") d.shape.shade = false; })} />
@@ -444,17 +470,14 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
           </Section>
 
           <Section title={tool === "sudoku" ? "Frame shape" : "Shape"}>
-            <ShapePicker tool={tool} design={design} compact themes={themes} onChange={(kind, mix, shade) => set((d) => {
-                    const familyChange = isSteppedShape(kind) !== isSteppedShape(d.shape.kind);
-                    d.shape = {
-                      ...d.shape,
-                      kind,
-                      mix,
-                      shade: shade ?? d.shape.shade,
-                      outline: familyChange ? defaultOutlineFor(kind) : d.shape.outline,
-                      outlineColor: d.shape.outlineColor ?? DEFAULT_STEPPED_COLOR,
-                    };
-                  })} />
+            <div className="pg-seg mb-3" role="radiogroup" aria-label="Shape plan">
+              {planOptions(tool).map((o) => (
+                <button key={o.value} type="button" role="radio" aria-checked={mode === o.value} className={mode === o.value ? "active" : ""} onClick={() => set((d) => applyPlanMode(d, o.value, tool, planList))} data-testid={`plan-seg-${o.value}`}>
+                  {o.value === "one" ? `One ${noun}` : o.value === "surprise" ? "Surprise me" : o.value === "pick" ? "From categories" : "Page by page"}
+                </button>
+              ))}
+            </div>
+            <ShapePlanPanel tool={tool} design={design} set={set} list={planList} themes={themes} focus={focus} setFocus={setFocus} compact />
             {shapeStatus && <div className="pg-shape-status small">{shapeStatus}</div>}
           </Section>
 
@@ -626,5 +649,5 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
     ),
   };
 
-  return <QuestionFlow flow={flow} questions={customizing ? [pickTemplate, pickShape, pickFrame, tune, customize] : [pickTemplate, pickShape, pickFrame, tune]} />;
+  return <QuestionFlow flow={flow} questions={customizing ? [pickTemplate, pickPlan, pickShape, pickFrame, tune, customize] : [pickTemplate, pickPlan, pickShape, pickFrame, tune]} />;
 }

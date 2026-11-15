@@ -87,14 +87,16 @@ await page.waitForSelector('#active-grid, [data-testid="puzzle-pager"]', { timeo
 await next();
 await next();
 await waitPreview();
-await next(); // shape
+await next(); // plan
+check((await page.$('[data-testid="plan-pick"]')) !== null, "random from categories plan is offered");
+await page.click('[data-testid="plan-one"]');
+await pause();
 check((await q()) === "shape", "ws: Pick a shape");
 
 for (const id of CATS) {
   check((await page.$(`[data-testid="shape-cat-${id}"]`)) !== null, `category tab ${id} is shown`);
 }
 check((await page.$('[data-testid="shape-search"]')) !== null, "search box is shown");
-check((await page.$('[data-testid="shape-mix-category"]')) !== null, "mix from category is offered");
 check((await page.$('[data-testid="shape-suggest"]')) !== null, "Weather theme suggests shapes");
 if (await page.$('[data-testid="shape-suggest"]')) {
   check((await page.$('[data-testid="shape-suggest"] [data-testid="shape-sunburst"], [data-testid="shape-suggest"] [data-testid="shape-cloud"]')) !== null, "Weather suggests a cloud or sun cluster");
@@ -152,12 +154,18 @@ if (await page.$('[data-testid="shape-recent"]')) {
   await shot("picker-recent", '[data-testid="shape-recent"]');
 }
 
-await page.click('[data-testid="shape-mix-category"]');
+await page.click('[data-testid="wizard-back"]');
+await pause();
+await page.click('[data-testid="plan-pick"]');
+await page.click('[data-testid="plan-cats-none"]');
+await page.click('[data-testid="plan-cat-stepped"]');
 await pause(300);
-check((await page.getAttribute('[data-testid="shape-mix-category"]', "aria-checked")) === "true", "mix from category is selected");
-await shot("picker-mix-category", '[data-testid="shape-picker"]');
-
-await page.click('[data-testid="shape-mix-one"]');
+check((await page.getAttribute('[data-testid="plan-cat-stepped"]', "aria-checked")) === "true", "mix from category is selected");
+await shot("picker-mix-category", '[data-testid="plan-panel"]');
+await page.click('[data-testid="wizard-back"]');
+await pause();
+await page.click('[data-testid="plan-one"]');
+await pause();
 await pause(200);
 await page.fill('[data-testid="shape-search"]', "arch");
 await pause(150);
