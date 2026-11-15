@@ -21,6 +21,8 @@ export interface AiBook {
   outline: AiOutline;
   /** Per case: what was fixed or still needs a look (plain words). */
   caseNotes: string[][];
+  /** Outline position (1-based) of each kept case. */
+  indexes: number[];
   notes: string[];
   usage: Usage;
   calls: number;
@@ -123,7 +125,8 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
       }
       const chk = checkAiCase({ ...c, index: i }, cast, st, req.maxWord, 20261115 + (i - 1) * 101);
       specs[i - 1] = chk.spec;
-      caseNotes[i - 1] = chk.repairs;
+      const was = fb?.get(i);
+      caseNotes[i - 1] = [...(was?.length && !chk.problems.length ? [`rewritten once to fix: ${was.join(" ").replace(/\.$/, "")}`] : []), ...chk.repairs];
       if (chk.problems.length) problems.set(i, chk.problems);
       else problems.delete(i);
     }
@@ -151,6 +154,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
   // Whatever still fails: keep it if it builds (with a note), otherwise leave it out.
   const kept: CaseSpec[] = [];
   const keptNotes: string[][] = [];
+  const indexes: number[] = [];
   specs.forEach((s, k) => {
     const p = problems.get(k + 1);
     if (!s || (p && p.some((x) => /grid|usable evidence|schema|unreadable|unsuitable|borrows|not in the cast|three different/.test(x)))) {
@@ -158,6 +162,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
       return;
     }
     kept.push(s);
+    indexes.push(k + 1);
     keptNotes.push([...caseNotes[k], ...(p ?? [])]);
   });
   if (!kept.length) throw new AiError("The cases couldn't be written. Please try again.", "bad-output");
@@ -167,6 +172,7 @@ export async function generateAiBook(req: GenerateRequest, llm: Llm, opts: Gener
     book: { title: outline.title, intro: outline.intro, cast, cases: kept, finale: { phrase, question: outline.finaleQuestion, epilogue: outline.epilogue } },
     outline,
     caseNotes: keptNotes,
+    indexes,
     notes,
     usage,
     calls,

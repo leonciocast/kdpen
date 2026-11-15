@@ -1,6 +1,6 @@
 "use client";
-import React, { useMemo, useRef, useState } from "react";
-import { BsBuilding, BsCheck2Circle, BsChevronLeft, BsChevronRight, BsClipboardCheck, BsEye, BsEyeSlash, BsFileEarmarkText, BsFolder2Open, BsIncognito, BsMagic, BsPencilSquare, BsTrash3 } from "react-icons/bs";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { BsBuilding, BsCheck2Circle, BsChevronLeft, BsChevronRight, BsClipboardCheck, BsEye, BsEyeSlash, BsFileEarmarkText, BsFolder2Open, BsIncognito, BsMagic, BsPencilSquare, BsTrash3, BsStars, BsArrowRepeat } from "react-icons/bs";
 import { toast } from "react-toastify";
 import PageHeader from "@/components/ui/PageHeader";
 import BookExport from "@/components/ui/BookExport";
@@ -27,11 +27,14 @@ import { findPerson, generateMystery, phraseLetters, uniqueTraits, type Generate
 import { buildMysteryBook } from "@/lib/mystery/pdf";
 import { DEFAULT_MYSTERY_SETTINGS, type CaseBook, type CaseSpec, type MysteryCase, type MysterySettings } from "@/lib/mystery/types";
 import CaseView from "./CaseView";
+import { AiNotConfigured, aiStatus, generateBook, regenerateOne, type AiResult, type AiStatus } from "./aiClient";
+import { TONES, TONE_LABEL, type GenerateRequest, type Tone } from "@/lib/ai/schema";
+import type { AiProgress } from "@/lib/ai/generate";
 
 const STEPS = [{ label: "Cases" }, { label: "Mystery settings" }, { label: "Build & check" }, { label: "Design" }, { label: "Export book" }];
 
 export const MYSTERY_NAME = "Murder Mystery Word Search";
-type Source = "starter" | "paste" | "theme";
+type Source = "ai" | "starter" | "paste" | "theme";
 const MAX_CASES = 200;
 
 /** A build error in plain words (never a stack trace or an internal message). */
@@ -82,6 +85,22 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
   const [solved, setSolved] = useState(false);
   const rawDesign = useDesign("mystery");
   const fileRef = useRef<HTMLInputElement>(null);
+  // ---- AI cases (server-side Bedrock; this page only sees the results)
+  const [ai, setAi] = useState<AiStatus | null>(null);
+  const [aiSetting, setAiSetting] = useState("surprise");
+  const [aiTone, setAiTone] = useState<Tone>("family");
+  const [aiCount, setAiCount] = useState(24);
+  const [aiRun, setAiRun] = useState<{ progress: AiProgress | null; cancel: () => void } | null>(null);
+  const [aiBook, setAiBook] = useState<(AiResult & { options: GenerateRequest }) | null>(null);
+  const [aiBusyCase, setAiBusyCase] = useState<number | null>(null);
+  useEffect(() => {
+    let live = true;
+    void aiStatus().then((s) => live && setAi(s));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const aiReady = !!ai?.configured;
   const { step, goTo, flow } = useStages(STEPS.length);
 
   const set = <K extends keyof MysterySettings>(k: K, v: MysterySettings[K]) => setSettings((s) => ({ ...s, [k]: v }));
@@ -92,13 +111,17 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
       const cases = starterCases(starterCount);
       return { book: SALTMERE, cases, phrase: phraseFor(cases.length) };
     }
+    if (source === "ai" && aiBook?.book.cases.length) {
+      const ph = phrase.trim().toUpperCase();
+      return { book: { ...aiBook.book, finale: { ...aiBook.book.finale, phrase: ph, epilogue: aiBook.book.finale.phrase === ph ? aiBook.book.finale.epilogue : `The boxes spell ${ph}. ${aiBook.book.finale.epilogue}` } }, cases: aiBook.book.cases, phrase: ph };
+    }
     if (source === "paste" && pasted?.cases.length) return { book: genericBook(pasted.cases, pasted.cast, phrase.trim().toUpperCase()), cases: pasted.cases, phrase: phrase.trim().toUpperCase() };
     if (source === "theme" && themeIds.length) {
       const b = scaffoldBook({ settings: themeIds, count: themeCount, seed: themeSeed }, phrase.trim().toUpperCase());
       return { book: b, cases: b.cases, phrase: phrase.trim().toUpperCase() };
     }
     return null;
-  }, [source, starterCount, pasted, themeIds, themeCount, themeSeed, phrase]);
+  }, [source, starterCount, pasted, themeIds, themeCount, themeSeed, phrase, aiBook]);
 
   const caseCount = plan?.cases.length ?? 0;
   const phraseLen = plan ? phraseLetters(plan.phrase).length : 0;
@@ -194,6 +217,49 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
     flow(0).setSub("paste");
   };
 
+  const aiOptions = (): GenerateRequest => ({ caseCount: aiCount, setting: aiSetting, tone: aiTone, difficulty: settings.difficulty, hiddenMessage: settings.hiddenMessage, missingEvidence: settings.missingEvidence, storyline: settings.storyline, maxWord: 11, seed: Math.floor(Math.random() * 1e9) });
+  const aiGenerate = async () => {
+    aiRun?.cancel();
+    const options = aiOptions();
+    const job = generateBook(options, (p) => setAiRun((r) => (r && r.cancel === job.cancel ? { ...r, progress: p } : r)));
+    setAiRun({ progress: { phase: "outline", done: 0, total: options.caseCount, message: "Writing the storyline…" }, cancel: job.cancel });
+    try {
+      const res = await job.promise;
+      setAiBook({ ...res, options });
+      setPhrase(res.book.finale.phrase || (res.book.cases.length >= 11 ? "CASE CLOSED" : "SOLVED".slice(0, Math.max(1, res.book.cases.length))));
+      toast.success(`${plural(res.book.cases.length, "case")} written: “${res.book.title}”.`);
+      flow(0).setSub("ai-review");
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+      if (e instanceof AiNotConfigured) {
+        setAi((a) => (a ? { ...a, configured: false } : a));
+        toast.info("AI cases need AWS setup on the server. Pick another source for now.");
+      } else toast.info((e as Error).message);
+    } finally {
+      setAiRun((r) => (r && r.cancel === job.cancel ? null : r));
+    }
+  };
+  const aiRegenerate = async (k: number) => {
+    if (!aiBook) return;
+    setAiBusyCase(k);
+    try {
+      const out = await regenerateOne(aiBook.options, aiBook.outline, aiBook.indexes[k], aiBook.book.cases[k]);
+      setAiBook((b) => {
+        if (!b) return b;
+        const cases = b.book.cases.slice();
+        cases[k] = out.spec;
+        const caseNotes = b.caseNotes.slice();
+        caseNotes[k] = out.notes;
+        return { ...b, book: { ...b.book, cases }, caseNotes };
+      });
+      toast.success(`Case ${k + 1} rewritten: “${out.spec.title}”.`);
+    } catch (e) {
+      toast.info((e as Error).message);
+    } finally {
+      setAiBusyCase(null);
+    }
+  };
+
   // ---------------------------------------------------------------- stage 1: cases
   const caseQuestions: Question[] = [
     {
@@ -203,23 +269,173 @@ export default function MysteryWordSearch({ onChangeType }: { onChangeType: () =
       wide: true,
       hideNext: true,
       body: (
+        <div className={`pg-my-sources ${aiReady ? "" : "ai-off"}`}>
         <ChoiceCards<Source>
           label="Case source"
-          cols={3}
+          cols={2}
           value={source}
           onPick={(v) => {
             setSource(v);
-            flow(0).setSub(v === "starter" ? "starter" : v === "paste" ? "paste" : "theme");
+            flow(0).setSub(v === "ai" ? (aiBook ? "ai-review" : "ai-options") : v === "starter" ? "starter" : v === "paste" ? "paste" : "theme");
           }}
           options={[
-            { value: "starter", title: "The Saltmere Lantern", text: "24 connected cases in a seaside town, written for you, with a twist at the end. Family friendly.", icon: <BsFolder2Open />, testId: "my-source-starter", badge: "Recommended", cta: "Use this story" },
+            {
+              value: "ai",
+              title: "Generate a new mystery with AI",
+              text: aiReady ? "A fresh, original storyline every time: cast, clues and a final twist. Up to 200 cases, checked before you print." : ai ? "Needs AWS setup. Once the server has its AWS keys, fresh stories are written here." : "Checking…",
+              icon: <BsStars />,
+              testId: "my-source-ai",
+              badge: aiReady ? "Recommended" : ai ? "Needs AWS setup" : undefined,
+              cta: "Write my mystery",
+              disabled: !aiReady,
+            },
+            { value: "starter", title: "The Saltmere Lantern", text: "24 connected cases in a seaside town, written for you, with a twist at the end. Family friendly.", icon: <BsFolder2Open />, testId: "my-source-starter", badge: aiReady ? undefined : "Recommended", cta: "Use this story" },
             { value: "paste", title: "Paste my own cases", text: "Case 1: Title, Story, Words, Suspects… I'll read almost any format.", icon: <BsPencilSquare />, testId: "my-source-paste", cta: "Paste cases" },
             { value: "theme", title: "Build from a setting", text: "Hotels, night trains, circuses and more. Stories made from templates, up to 200 cases.", icon: <BsBuilding />, testId: "my-source-theme", cta: "Pick settings" },
           ]}
         />
+        </div>
       ),
     },
   ];
+  if (source === "ai") {
+    const running = !!aiRun;
+    const p = aiRun?.progress;
+    const pct = p ? (p.phase === "outline" ? 6 : p.phase === "repair" ? 96 : 8 + (90 * p.done) / Math.max(1, p.total)) : 4;
+    caseQuestions.push({
+      key: "ai-options",
+      title: "What kind of mystery?",
+      lead: "Pick a setting and a tone. The AI writes an original storyline, cast and clues, and every case is checked before you see it.",
+      wide: true,
+      canNext: !running && aiReady && aiCount >= 1,
+      blockedHint: running ? undefined : "AI cases need AWS setup",
+      nextLabel: running ? "Writing…" : `Generate ${plural(aiCount, "case")}`,
+      nextTestId: "my-ai-generate",
+      enter: false,
+      onNext: () => {
+        void aiGenerate();
+        return false;
+      },
+      body: (
+        <div className="pg-ai">
+          <div className="pg-ai-group">
+            <div className="pg-ai-label">Setting</div>
+            <div className="pg-ai-chips" role="radiogroup" aria-label="Setting">
+              {[{ id: "surprise", name: "Surprise me" }, ...SETTINGS].map((st) => (
+                <button key={st.id} type="button" role="radio" aria-checked={aiSetting === st.id} className={`pg-chip ${aiSetting === st.id ? "selected" : ""}`} data-testid={`my-ai-setting-${st.id}`} disabled={running} onClick={() => setAiSetting(st.id)}>
+                  {st.id === "surprise" && <BsMagic aria-hidden="true" />} {st.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="pg-ai-row">
+            <div className="pg-ai-group">
+              <div className="pg-ai-label">Tone</div>
+              <div className="pg-seg" role="radiogroup" aria-label="Tone">
+                {TONES.map((t) => (
+                  <button key={t} type="button" role="radio" aria-checked={aiTone === t} className={aiTone === t ? "active" : ""} data-testid={`my-ai-tone-${t}`} disabled={running} onClick={() => setAiTone(t)}>
+                    {TONE_LABEL[t]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="pg-ai-group">
+              <label className="pg-ai-label" htmlFor="myAiCount">
+                Cases
+              </label>
+              <input id="myAiCount" type="number" min={1} max={MAX_CASES} className="form-control" style={{ width: "6.5rem" }} value={aiCount} data-testid="my-ai-count" disabled={running} onChange={(e) => setAiCount(Math.max(1, Math.min(MAX_CASES, Math.round(Number(e.target.value) || 1))))} />
+            </div>
+          </div>
+          {aiTone === "noir" && <p className="pg-ai-hint">Adult noir stays restrained: crimes happen off the page, with no gore or bad language.</p>}
+          {running ? (
+            <div className="pg-ai-progress" role="status" aria-live="polite" data-testid="my-ai-progress">
+              <div className="pg-ai-progress-head">
+                <span>
+                  <BsStars aria-hidden="true" /> {p?.message ?? "Starting…"}
+                </span>
+                <button type="button" className="pg-link-btn" onClick={() => aiRun?.cancel()}>
+                  Cancel
+                </button>
+              </div>
+              <div className="pg-progress">
+                <div style={{ width: `${Math.min(100, pct)}%` }} />
+              </div>
+              <div className="pg-ai-progress-note">Long books take a few minutes. You can keep this tab open in the background.</div>
+            </div>
+          ) : (
+            <p className="pg-ai-hint">Original stories and invented people only. {aiTone === "family" ? "Family friendly." : ""} {ai?.mock ? "(Test mode: stories come from templates.)" : ""}</p>
+          )}
+        </div>
+      ),
+    });
+    caseQuestions.push({
+      key: "ai-review",
+      title: aiBook ? `“${aiBook.book.title}”` : "Your mystery",
+      lead: aiBook ? aiBook.book.intro : "",
+      wide: true,
+      canNext: !!aiBook?.book.cases.length && aiBusyCase === null,
+      blockedHint: aiBusyCase !== null ? "Rewriting a case…" : "Generate the cases first",
+      nextTestId: "my-ai-apply",
+      onNext: () => FINISH,
+      body: aiBook ? (
+        <div className="pg-my-review" data-testid="my-ai-review">
+          <div className="pg-ai-summary">
+            <span>
+              {plural(aiBook.book.cases.length, "case")} · {plural(aiBook.book.cast.length, "suspect")} in the cast
+              {aiBook.book.finale.phrase ? ` · the Case Board spells ${aiBook.book.finale.phrase}` : ""}
+            </span>
+            <span className="d-flex gap-3 flex-wrap">
+              <button type="button" className="pg-link-btn" data-testid="my-ai-regenerate-all" onClick={() => (flow(0).setSub("ai-options"), void aiGenerate())}>
+                <BsArrowRepeat /> Regenerate all
+              </button>
+              <button type="button" className="pg-link-btn" data-testid="my-edit-text" onClick={editAsText}>
+                <BsPencilSquare /> Edit as text
+              </button>
+            </span>
+          </div>
+          {(() => {
+            const all = [...aiBook.notes, ...aiBook.caseNotes.flatMap((n, k) => (n.length ? [`Case ${k + 1}: ${n.join("; ")}.`] : []))];
+            return all.length ? (
+              <details className="pg-my-checks-box pg-ai-notes" data-testid="my-ai-notes">
+                <summary>{plural(all.length, "note")} from the checks</summary>
+                <ul>
+                  {all.map((n, i) => (
+                    <li key={i}>{n}</li>
+                  ))}
+                </ul>
+              </details>
+            ) : null;
+          })()}
+          {aiBook.book.cases.map((c, i) => {
+            const notes = caseNotes(c, aiBook.book.cast, settings);
+            return (
+              <div key={i} className="pg-my-row" data-testid="my-review-case">
+                <span className="pg-theme-num">{i + 1}</span>
+                <div className="pg-my-row-main">
+                  <div className="pg-my-row-title">{c.title}</div>
+                  <div className="pg-ai-story">{c.story}</div>
+                  <div className="pg-theme-meta">
+                    {plural(c.words.length, "word")} · {c.suspects.join(", ")}
+                    {c.culprit ? ` · culprit ${c.culprit}` : ""}
+                    {c.missing ? ` · missing ${c.missing.word}` : ""}
+                  </div>
+                  {notes.length > 0 && <div className="pg-my-row-note">{notes.join(" ")}</div>}
+                </div>
+                <span className="pg-ai-row-actions">
+                  <button type="button" className="pg-quiet-btn" data-testid="my-ai-regenerate" disabled={aiBusyCase !== null} onClick={() => void aiRegenerate(i)} title="Regenerate this case">
+                    <BsArrowRepeat className={aiBusyCase === i ? "pg-spin" : ""} /> {aiBusyCase === i ? "Rewriting…" : "Regenerate"}
+                  </button>
+                  <button type="button" className="pg-quiet-btn" aria-label={`Remove ${c.title}`} disabled={aiBusyCase !== null || aiBook.book.cases.length < 2} onClick={() => setAiBook({ ...aiBook, book: { ...aiBook.book, cases: aiBook.book.cases.filter((_, j) => j !== i) }, caseNotes: aiBook.caseNotes.filter((_, j) => j !== i), indexes: aiBook.indexes.filter((_, j) => j !== i) })}>
+                    <BsTrash3 />
+                  </button>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : null,
+    });
+  }
   if (source === "starter")
     caseQuestions.push({
       key: "starter",

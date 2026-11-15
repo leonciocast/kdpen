@@ -795,3 +795,32 @@ a { text-underline-offset: 2px; }
   color: #1f2937;
 }
 .pg-update-note .btn { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+/* AI cases */
+.pg-my-sources.ai-off .pg-choice-card:disabled { opacity: 1; box-shadow: none; background: #f8fafc; cursor: default; }
+.pg-my-sources .pg-choice-card:disabled .pg-rec-badge { background: #e2e8f0; color: #64748b; }
+.pg-my-sources .pg-choice-card:disabled .pg-cta { display: none; }
+.pg-my-sources .pg-choice-card:disabled .pg-icon-badge { background: #eef1f5; color: #8a97a8; }
+.pg-my-sources .pg-choice-card:disabled .pg-choice-title { color: #475569; }
+.pg-ai { display: flex; flex-direction: column; gap: 1.25rem; }
+.pg-ai-group { display: flex; flex-direction: column; gap: .5rem; }
+.pg-ai-row { display: flex; flex-wrap: wrap; gap: 2rem; align-items: flex-start; }
+.pg-ai-label { font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #64748b; margin: 0; }
+.pg-ai-chips { display: flex; flex-wrap: wrap; gap: .45rem; }
+.pg-ai-chips .pg-chip { font-weight: 500; }
+.pg-ai-chips .pg-chip:disabled, .pg-ai .pg-seg button:disabled { opacity: .6; cursor: default; }
+.pg-ai-hint { margin: 0; font-size: .85rem; color: #64748b; }
+.pg-ai-progress { border: 1px solid #dfe3fb; background: linear-gradient(180deg, #f7f8ff 0%, #fff 100%); border-radius: 12px; padding: 1rem 1.1rem .9rem; }
+.pg-ai-progress-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; font-weight: 600; color: #312e81; margin-bottom: .6rem; }
+.pg-ai-progress-head svg { color: var(--pg-primary); margin-right: .35rem; }
+.pg-ai-progress .pg-progress { margin-bottom: .5rem; }
+.pg-ai-progress-note { font-size: .8rem; color: #64748b; }
+.pg-ai-summary { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .75rem; font-size: .88rem; color: #475569; padding: .2rem 0 .8rem; border-bottom: 1px solid var(--pg-border); margin-bottom: .4rem; }
+.pg-ai-notes { margin: .4rem 0 .6rem; }
+.pg-ai-notes ul { margin: .5rem 0 0; padding-left: 1.1rem; font-size: .84rem; color: #475569; }
+.pg-ai-story { font-size: .85rem; color: #475569; margin: .15rem 0 .25rem; line-height: 1.45; }
+.pg-ai-row-actions { display: flex; align-items: center; gap: .25rem; flex-shrink: 0; }
+.pg-ai-row-actions .pg-quiet-btn { white-space: nowrap; }
+.pg-spin { animation: pg-spin 1s linear infinite; }
+@keyframes pg-spin { to { transform: rotate(360deg); } }
+.pg-ai-notes > summary { color: #475569; font-size: .88rem; }

@@ -8,7 +8,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!job) return Response.json({ error: "This job has expired. Please generate again." }, { status: 404 });
   const { status, progress, error, result } = job;
   return Response.json(
-    { status, progress, error, result: result ? { book: result.book, outline: result.outline, caseNotes: result.caseNotes, notes: result.notes } : undefined },
+    { status, progress, error, result: result ? { book: result.book, outline: result.outline, caseNotes: result.caseNotes, indexes: result.indexes, notes: result.notes } : undefined },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
