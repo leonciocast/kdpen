@@ -139,6 +139,28 @@ export function paragraph(pdf: jsPDF, text: string, x: number, y: number, width:
 }
 
 /** Page header in the book's design; returns the y where content can start. */
+/**
+ * A subtitle that needs two or more lines breaks after a colon when it can ("…to Solve:" / "A Whodunit…"),
+ * otherwise the lines are balanced so no word sits alone on the last line.
+ */
+export function subtitleLines(pdf: jsPDF, text: string, maxW: number): string[] {
+  const plain = pdf.splitTextToSize(text, maxW) as string[];
+  if (plain.length < 2) return plain;
+  const colon = text.indexOf(": ");
+  if (colon > 0) {
+    const parts = [text.slice(0, colon + 1), text.slice(colon + 2)];
+    const lines = parts.flatMap((t) => pdf.splitTextToSize(t, maxW) as string[]);
+    if (lines.length === parts.length) return lines;
+  }
+  let lo = maxW * 0.4, hi = maxW;
+  for (let i = 0; i < 14; i++) {
+    const mid = (lo + hi) / 2;
+    if ((pdf.splitTextToSize(text, mid) as string[]).length > plain.length) lo = mid;
+    else hi = mid;
+  }
+  return pdf.splitTextToSize(text, hi) as string[];
+}
+
 export function heading(ctx: PageContext, text: string, number?: number, subtitle?: string): number {
   return drawHeader(ctx.pdf, ctx.box, ctx.look, { text, number, subtitle }, ctx.s);
 }
@@ -171,7 +193,7 @@ function drawTitlePage(ctx: PageContext, fm: FrontMatter, detail: string, volume
     pdf.setFontSize(15 * s);
     pdf.setTextColor(70, 70, 70);
     y += 4 * s;
-    (pdf.splitTextToSize(fm.subtitle.trim(), innerW) as string[]).forEach((l) => {
+    subtitleLines(pdf, fm.subtitle.trim(), innerW).forEach((l) => {
       centered(pdf, l, cx, y);
       y += 20 * s;
     });
@@ -423,6 +445,7 @@ export function renderBook(opts: RenderBookOptions): RenderedBook {
   // Every stroke at least KDP's 0.75 pt, whatever a layout asks for.
   const setWidth = pdf.setLineWidth.bind(pdf);
   pdf.setLineWidth = ((w: number) => setWidth(Math.max(w, PRINT_MIN_LINE_PT))) as typeof pdf.setLineWidth;
+  pdf.setLineWidth(PRINT_MIN_LINE_PT);
   registerFonts(pdf, familiesFor(design), opts.fonts);
   pdf.setFont(SANS, "normal");
   const fm = opts.frontMatter;

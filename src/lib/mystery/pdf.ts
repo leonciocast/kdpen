@@ -387,21 +387,7 @@ function casePage(c: MysteryCase, style: CaseStyle, headerText: string): PageRen
     const rightH = notes(false, 0, 0);
     const bottomH = Math.max(leftH, rightH);
     // The lead is never cut short: it shrinks a little to stay on one line, then wraps.
-    const leadFit = (() => {
-      if (!c.lead) return null;
-      pdf.setFont(SANS, "bold");
-      pdf.setFontSize(7.2 * s);
-      const kw = pdf.getTextWidth("NEXT LEAD") + 9 * 1.4 * s;
-      const room = box.w - kw - 14 * s;
-      pdf.setFont(SERIF, "normal");
-      for (const size of [8.8, 8.4, 8]) {
-        pdf.setFontSize(size * s);
-        const lines = pdf.splitTextToSize(c.lead, room) as string[];
-        if (lines.length === 1) return { kw, size: size * s, lines };
-      }
-      pdf.setFontSize(8.8 * s);
-      return { kw, size: 8.8 * s, lines: pdf.splitTextToSize(c.lead, room) as string[] };
-    })();
+    const leadFit = c.lead ? fitLead(pdf, c.lead, box.w, s) : null;
     const leadExtra = leadFit ? (leadFit.lines.length - 1) * leadFit.size * 1.3 : 0;
     const leadH = c.lead ? 24 * s + leadExtra : 0;
     const bottomY = box.y + box.h - bottomH - leadH;
@@ -501,27 +487,32 @@ function boardPage(b: BoardItem): PageRenderer {
     pdf.text("Write each case key in its numbered box.", box.x + box.w, y, { align: "right", baseline: "middle" });
     pdf.setTextColor(0, 0, 0);
     y += 12 * s;
-    // As many boxes per row as fit at a comfortable size, rows balanced (never one box alone).
+    // Boxes grouped by word, with a gap between words (as on Case Closed); words wrap to new rows.
     const bgap = 5 * s;
-    const maxPer = Math.max(1, Math.floor((box.w + bgap) / (26 * s + bgap)));
-    const per = Math.ceil(b.boxes / Math.ceil(b.boxes / maxPer));
-    let size = Math.min(34 * s, (box.w - bgap * (per - 1)) / per);
-    const rowsB = Math.ceil(b.boxes / per);
-    if (rowsB * (size + bgap) > remaining - 24 * s) size = Math.max(14 * s, (remaining - 24 * s) / rowsB - bgap);
-    const rowW = per * size + (per - 1) * bgap;
-    for (let i = 0; i < b.boxes; i++) {
-      const r = Math.floor(i / per);
-      const c = i % per;
-      keyBox(pdf, box.x + (box.w - rowW) / 2 + c * (size + bgap), y + r * (size + bgap), size, i + 1, look, s);
-    }
-    y += rowsB * (size + bgap) + 24 * s;
+    const wgap = 14 * s;
+    const bwords = phraseWords(b.phrase);
+    let size = 30 * s;
+    let browsW = wordRows(bwords, size, bgap, wgap, box.w);
+    while ((browsW.length > 4 || browsW.length * (size + bgap) > remaining - 24 * s) && size > 14 * s) browsW = wordRows(bwords, (size -= 1 * s), bgap, wgap, box.w);
+    let bn = 0;
+    browsW.forEach((row, r) => {
+      const rw = row.reduce((a, w) => a + w.length * (size + bgap) - bgap, 0) + wgap * (row.length - 1);
+      let x = box.x + (box.w - rw) / 2;
+      for (const word of row) {
+        for (let i = 0; i < word.length; i++) keyBox(pdf, x + i * (size + bgap), y + r * (size + bgap), size, ++bn, look, s);
+        x += word.length * (size + bgap) - bgap + wgap;
+      }
+    });
+    y += browsW.length * (size + bgap) + 24 * s;
 
     // Case log: one line per case for the culprit's name.
     const cases = b.cases ?? 0;
-    const rowH = 17 * s;
-    const avail = box.y + box.h - y - 14 * s;
-    const logCols = cases > 48 ? 4 : cases > 16 ? 3 : 2;
-    if (cases > 0 && Math.ceil(cases / logCols) * rowH <= avail) {
+    const avail = box.y + box.h - y - 22 * s;
+    // More columns (up to 5), then tighter rows (down to 13 pt), before the log is left out.
+    let logCols = cases > 48 ? 4 : cases > 16 ? 3 : 2;
+    while (logCols < 5 && Math.ceil(cases / logCols) * 13 * s > avail) logCols++;
+    const rowH = Math.min(17 * s, avail / Math.max(1, Math.ceil(cases / logCols)));
+    if (cases > 0 && rowH >= 13 * s) {
       label(pdf, "CASE LOG", box.x, y, look, s);
       pdf.setFont(SERIF, "normal");
       pdf.setFontSize(8.8 * s);
@@ -547,6 +538,41 @@ function boardPage(b: BoardItem): PageRenderer {
   };
 }
 
+const keyLook = (look: Look): Look => (look.design.fonts.gridScale <= 1 ? look : { ...look, design: { ...look.design, fonts: { ...look.design.fonts, gridScale: 1 } } });
+/** The NEXT LEAD footer text: shrunk a little (8.8 → 8 pt) to stay on one line, otherwise wrapped. Never cut. */
+export function fitLead(pdf: jsPDF, lead: string, width: number, s: number): { kw: number; size: number; lines: string[] } {
+  pdf.setFont(SANS, "bold");
+  pdf.setFontSize(7.2 * s);
+  const kw = pdf.getTextWidth("NEXT LEAD") + 9 * 1.4 * s;
+  const room = width - kw - 14 * s;
+  pdf.setFont(SERIF, "normal");
+  for (const size of [8.8, 8.4, 8]) {
+    pdf.setFontSize(size * s);
+    const lines = pdf.splitTextToSize(lead, room) as string[];
+    if (lines.length === 1) return { kw, size: size * s, lines };
+  }
+  pdf.setFontSize(8.8 * s);
+  return { kw, size: 8.8 * s, lines: pdf.splitTextToSize(lead, room) as string[] };
+}
+
+/** The final phrase as words of box letters. */
+const phraseWords = (phrase: string) => phrase.split(/\s+/).map((w) => w.toUpperCase().replace(/[^A-ZÑ]/g, "")).filter(Boolean);
+/** Words laid out in rows of boxes that fit a width (a word never splits). */
+function wordRows(words: string[], sz: number, bgap: number, wgap: number, maxW: number): string[][] {
+  const rows: string[][] = [[]];
+  let w = 0;
+  for (const word of words) {
+    const ww = word.length * (sz + bgap) - bgap;
+    if (w > 0 && w + wgap + ww > maxW) {
+      rows.push([]);
+      w = 0;
+    }
+    w += (w > 0 ? wgap : 0) + ww;
+    rows[rows.length - 1].push(word);
+  }
+  return rows;
+}
+
 function finalePage(f: FinaleItem): PageRenderer {
   return (ctx: PageContext) => {
     const { pdf, box, s, look } = ctx;
@@ -559,26 +585,12 @@ function finalePage(f: FinaleItem): PageRenderer {
     introL.forEach((l, i) => pdf.text(l, box.x + box.w / 2, y + i * 15 * s + 8 * s, { align: "center" }));
     y += introL.length * 15 * s + 22 * s;
     // Boxes grouped by word.
-    const words = f.phrase.split(/\s+/).map((w) => w.replace(/[^A-ZÑ]/g, "")).filter(Boolean);
+    const words = phraseWords(f.phrase);
     const bgap = 4 * s;
     const wgap = 16 * s;
     let size = 30 * s;
-    const fits = (sz: number) => {
-      const rows: string[][] = [[]];
-      let w = 0;
-      for (const word of words) {
-        const ww = word.length * (sz + bgap) - bgap;
-        if (w > 0 && w + wgap + ww > box.w) {
-          rows.push([]);
-          w = 0;
-        }
-        w += (w > 0 ? wgap : 0) + ww;
-        rows[rows.length - 1].push(word);
-      }
-      return rows;
-    };
-    let rows = fits(size);
-    while (rows.length > 3 && size > 16 * s) rows = fits((size -= 2 * s));
+    let rows = wordRows(words, size, bgap, wgap, box.w);
+    while (rows.length > 3 && size > 16 * s) rows = wordRows(words, (size -= 2 * s), bgap, wgap, box.w);
     let n = 0;
     const card0 = { x: box.x, y: y - 16 * s, w: box.w, h: rows.length * (size + 14 * s) + 18 * s };
     card(pdf, card0, look, s, paper(look), false);
@@ -679,7 +691,8 @@ function answersPage(entries: Entry[], first: boolean, per: number): PageRendere
         const gy = sy + labelH + (0.08 - geo.ext.y0) * cell;
         ttl(`#${c.number}  ${c.title}`);
         const em = new Set(c.messageCells.map(([r, cc]) => `${r},${cc}`));
-        drawWordSearchGrid(pdf, look, pz, gx, gy, cell, { answers: true, dashed: c.extra ? [c.extra as Placement] : [], emphasis: em });
+        // Answer keys keep the standard letter size; a larger puzzle letter (gridScale > 1) would crowd the loops.
+        drawWordSearchGrid(pdf, keyLook(look), pz, gx, gy, cell, { answers: true, dashed: c.extra ? [c.extra as Placement] : [], emphasis: em });
         let y = gy + geo.ext.y1 * cell + 4 * s + fs;
         // Line the labels up with the grid's left edge when the values still fit there.
         let kx = sx + Math.max(0, (slotW - extW * cell) / 2) + 2 * s;
