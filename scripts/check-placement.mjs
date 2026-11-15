@@ -5,7 +5,7 @@ const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-await page.goto("http://localhost:3000/word-search", { waitUntil: "networkidle" });
+await page.goto("http://localhost:3000/word-search?type=classic", { waitUntil: "networkidle" });
 await page.click('[data-testid="choose-type"]');
 const ta = page.locator("#wordInput");
 await ta.click();

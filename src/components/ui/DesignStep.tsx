@@ -90,6 +90,7 @@ interface Props {
 const SHAPE_LEAD: Record<ToolKind, string> = {
   "word-search": "The letters fill the shape you pick — a heart, a star, or an animal silhouette — and every word stays inside it. Grids grow a little when a shape needs more room, so no word is ever dropped.",
   crossword: "The crossword is built inside the shape: every word stays within its outline. Only shapes that still give well-connected crosswords are offered, including the animals that work well.",
+  mystery: "Each case grid fills the shape you pick, and the leftover letters still spell the hidden message exactly. Grids grow a little when a shape needs more room.",
   sudoku: "A sudoku must stay a 9×9 square to be solvable, so the shape is a decorative frame around the grid (animals sit the grid in the body). You can also round or circle the cells in the next step.",
 };
 
@@ -270,7 +271,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
       <div className="row g-4">
         <div className="col-lg-7">
           <ShapePlanPanel tool={tool} design={design} set={set} list={planList} themes={themes} focus={focus} setFocus={setFocus} />
-          {tool === "word-search" && (
+          {(tool === "word-search" || tool === "mystery") && (
             <div className="mt-3">
               <Seg label="Shape outline" value={design.shape.outline} options={DESIGN_OPTIONS.OUTLINES} labels={{ smooth: "Artist (smooth)", stepped: "Stepped cell outline", snug: "Snug (hugs letters)", blocky: "Blocky / pixel" }} onChange={(v) => set((d) => { d.shape.outline = v; if (v === "stepped") d.shape.shade = false; })} />
               {design.shape.outline === "stepped" && (
@@ -324,7 +325,7 @@ export default function DesignStep({ tool, api, buildSample, listName, shapeStat
           </div>
         </div>
       )}
-      {tool === "word-search" && (
+      {(tool === "word-search" || tool === "mystery") && (
         <div className="form-check form-switch">
           <input className="form-check-input" type="checkbox" id="ds-lines2" checked={design.grid.lines} onChange={(e) => set((d) => (d.grid.lines = e.target.checked))} data-testid="inner-lines" />
           <label className="form-check-label" htmlFor="ds-lines2">

@@ -226,7 +226,7 @@ async function exercise(tool, unit) {
 }
 
 // ---------------- Word search (three themes) ----------------
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle" });
 await hideToasts();
@@ -403,7 +403,7 @@ if (!SKIP_10K) {
   }
   const themes = ["Animals", "Food", "Travel", "Science", "Music"];
   fs.writeFileSync("/tmp/ws_10k.csv", "Word,Theme\n" + [...words].map((w, i) => `${w},${themes[i % 5]}`).join("\n") + "\n");
-  await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+  await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
   await hideToasts();
   await page.click('[data-testid="choose-upload"]');
   await page.setInputFiles('[data-testid="csv-input"]', "/tmp/ws_10k.csv");

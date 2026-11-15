@@ -3,11 +3,13 @@ import { useCallback, useEffect, useState } from "react";
 import { CURRENT_DESIGN_KEY, PRESETS_STORAGE_KEY, PresetStore, parsePresetStore, removePreset, sanitizeDesign, upsertPreset } from "@/lib/design/presets";
 import { DEFAULT_DESIGN, templateDesign } from "@/lib/design/templates";
 import type { Design, ToolKind } from "@/lib/design/types";
+import { mysteryDesign } from "@/lib/mystery/pdf";
 
 const DEFAULT_FOR: Record<ToolKind, Design> = {
   "word-search": templateDesign("banner"),
   crossword: templateDesign("elegant"),
   sudoku: templateDesign("classic"),
+  mystery: mysteryDesign(),
 };
 
 function read<T>(key: string, parse: (raw: string | null) => T, fallback: T): T {

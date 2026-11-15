@@ -1,7 +1,9 @@
 "use client";
 import { plural } from "@/lib/plural";
 import React, { useMemo, useRef, useState } from "react";
-import { BsSearch } from "react-icons/bs";
+import { BsGrid3X3Gap, BsSearch } from "react-icons/bs";
+import WordSearchType, { useWordSearchType } from "./WordSearchType";
+import MysteryWordSearch from "@/components/mystery/MysteryWordSearch";
 import { toast } from "react-toastify";
 import PageHeader from "@/components/ui/PageHeader";
 import BookExport from "@/components/ui/BookExport";
@@ -76,7 +78,7 @@ function recentre(ps: Placement[], from: number, to: number): Placement[] {
 
 const toBook = (p: PuzzleModel): BookPuzzle => ({ title: p.title, theme: p.theme, size: p.size, grid: p.grid!, words: listedWords(p), placements: p.placements, shape: p.shape });
 
-export default function WordSearch() {
+function ClassicWordSearch({ onChangeType }: { onChangeType: () => void }) {
   const [entries, setEntries] = useState<WordEntry[]>([]);
   const [settings, setSettings] = useState<WsSettings>({ difficulty: "medium", dirOpts: dirOptsFor("medium"), wordsPerPuzzle: 20, sizeMode: "auto", gridSize: 15, groupByTheme: true });
   const [puzzles, setPuzzles] = useState<PuzzleModel[]>([]);
@@ -275,11 +277,20 @@ export default function WordSearch() {
 
   return (
     <div className="container pb-4">
-      <PageHeader icon={<BsSearch />} title="Word Search" lead="Build word search puzzles step by step, from a dozen words to 20,000, and export a print-ready book with answer keys." />
+      <PageHeader
+        icon={<BsSearch />}
+        title="Word Search"
+        lead="Build word search puzzles step by step, from a dozen words to 20,000, and export a print-ready book with answer keys."
+        actions={
+          <button type="button" className="pg-quiet-btn" onClick={onChangeType} data-testid="ws-change-type">
+            <BsGrid3X3Gap /> Change type
+          </button>
+        }
+      />
       <Stepper steps={STEPS} current={step} maxReachable={maxReachable} onSelect={goTo} />
       <div className="pg-card pg-wizard-card">
         <>
-          {step === 0 && <StepWords entries={entries} setEntries={setEntries} flow={flow(0)} wordsPerPuzzle={settings.wordsPerPuzzle} fixedGrid={settings.sizeMode === "auto" ? undefined : settings.gridSize} />}
+          {step === 0 && <StepWords entries={entries} setEntries={setEntries} flow={{ ...flow(0), onBackOut: onChangeType }} wordsPerPuzzle={settings.wordsPerPuzzle} fixedGrid={settings.sizeMode === "auto" ? undefined : settings.gridSize} />}
           {step === 1 && <StepSettings settings={settings} setSettings={setSettings} specs={specs} wordCount={entries.length} themeCount={themeCount} flow={flow(1)} />}
           {step === 2 && <StepPlace puzzles={puzzles} active={active} setActive={setActive} updateActive={updateActive} autoDirs={dirs} stale={stale} create={create} finishAll={finishAll} running={running} flow={flow(2)} />}
           {step === 3 && (
@@ -304,4 +315,13 @@ export default function WordSearch() {
       </div>
     </div>
   );
+}
+
+/** Word search: first pick the type, then that type's wizard. */
+export default function WordSearch() {
+  const [kind, setKind] = useWordSearchType();
+  if (kind === "mystery") return <MysteryWordSearch onChangeType={() => setKind(null)} />;
+  if (kind === "classic") return <ClassicWordSearch onChangeType={() => setKind(null)} />;
+  if (kind === undefined) return <div className="container pb-4" aria-busy="true" />;
+  return <WordSearchType onPick={setKind} ready />;
 }

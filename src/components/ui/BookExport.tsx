@@ -247,7 +247,7 @@ export default function BookExport({ tool, toolDefaults, itemNoun, itemCount, se
     const rank: Record<string, number> = { easy: 0, medium: 1, hard: 2, expert: 3 };
     const out: Sorter[] = [];
     if (tool === "sudoku") out.push(sortBy("Sort easy → hard", "difficulty", (it) => rank[String(it.difficulty)] ?? 9));
-    else if (sectionCount > 0) out.push(sortBy("Group by theme (A–Z)", "theme", (it) => String(it.theme ?? "").toLowerCase()));
+    else if (sectionCount > 0 && tool !== "mystery") out.push(sortBy("Group by theme (A–Z)", "theme", (it) => String(it.theme ?? "").toLowerCase()));
     out.push({ key: "original", label: `Original ${itemNoun} order`, apply: () => changeSlots(reorderPuzzles(slots, (refs) => refs.slice().sort((a, b) => a - b))) });
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps

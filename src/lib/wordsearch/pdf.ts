@@ -48,6 +48,10 @@ export interface GridDrawOptions {
   answers: boolean;
   /** Draw a white panel behind the grid (patterned pages). */
   backing?: boolean;
+  /** Answers: extra words drawn with a dashed loop (e.g. a mystery's missing evidence). */
+  dashed?: Placement[];
+  /** Answers: cells whose letters are drawn bold in the accent colour (e.g. a hidden message). */
+  emphasis?: Set<string>;
 }
 
 /** Letter font size in points for a grid whose cells are `cell` points wide. */
@@ -136,6 +140,15 @@ export function drawWordSearchGrid(pdf: jsPDF, baseLook: Look, puzzle: BookPuzzl
       poly(pdf, pts, "FD");
       for (const [r, c] of placementCells(p)) solution.add(`${r},${c}`);
     }
+    if (o.dashed?.length) {
+      pdf.setLineDashPattern([Math.max(1.2, cell * 0.12), Math.max(1, cell * 0.09)], 0);
+      paint.stroke(pdf, look.ink);
+      for (const p of o.dashed) {
+        poly(pdf, placementCapsule(p, ox, oy, cell), "S");
+        for (const [r, c] of placementCells(p)) solution.add(`${r},${c}`);
+      }
+      pdf.setLineDashPattern([], 0);
+    }
   }
   const gf = look.font(look.design.fonts.grid);
   const size = wsLetterSize(cell, look.design);
@@ -145,12 +158,14 @@ export function drawWordSearchGrid(pdf: jsPDF, baseLook: Look, puzzle: BookPuzzl
     for (let c = c0; c < c0 + cols; c++) {
       const ch = puzzle.grid[r]?.[c];
       if (!ch) continue;
+      const em = !!o.answers && !!o.emphasis?.has(`${r},${c}`);
       const on = !o.answers || solution.has(`${r},${c}`);
-      const style = o.answers && on ? "bold" : "normal";
-      const key = style + (on ? 1 : 0);
+      const style = o.answers && (on || em) ? "bold" : "normal";
+      const key = style + (em ? 2 : on ? 1 : 0);
       if (key !== current) {
         pdf.setFont(gf, style);
-        if (o.answers && !on) pdf.setTextColor(165, 165, 165);
+        if (em) paint.textColor(pdf, look.ink);
+        else if (o.answers && !on) pdf.setTextColor(165, 165, 165);
         else pdf.setTextColor(0, 0, 0);
         current = key;
       }

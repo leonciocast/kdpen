@@ -95,10 +95,11 @@ export interface Design {
   };
 }
 
-export type ToolKind = "word-search" | "crossword" | "sudoku";
+export type ToolKind = "word-search" | "crossword" | "sudoku" | "mystery";
 
 export const TOOL_HEADER: Record<ToolKind, string> = {
   "word-search": "WORD SEARCH PUZZLE",
   crossword: "CROSSWORD PUZZLE",
   sudoku: "SUDOKU PUZZLE",
+  mystery: "CASE FILE",
 };

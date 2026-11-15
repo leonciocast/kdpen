@@ -79,7 +79,7 @@ const WORDS1 = SAMPLE.split("\n").filter((l) => /^\d+\. /.test(l)).map((l) => l.
 const WORDS2 = SAMPLE.split("\n").filter((l) => /^- /.test(l)).map((l) => l.slice(2));
 
 // ================= Word search: the ice cream sample =================
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle" });
 await hideToasts();
@@ -198,7 +198,7 @@ for (let p = 1; p <= pages; p++) {
 stamp("04_final_page");
 
 // ================= Word search: messy formats + a dropped file =================
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle" });
 await hideToasts();

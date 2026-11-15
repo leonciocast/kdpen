@@ -46,7 +46,7 @@ await page.goto(BASE + "/", { waitUntil: "networkidle" });
 await shot(page, "01_home");
 
 // ---------- Word search: small book with manual placement ----------
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await page.click('[data-testid="choose-type"]');
 await page.fill("#wordInput", "ICE CREAM\nSunshine\nBeach Ball\nSandcastle\nSeashell\nSurfing\nLemonade\nSunglasses\nPicnic\nWaves\nT-REX");
 await next(); // -> theme
@@ -117,7 +117,7 @@ while (words.size < 10000) {
 }
 const themes = ["Animals", "Food", "Travel", "Science", "Music"];
 fs.writeFileSync("/tmp/ws_10k.csv", "Word,Theme\n" + [...words].map((w, i) => `${w},${themes[i % 5]}`).join("\n") + "\n");
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 let t0 = t();
 await page.click('[data-testid="choose-upload"]');
 await page.setInputFiles('[data-testid="csv-input"]', "/tmp/ws_10k.csv");

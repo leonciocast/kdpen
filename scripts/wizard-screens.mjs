@@ -90,7 +90,7 @@ await page.goto(BASE + "/", { waitUntil: "networkidle" });
 await shot("00_home");
 
 // ---------------- Word search ----------------
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle" });
 await hideToasts();
@@ -186,7 +186,7 @@ await next();
 await sharedDesignExport("sd", 3);
 
 // Word search upload path
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await hideToasts();
 await page.click('[data-testid="choose-upload"]');
 await shot("ws_1f_upload");

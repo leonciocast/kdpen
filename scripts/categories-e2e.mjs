@@ -67,7 +67,7 @@ const CATS = ["basic", "stepped", "hollow", "clusters", "letters", "animals", "n
 const GROUPS = ["farm", "safari", "pets", "forest", "birds", "ocean", "bugs", "fantasy"];
 const cardSel = '[data-testid="shape-picker"] [data-testid^="shape-"]:not([data-testid^="shape-mix"]):not([data-testid^="shape-cat"]):not([data-testid^="shape-subcat"]):not([data-testid="shape-picker"]):not([data-testid="shape-search"]):not([data-testid="shape-shade"]):not([data-testid^="shape-suggest"]):not([data-testid="shape-recent"])';
 
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle" });
 await hideToasts();

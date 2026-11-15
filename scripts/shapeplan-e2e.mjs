@@ -261,7 +261,7 @@ const THEMES = {
 const csv = ["Word,Theme"];
 for (const [t, ws] of Object.entries(THEMES)) for (const w of ws.split(" ")) csv.push(`${w},${t}`);
 fs.writeFileSync("/tmp/shapeplan_ws.csv", csv.join("\n") + "\n");
-await page.goto(BASE + "/word-search", { waitUntil: "networkidle" });
+await page.goto(BASE + "/word-search?type=classic", { waitUntil: "networkidle" });
 await page.evaluate(() => localStorage.clear());
 await page.reload({ waitUntil: "networkidle" });
 await hideToasts();

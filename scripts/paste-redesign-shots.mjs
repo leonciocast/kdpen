@@ -36,14 +36,14 @@ async function run(width, height, name, tool) {
   }
   await ctx.close();
 }
-await run(1440, 1000, "ws", "word-search");
+await run(1440, 1000, "ws", "word-search?type=classic");
 await run(1440, 1000, "cw", "cross-word");
-await run(390, 844, "ws_narrow", "word-search");
+await run(390, 844, "ws_narrow", "word-search?type=classic");
 if (TAG !== "before") {
   // Open menu (desktop)
   const ctx = await browser.newContext({ viewport: { width: 1200, height: 800 } });
   const page = await ctx.newPage();
-  await page.goto(`${BASE}/word-search`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/word-search?type=classic`, { waitUntil: "networkidle" });
   await page.addStyleTag({ content: ".Toastify{display:none!important}" });
   await page.click('[data-testid="choose-paste"]');
   await page.click('[data-testid="paste-example"]');

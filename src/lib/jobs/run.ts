@@ -7,6 +7,9 @@ import { generateSudoku } from "../sudoku";
 import { buildWordSearchBook } from "../wordsearch/pdf";
 import { buildCrosswordBook } from "../crossword/pdf";
 import { buildSudokuBook } from "../sudoku/pdf";
+import { buildMysteryBook } from "../mystery/pdf";
+import { bookItems, buildCase, planBook, validateBook } from "../mystery/model";
+import type { MysteryItem } from "../mystery/types";
 import { FontData, familiesFor, filesFor } from "../print/fonts";
 import type { RenderedBook } from "../print/book";
 import { resolveSlots } from "../print/arrange";
@@ -93,8 +96,24 @@ export async function runJob<J extends Job>(job: J, env: JobEnv): Promise<JobRes
       }
       return out as JobResultMap[J["type"]];
     }
+    case "my-generate": {
+      const { book, settings } = job.input;
+      const plan = planBook(book, job.input.cases, job.input.phrase, settings);
+      const warnings: string[] = [];
+      const built = [];
+      for (let i = 0; i < plan.cases.length; i++) {
+        await check(i);
+        const b = buildCase(plan.cases[i], i + 1, book.cast, plan.targets[i], { settings, seed: job.input.seed + i * 101, shape: job.input.shapes?.[i] });
+        built.push(b.case);
+        warnings.push(...b.warnings);
+        if (i % 2 === 0 || i === plan.cases.length - 1) env.progress({ phase: "Building case files", done: i + 1, total: plan.cases.length });
+      }
+      const items = bookItems(book, built, plan.phrase, settings.storyline && !!plan.phrase);
+      return { items, warnings, problems: validateBook(items).problems } as JobResultMap[J["type"]];
+    }
     case "build": {
       const st = job.settings;
+      if (job.tool === "mystery" && job.volumes.length > 1) throw new Error("This mystery book is too long for one KDP volume. Use fewer cases.");
       env.progress({ phase: "Loading fonts", done: 0, total: 1 });
       const fonts = await env.loadFonts(filesFor(familiesFor(st.design)));
       const files: BuiltFile[] = [];
@@ -124,6 +143,7 @@ export async function runJob<J extends Job>(job: J, env: JobEnv): Promise<JobRes
         let book: RenderedBook;
         if (job.tool === "word-search") book = buildWordSearchBook((items as BookPuzzle[]).slice(a, b), { ...common, answersPerPage: st.answersPerPage }, fonts);
         else if (job.tool === "crossword") book = buildCrosswordBook((items as CrosswordItem[]).slice(a, b), { ...common, answersPerPage: st.answersPerPage }, fonts);
+        else if (job.tool === "mystery") book = buildMysteryBook(items as MysteryItem[], { ...common, answersPerPage: st.answersPerPage, style: job.style }, fonts);
         else book = buildSudokuBook((items as SudokuPuzzle[]).slice(a, b), { ...common, puzzlesPerPage: st.perPage ?? 1, answersPerPage: st.answersPerPage, pageSizes: arranged?.puzzlePageSizes }, fonts);
         env.progress({ phase: "Saving PDF", done: 1, total: 1 });
         const bytes = book.pdf.output("arraybuffer");
