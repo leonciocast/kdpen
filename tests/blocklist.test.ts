@@ -51,6 +51,26 @@ describe("blocklist scanner", () => {
     expect(wordIsBlocked("TARP")).toBe(true); // reversed: PRAT
     expect(allowedWordDirections("RIBBON", ["E", "W", "S", "N", "SE", "NW"])).toEqual(["E", "S", "SE"]);
   });
+  it("blocks the shared list's newer tokens in all 8 directions (kept ROT13 here so the test file stays clean)", () => {
+    const rot = (w: string) => w.replace(/[A-Z]/g, (ch) => String.fromCharCode(((ch.charCodeAt(0) - 52) % 26) + 65));
+    const newer = ["XBX", "XBPX", "OGPU", "OVPU", "XHAG", "SIPX", "XLXR", "CNAGL"].map(rot);
+    const D: [number, number][] = [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    for (const t of newer) {
+      expect(blockedSpans(`Q${t}Q`), rot(t)).toHaveLength(1);
+      for (const [dr, dc] of D) {
+        const n = t.length + 2;
+        const g = Array.from({ length: n }, () => Array.from({ length: n }, () => "Q"));
+        const r0 = dr < 0 ? n - 2 : 1, c0 = dc < 0 ? n - 2 : 1;
+        [...t].forEach((ch, i) => (g[r0 + dr * i][c0 + dc * i] = ch));
+        expect(scanGrid(g), `${rot(t)} ${dr},${dc}`).toHaveLength(1);
+      }
+    }
+    // Case 11 of the v4 book: K-O-K ran down-right through three different answer words, so no word excuses it.
+    const k = grid(["KQQ", "QOQ", "QQK"]);
+    expect(scanGrid(k, [[[0, 0]], [[1, 1]], [[2, 2]]])).toHaveLength(1);
+    // The shared tool's innocent stems excuse the same readings ours do.
+    for (const w of ["BICHON", "PRATTLE", "PRATFALL", "SPRAT"]) expect(blockedSpans(w), w).toEqual([]);
+  });
   it("ships the list as hashes only, and no screen imports it", () => {
     const data = readFileSync("src/lib/wordsearch/blocklistData.ts", "utf8");
     const hashes = data.slice(data.indexOf("BLOCKED_TOKEN_HASHES"), data.indexOf("INNOCENT_STEMS"));
