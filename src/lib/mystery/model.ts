@@ -92,8 +92,12 @@ export function keySources(c: { culprit?: Person; missing?: string; title: strin
 export function chooseKey(target: string, box: number, c: { culprit?: Person; missing?: string; title: string }, seed: number): CaseKey | undefined {
   const sources = keySources(c);
   const rng = mulberry32(seed);
-  for (const pass of [0, 1])
-    for (const [source, text, firstLen] of sources) {
+  // The title is printed on the page, so its letter is free; it is the very last resort, after
+  // any letter the solver has to earn (culprit, missing word or job, even past the first word).
+  const earned = sources.filter(([k]) => k !== "title");
+  const free = sources.filter(([k]) => k === "title");
+  for (const [pass, list] of [[0, earned], [1, earned], [0, free], [1, free]] as const)
+    for (const [source, text, firstLen] of list) {
       const at: number[] = [];
       for (let i = 0; i < text.length; i++) if (text[i] === target && (pass === 1 || i < firstLen)) at.push(i);
       if (!at.length) continue;

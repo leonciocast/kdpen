@@ -35,6 +35,22 @@ describe("blocklist scanner", () => {
     expect(allowedWordDirections("PARCEL", ["E", "W", "S", "N"])).toEqual(["E", "S"]);
     expect(allowedWordDirections("LANTERN", ["E", "W"])).toEqual(["E", "W"]);
   });
+  it("hard-blocks the mild NOB, SOD, PRAT and HORE too, even inside KNOB or SHORE filler", () => {
+    for (const t of ["NOB", "SOD", "PRAT", "HORE"]) {
+      expect(blockedSpans(`Q${t}Q`), t).toHaveLength(1);
+      expect(scanGrid(grid([`Q${[...t].reverse().join("")}Q`, "QQQQQQ"])), t).toHaveLength(1); // read right to left
+      expect(scanGrid(grid(["Q" + "Q".repeat(t.length), ...[...t].map((ch) => `Q${ch}`.padEnd(t.length + 1, "Q"))])), `${t} down`).toHaveLength(1);
+    }
+    expect(scanGrid(grid(["NO.B", "QQQQ"]))).toHaveLength(0); // split at a hole
+    // Not excused by a look-alike word in the filler: a grid reading "…KNOB…" still shows NOB.
+    for (const w of ["KNOB", "SODA", "SHORE"]) expect(blockedSpans(w), w).toHaveLength(1);
+    // ...but an answer word that holds one is fine where it is placed (the hit lies inside its own cells).
+    const shore = [[0, 0], [0, 1], [0, 2], [0, 3], [0, 4]] as [number, number][];
+    expect(scanGrid(grid(["SHORE"]), [shore])).toHaveLength(0);
+    expect(wordIsBlocked("RIBBON")).toBe(true); // reversed: NOBBIR
+    expect(wordIsBlocked("TARP")).toBe(true); // reversed: PRAT
+    expect(allowedWordDirections("RIBBON", ["E", "W", "S", "N", "SE", "NW"])).toEqual(["E", "S", "SE"]);
+  });
   it("ships the list as hashes only, and no screen imports it", () => {
     const data = readFileSync("src/lib/wordsearch/blocklistData.ts", "utf8");
     const hashes = data.slice(data.indexOf("BLOCKED_TOKEN_HASHES"), data.indexOf("INNOCENT_STEMS"));

@@ -3,7 +3,8 @@
  * Turn a plain blocklist (one token per line, A–Z) into the hashed data the generator ships
  * (src/lib/wordsearch/blocklistData.ts), so no blocked word is ever readable in the app or its bundle.
  *   node scripts/blocklist-hashes.mjs tokens.txt stems.txt > src/lib/wordsearch/blocklistData.ts
- * The plain lists stay outside the repo (the team's shared blocklist).
+ * The plain lists stay outside the repo: the team's shared blocklist plus our extra tokens and stems
+ * (on the box: /workspace/kdpen-blocklist-src/{tokens,stems}.txt).
  */
 import { readFileSync } from "fs";
 const read = (p) => [...new Set(readFileSync(p, "utf8").split(/\s+/).map((t) => t.toUpperCase().replace(/[^A-Z]/g, "")).filter((t) => t.length >= 3))].sort();

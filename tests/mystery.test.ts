@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { checkCaseGrid, directionsFor, generateCaseGrid, messageLetters, BLANK } from "../src/lib/mystery/engine";
-import { findPerson, generateMystery, keyInstruction, phraseLetters, planBook, uniqueTraits, validateBook } from "../src/lib/mystery/model";
+import { chooseKey, findPerson, generateMystery, keyInstruction, phraseLetters, planBook, uniqueTraits, validateBook } from "../src/lib/mystery/model";
 import { CASES_EXAMPLE, casesToText, parseCases } from "../src/lib/mystery/parse";
 import { SALTMERE, phraseFor, starterCases } from "../src/lib/mystery/starter";
 import { SETTINGS, scaffoldBook } from "../src/lib/mystery/templates";
@@ -222,5 +222,17 @@ describe("square cases never fail, however slow the device", () => {
         }
       }
     }
+  });
+});
+
+describe("Case Board keys", () => {
+  test("a title letter is the last resort: a letter the solver earns wins, even past the first word", () => {
+    const culprit = { name: "Pieter Voss", role: "Ferry mechanic", traits: ["has oily fingers"] };
+    const k = chooseKey("H", 13, { culprit, missing: "DRILL", title: "The Squeaking Gangplank" }, 7)!;
+    expect(k.source).toBe("role");
+    expect(k.spaced).toBe(true);
+    expect("FERRYMECHANIC"[k.position - 1]).toBe("H");
+    // Only when nothing earned has the letter does the title give it.
+    expect(chooseKey("Q", 1, { culprit, missing: "DRILL", title: "The Squeaking Gangplank" }, 7)!.source).toBe("title");
   });
 });
