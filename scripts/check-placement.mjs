@@ -1,0 +1,81 @@
+// Quick Playwright check of error-proof manual placement and input tidying (server on :3000).
+import { chromium } from "playwright";
+const b = await chromium.launch();
+const page = await b.newPage({ viewport: { width: 1440, height: 1000 } });
+const errors = [];
+page.on("pageerror", (e) => errors.push(String(e)));
+page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
+await page.goto("http://localhost:3000/word-search?type=classic", { waitUntil: "networkidle" });
+await page.click('[data-testid="choose-type"]');
+const ta = page.locator("#wordInput");
+await ta.click();
+await ta.evaluate((el) => {
+  const dt = new DataTransfer();
+  dt.setData("text/plain", "\n\n   ICE     CREAM   \n\n\n  sunshine\n   \n  BEACH    BALL  \n\nSandcastle\nSeashell\nSurfing\nLemonade\nPicnic\n");
+  el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+});
+await page.waitForTimeout(200);
+console.log("after paste:", JSON.stringify(await ta.inputValue()));
+await ta.pressSequentially("   WAVES    AT   SEA   ");
+await page.locator("#wordInput").blur();
+await page.click("body", { position: { x: 5, y: 500 } });
+await page.waitForTimeout(150);
+console.log("after blur:", JSON.stringify(await ta.inputValue()));
+await page.screenshot({ path: "review/20_tidy_input.png" });
+await page.click('[data-testid="wizard-next"]'); // words -> theme
+await page.click('[data-testid="wizard-skip"]'); // no theme -> words added, list shown
+console.log("list:", (await page.locator('[data-testid="word-list"]').innerText()).split("\n").filter((l) => /[A-Z]{3}/.test(l)).join(" | "));
+await page.click('[data-testid="wizard-next"]'); // list -> difficulty
+await page.click('[data-testid="wizard-next"]'); // keep medium -> size
+await page.click("text=Same size for all");
+await page.fill("#gridSize", "15");
+await page.click('[data-testid="wizard-next"]'); // size -> rules
+await page.click('[data-testid="wizard-next"]'); // rules -> place words
+await page.click('[data-testid="mode-manual"]');
+await page.waitForTimeout(300);
+const cell = (r, c) => page.locator(`#active-grid [data-cell="${r},${c}"]`);
+const msg = () => page.locator('[data-testid="placement-message"]').innerText();
+await page.click('[data-word="ICE CREAM"]');
+await page.click('[data-dir="E"]');
+const states = await page.$$eval("#active-grid [data-cell]", (els) => els.reduce((a, e) => ((a[e.dataset.state] = (a[e.dataset.state] || 0) + 1), a), {}));
+console.log("cell states (ICE CREAM across, empty 15x15):", JSON.stringify(states));
+await cell(4, 13).hover();
+await page.waitForTimeout(150);
+console.log("hover 4,13 msg:", await msg());
+await page.screenshot({ path: "review/21_snap_preview_edge.png" });
+await cell(4, 13).click();
+await page.waitForTimeout(150);
+// SUNSHINE down, hover far below bottom edge
+await page.click('[data-word="SUNSHINE"]');
+await page.click('[data-dir="S"]');
+await cell(14, 0).hover();
+console.log("hover 14,0 (S) msg:", await msg());
+await cell(14, 0).click();
+// conflict: SEASHELL across starting where it clashes with ICECREAM row 4
+await page.click('[data-word="SEASHELL"]');
+await page.click('[data-dir="S"]');
+await cell(0, 8).hover();
+await page.waitForTimeout(150);
+const blockedCursor = await cell(0, 8).evaluate((e) => [e.dataset.state, getComputedStyle(e).cursor]);
+console.log("hover 0,8 SEASHELL down:", blockedCursor.join(" / "), "|", await msg());
+await page.screenshot({ path: "review/22_conflict_blocked.png" });
+const before = await page.locator(".pg-chip.placed").count();
+await cell(0, 8).click();
+await page.waitForTimeout(150);
+console.log("placed before/after blocked click:", before, await page.locator(".pg-chip.placed").count());
+// free mode: start top-right corner, drag toward off-grid right
+await page.click('[data-dir="free"]');
+await cell(0, 14).click();
+await cell(0, 13).hover(); // W direction ok
+console.log("free W msg:", JSON.stringify(await msg()));
+await cell(1, 14).hover();
+await page.waitForTimeout(100);
+const st = await page.$$eval("#active-grid [data-state=start]", (els) => els.map((e) => e.dataset.cell));
+console.log("free mode valid end cells:", st.join(" "));
+await page.screenshot({ path: "review/23_free_mode_ends.png" });
+await cell(5, 14).click();
+await page.waitForTimeout(150);
+const placements = await page.$$eval(".pg-chip.placed", (els) => els.map((e) => e.textContent));
+console.log("placed:", placements.join(", "));
+console.log(errors.length ? "ERRORS: " + errors.join("\n") : "no console errors");
+await b.close();

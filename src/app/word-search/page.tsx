@@ -1,15 +1,8 @@
+import type { Metadata } from "next";
+import WordSearch from "@/components/word-search/WordSearch";
 
-import WordSearch from '@/components/word-search/WordSearch'
-import React from 'react'
+export const metadata: Metadata = { title: "Word Search" };
 
-const page = () => {
-    return (
-        <>
-
-            <WordSearch />
-
-        </>
-    )
+export default function Page() {
+  return <WordSearch />;
 }
-
-export default page

@@ -1,10 +1,8 @@
-import CrossWordGenerator from '@/components/cross-word/CrossWordGenerator'
-import React from 'react'
+import type { Metadata } from "next";
+import CrossWordGenerator from "@/components/cross-word/CrossWordGenerator";
 
-const page = () => {
-    return (
-        <><CrossWordGenerator /></>
-    )
+export const metadata: Metadata = { title: "Crossword" };
+
+export default function Page() {
+  return <CrossWordGenerator />;
 }
-
-export default page

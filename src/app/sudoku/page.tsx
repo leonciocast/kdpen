@@ -1,16 +1,8 @@
+import type { Metadata } from "next";
+import SudokuGenerator from "@/components/sudoku/SudokuGenerator";
 
-import React from 'react'
-import styles from './page.module.css'
-import SudokuGenerator from '@/components/sudoku/SudokuGenerator'
+export const metadata: Metadata = { title: "Sudoku" };
 
-const Page = () => {
-
-    return (
-        <>
-
-            <SudokuGenerator styles={styles} />
-        </>
-    )
+export default function Page() {
+  return <SudokuGenerator />;
 }
-
-export default Page

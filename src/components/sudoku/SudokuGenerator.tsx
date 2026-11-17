@@ -1,423 +1,252 @@
-'use client';
-import React, {useState } from 'react';
-import html2canvas from 'html2canvas';
-import { Difficulty } from 'sudoku-gen/dist/types/difficulty.type';
-import useSudoku from './useSudoku';
-import { toast,ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import { PuzzleType, SudokuHookType } from '@/types/sudoku';
-import { jsPDF } from "jspdf";
-import { BsArrowRepeat,BsEye, BsEyeSlash,BsPrinter,BsDownload     } from "react-icons/bs";
+"use client";
+import { plural } from "@/lib/plural";
+import React, { useMemo, useState } from "react";
+import { BsArrowRepeat, BsBarChartFill, BsEmojiSmile, BsEye, BsFire, BsGraphUpArrow, BsGrid3X3Gap, BsLightningCharge, BsSliders } from "react-icons/bs";
+import { ChoiceCards, FINISH, Question, QuestionFlow } from "@/components/ui/Flow";
+import { useStages } from "@/components/ui/useStages";
+import { Panel, SubStep } from "@/components/ui/Panel";
+import { toast } from "react-toastify";
+import PageHeader from "@/components/ui/PageHeader";
+import BookExport from "@/components/ui/BookExport";
+import DesignStep from "@/components/ui/DesignStep";
+import ItemPager from "@/components/ui/ItemPager";
+import JobProgress from "@/components/ui/JobProgress";
+import { useDesign } from "@/components/ui/useDesign";
+import { Stepper } from "@/components/ui/Wizard";
+import { SUDOKU_DIFFICULTIES, SUDOKU_MAX_PUZZLES, SudokuDifficulty, SudokuMix, SudokuPuzzle, capitalize, generateSudoku, mixPlan } from "@/lib/sudoku";
+import { buildSudokuBook, demoSudoku } from "@/lib/sudoku/pdf";
+import { JobCancelled, startJob } from "@/lib/jobs/client";
+import type { Progress } from "@/lib/jobs/types";
+import { DEFAULT_EXTRAS } from "@/lib/print/book";
+import { DEFAULT_FRONT_MATTER } from "@/lib/print/frontMatter";
+import type { Design } from "@/lib/design/types";
+import { SUDOKU_SHAPES, shapeTargetsFor } from "@/lib/shapes/shapes";
+import type { FontData } from "@/lib/print/fonts";
+import SudokuGrid from "./SudokuGrid";
 
-interface SudokuGeneratorComponentProps {
-    styles: any
-    sudoku?: SudokuHookType 
-}
-interface SingleSudokuComponentProps {
-    styles: any,
-    puzzle: PuzzleType,
-    puzzleIndex: number
-}
-
-
-const SudokuGenerator: React.FC<SudokuGeneratorComponentProps> = ({ styles }) => {
-    const [showAllSolutions, setShowAllSolutions] = useState<boolean>(false); 
-    const [showSolution, setShowSolution] = useState<boolean>(false); 
-    const [numberOfPuzzles, setNumberOfPuzzles] = React.useState<number>(1)
-    const [difficulty, setDifficulty] = React.useState<Difficulty>("easy")
-    const [isPrinting, setIsPrinting] = useState<boolean>(false);
-    const [isDownloading, setIsDownloading] = useState<boolean>(false);
-
-    const sudoku = useSudoku(difficulty)
-   
-    const printAllPuzzles = () => {
-      setIsPrinting(true);
-      const canvasList: HTMLCanvasElement[] = [];
-      let renderedCount = 0;
-  
-      const renderNextCanvas = (puzzleIndex: number) => {
-          const componentRef = document.getElementById(`sudoku_${puzzleIndex}`) as HTMLElement;
-          if (!componentRef) {
-              setIsPrinting(false);
-              console.error(`Component with id sudoku_${puzzleIndex} not found.`);
-              return;
-          }
-  
-          html2canvas(componentRef, {
-              useCORS: true,
-              scale: 2
-          }).then(canvas => {
-              canvasList.push(canvas);
-              renderedCount++;
-  
-              if (renderedCount === sudoku.listOfPuzzles.length) {
-                  printCanvasList(canvasList);
-              } else {
-                  renderNextCanvas(puzzleIndex + 1);
-              }
-          }).catch(error => {
-              setIsPrinting(false);
-              console.error('Error rendering canvas:', error);
-          });
-      };
-  
-      const printCanvasList = (canvasList: HTMLCanvasElement[]) => {
-          const printWindow = window.open('', '_blank');
-          if (printWindow) {
-              printWindow.document.write('<html><head><title>All Sudoku Puzzles</title></head><body>');
-              canvasList.forEach((canvas, index) => {
-                  printWindow.document.write('<div style="page-break-before: always;">');
-                  printWindow.document.write(`<h4 style="text-align: center;">Sudoku Puzzle: ${index + 1}</h4>`);
-                  printWindow.document.write(`<img src="${canvas.toDataURL("image/png")}" style="width: 80%; display:flex;margin:auto" />`);
-                  printWindow.document.write('</div>');
-              });
-              printWindow.document.write('</body></html>');
-              printWindow.document.close();
-              printWindow.print();
-          } else {
-              console.error('Failed to open print window');
-          }
-          setIsPrinting(false);
-      };
-  
-      if (sudoku.listOfPuzzles.length > 0) {
-          renderNextCanvas(0);
-      } else {
-          setIsPrinting(false);
-          console.error('No puzzles to print.');
-      }
-  };
-  
-  //   const downloadAllPDF = (puzzles: PuzzleType[]) => {
-  //     setIsDownloading(true);
-  //     const pdf = new jsPDF({
-  //         orientation: "portrait",
-  //         unit: "mm",
-  //         format: "a4",
-  //     });
-  
-  //     puzzles.forEach((puzzle, index) => {
-  //         const componentRef = document.getElementById(`sudoku_${index}`) as HTMLElement;
-  //         if (!componentRef || !componentRef.innerHTML.trim()) {
-  //             return;
-  //         }
-  
-  //         const dpi = 400; 
-  //         html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
-  //             const imgData = canvas.toDataURL("image/png");
-  //             const imgWidth = 150;
-  //             const imgHeight = (canvas.height * imgWidth) / canvas.width;
-  //             if (index !== 0) {
-  //                 pdf.addPage();
-  //             }
-  //             pdf.text(`Sudoku ${index + 1}`, 30, 20);
-  //             pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
-  //             if (index === puzzles.length - 1) {
-  //                 pdf.save("All_Sudokus.pdf");
-  //             }
-  //         });
-  //     });
-  // };
-  const downloadAllPDF = (puzzles: PuzzleType[]) => {
-    setIsDownloading(true);
-    const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-    });
-
-    const canvasList: HTMLCanvasElement[] = [];
-
-    const renderNextPage = (index: number) => {
-        if (index >= puzzles.length) {
-            pdf.save("All_Sudokus.pdf");
-            setIsDownloading(false);
-            return;
-        }
-
-        const puzzle = puzzles[index];
-        const componentRef = document.getElementById(`sudoku_${index}`) as HTMLElement;
-        if (!componentRef || !componentRef.innerHTML.trim()) {
-            renderNextPage(index + 1);
-            return;
-        }
-
-        const dpi = 300;
-        html2canvas(componentRef, { scale: dpi / 156 }).then((canvas) => {
-            canvasList.push(canvas);
-            const imgData = canvas.toDataURL("image/png");
-            const imgWidth = 150;
-            const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-            if (index !== 0) {
-                pdf.addPage();
-            }
-            pdf.text(`Sudoku ${index + 1}`, 30, 20);
-            pdf.addImage(imgData, "PNG", 30, 30, imgWidth, imgHeight);
-
-            renderNextPage(index + 1);
-        }).catch(error => {
-            console.error('Error rendering canvas:', error);
-            setIsDownloading(false);
-        });
-    };
-
-    renderNextPage(0);
+const STEPS = [{ label: "Choose puzzles" }, { label: "Review & solution" }, { label: "Design" }, { label: "Export book" }];
+const DIFF_TEXT: Record<SudokuDifficulty, string> = {
+  easy: "Plenty of numbers to start",
+  medium: "A steady challenge",
+  hard: "For experienced solvers",
+  expert: "Very few clues",
 };
+const QUICK_ICONS = [<BsEmojiSmile key="a" />, <BsGraphUpArrow key="b" />, <BsBarChartFill key="c" />, <BsFire key="d" />];
+const QUICK: { label: string; mix: SudokuMix }[] = [
+  { label: "All easy", mix: { easy: 50, medium: 0, hard: 0, expert: 0 } },
+  { label: "Easy → hard (100)", mix: { easy: 30, medium: 40, hard: 30, expert: 0 } },
+  { label: "Balanced (200)", mix: { easy: 50, medium: 50, hard: 50, expert: 50 } },
+  { label: "Challenge (100)", mix: { easy: 0, medium: 20, hard: 50, expert: 30 } },
+];
 
-    
-    return (
-      <>
-        <div className="d-flex flex-row justify-content-center align-items-center my-2">
-        <ToastContainer position="bottom-right" autoClose={3000}/>
-          <select
-            id="difficulty"
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value as Difficulty)}
-            className="form-select w-25 mx-1"
-            aria-label="Select difficulty"
-          >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-            <option value="expert">Expert</option>
-          </select>
-          <input
-            type="number"
-            className="form-control w-25 mx-1"
-            value={numberOfPuzzles}
-            onChange={(e) => {
-              let newValue = parseInt(e.target.value, 10);
-              if (newValue < 0) {
-                newValue = 0;
-              } else if (newValue > 24) {
-                newValue = 24;
-                toast.error("Maximum limit reached: 24 puzzles");
-              }
-              setNumberOfPuzzles(newValue);
-            }}
-          />
-          <button
-            className="btn btn-primary mx-1 text-nowrap"
-            onClick={() => {
-              const limit = Math.min(numberOfPuzzles, 24);
-              sudoku.generateNumberOfPuzzles(limit);
-            }}
-            disabled={isPrinting || isDownloading}
-          >
-            {/* <BsArrowRepeat /> */}
-            <span>Generate Puzzle</span>
-          </button>
-          {sudoku.listOfPuzzles.length !== 0 && (<>
+let sample: SudokuPuzzle[] | null = null;
+const samplePuzzles = () => (sample ??= [demoSudoku(), demoSudoku(), demoSudoku(), demoSudoku()]);
 
+export default function SudokuGenerator() {
+  const { step, goTo, flow: stage } = useStages(STEPS.length);
+  const [genKey, setGenKey] = useState("");
+  const [mix, setMix] = useState<SudokuMix>({ easy: 10, medium: 0, hard: 0, expert: 0 });
+  // Remember "Choose my own numbers" so going Back shows that choice as picked.
+  const [ownMix, setOwnMix] = useState(false);
+  const [puzzles, setPuzzles] = useState<SudokuPuzzle[]>([]);
+  const [active, setActive] = useState(0);
+  const [showSolution, setShowSolution] = useState(false);
+  const [running, setRunning] = useState<{ progress: Progress | null; cancel: () => void } | null>(null);
+  const designApi = useDesign("sudoku");
 
-          <button
-            className="btn btn-dark mx-1 text-nowrap"
-            onClick={() => setShowAllSolutions(!showAllSolutions)}
-            disabled={isPrinting || isDownloading}
-          >
-            {showAllSolutions ? (
-              <>
-                <BsEyeSlash className="me-2 top-0" />
-                Hide Solution
-              </>
-            ) : (
-              <>
-                <BsEye className="me-2 top-0" />
-                Show Solution
-              </>
-            )}
-          </button>
-          <button
-            className="btn btn-success mx-1 my-2 text-nowrap"
-            onClick={printAllPuzzles}
-            disabled={isPrinting || isDownloading}
-          >
-            {isPrinting ? (
-              <div
-                className="spinner-border spinner-border-sm me-2"
-                role="status"
-              >
-                <span className="visually-hidden">Loading...</span>
+  const total = SUDOKU_DIFFICULTIES.reduce((n, d) => n + mix[d], 0);
+  const setCount = (d: SudokuDifficulty, v: number) => {
+    const others = total - mix[d];
+    setMix({ ...mix, [d]: Math.max(0, Math.min(SUDOKU_MAX_PUZZLES - others, Math.round(Number.isFinite(v) ? v : 0))) });
+  };
+
+  const generate = async () => {
+    if (!total) return toast.error("Choose at least one puzzle.");
+    const job = startJob({ type: "sd-generate", plan: mixPlan(mix) }, (p) => setRunning((r) => (r ? { ...r, progress: p } : r)));
+    setRunning({ progress: null, cancel: job.cancel });
+    const t0 = performance.now();
+    try {
+      const list = await job.promise;
+      setPuzzles(list);
+      setGenKey(JSON.stringify(mix));
+      setActive(0);
+      setShowSolution(false);
+      toast.success(`${plural(list.length, "sudoku puzzle")} ${list.length === 1 ? "is" : "are"} ready (${((performance.now() - t0) / 1000).toFixed(1)}s).`);
+      goTo(1, "review");
+    } catch (e) {
+      if (e instanceof JobCancelled) toast.info("Stopped. Nothing was changed.");
+      else toast.error(`Sorry, the puzzles couldn't be generated: ${(e as Error).message}`);
+    } finally {
+      setRunning(null);
+    }
+  };
+
+  const puzzle = puzzles[active];
+  const levels = useMemo(() => new Set(puzzles.map((p) => p.difficulty)).size, [puzzles]);
+  const planList = useMemo(() => puzzles.map((p) => ({ title: capitalize(p.difficulty) })), [puzzles]);
+  /** Every puzzle with the frame its shape plan gives it (preview and PDF use the same list). */
+  const withShapes = (design: Design, list: SudokuPuzzle[]) => {
+    const t = shapeTargetsFor(design.shape, list.map(() => ({})), SUDOKU_SHAPES);
+    return list.map((p, i) => ({ ...p, shape: t[i] }));
+  };
+  const sampleBuilder = (design: Design, fonts: FontData, focus = 0) => {
+    const at = Math.max(0, Math.min(focus, puzzles.length - 2));
+    const items = puzzles.length >= 2 ? withShapes(design, puzzles).slice(at, at + 4) : withShapes(design, samplePuzzles());
+    return buildSudokuBook(items, { firstNumber: puzzles.length >= 2 ? at + 1 : 1, trim: "8.5x11", bleed: false, frontMatter: { ...DEFAULT_FRONT_MATTER, title: "Sudoku Puzzle Book", subtitle: "Puzzles with Solutions" }, extras: { ...DEFAULT_EXTRAS, notesPages: 0, padWithNotes: false }, design, puzzlesPerPage: 2, answersPerPage: 4, padForKdp: false }, fonts);
+  };
+  const subtitle = levels > 1 ? "Easy to Hard Puzzles with Solutions" : `${capitalize(puzzles[0]?.difficulty ?? "easy")} Puzzles with Solutions`;
+
+  const mixKey = JSON.stringify(mix);
+  const presetOf = QUICK.find((q) => JSON.stringify(q.mix) === mixKey);
+  const mixLine = (m: SudokuMix) =>
+    SUDOKU_DIFFICULTIES.filter((d) => m[d])
+      .map((d) => `${m[d]} ${d}`)
+      .join(" · ");
+
+  const chooseQs: Question[] = [
+    {
+      key: "mix",
+      wide: true,
+      title: "What kind of sudoku book?",
+      lead: "Pick a ready-made mix, or choose your own numbers. You can adjust them on the next screen.",
+      hideNext: true,
+      body: (
+        <ChoiceCards
+          label="Puzzle mix"
+          cols={3}
+          value={presetOf ? presetOf.label : ownMix ? "custom" : null}
+          onPick={(v) => {
+            const q = QUICK.find((x) => x.label === v);
+            setOwnMix(!q);
+            if (q) setMix(q.mix);
+            stage(0).setSub("counts");
+          }}
+          options={[
+            ...QUICK.map((q, i) => ({ value: q.label, title: q.label, text: mixLine(q.mix), icon: QUICK_ICONS[i], testId: `quick-${i}`, badge: i === 1 ? "Popular" : undefined })),
+            { value: "custom", title: "Choose my own numbers", text: "Set exactly how many easy, medium, hard and expert puzzles you want.", icon: <BsSliders />, testId: "quick-custom" },
+          ]}
+        />
+      ),
+    },
+    {
+      key: "counts",
+      wide: true,
+      title: running ? "Generating your puzzles…" : "How many puzzles of each level?",
+      lead: running ? "Every puzzle is unique with exactly one solution. Hundreds take a few seconds." : `Type a number in each box (0 skips a level). Up to ${SUDOKU_MAX_PUZZLES.toLocaleString()} in total. The book goes from easiest to hardest.`,
+      canNext: total > 0 && !running,
+      blockedHint: running ? "Generating…" : "Choose at least one puzzle",
+      nextLabel: puzzles.length && genKey === mixKey ? "Next" : `Generate ${plural(total, "puzzle")}`,
+      nextIcon: puzzles.length && genKey === mixKey ? undefined : <BsLightningCharge />,
+      nextTestId: "generate-sudoku",
+      onNext: () => {
+        if (puzzles.length && genKey === mixKey) return FINISH;
+        generate();
+        return false;
+      },
+      body: running ? (
+        <JobProgress title="Generating sudoku" progress={running.progress} onCancel={running.cancel} />
+      ) : (
+        <div className="row g-3">
+          {SUDOKU_DIFFICULTIES.map((d) => (
+            <div className="col-6 col-md-3" key={d}>
+              <div className={`pg-option-card text-center h-100 ${mix[d] ? "active" : ""}`}>
+                <h3 className="mt-0">{capitalize(d)}</h3>
+                <p className="small mb-2">{DIFF_TEXT[d]}</p>
+                <label className="visually-hidden" htmlFor={`count-${d}`}>
+                  {capitalize(d)} puzzles
+                </label>
+                <input id={`count-${d}`} type="number" className="form-control text-center mx-auto pg-big-input pg-q-big-number" min={0} max={SUDOKU_MAX_PUZZLES} value={mix[d]} onChange={(e) => setCount(d, Number(e.target.value))} data-testid={`count-${d}`} autoFocus={d === "easy"} />
               </div>
-            ) : null}
-            <BsPrinter />
-            <span className="ms-1"> Print </span>
-          </button>
-          
-          <button
-            className="btn btn-primary mx-1 my-2 text-nowrap"
-            onClick={() => downloadAllPDF(sudoku.listOfPuzzles)}
-            disabled={isPrinting || isDownloading}
-          >
-            {isDownloading ? (
-              <div
-                className="spinner-border spinner-border-sm me-2"
-                role="status"
-              >
-                <span className="visually-hidden">Loading...</span>
-              </div>
-            ) : null}
-            <BsDownload />
-            <span> Download All </span>
-          </button>
-          </> )}
-
-          {/* {sudoku.listOfPuzzles.length !== 0 && (
-                        <button
-                            className="btn btn-primary mx-1"
-                            onClick={() => setShowSolution(!showSolution)}
-                        >
-                            {showSolution ? "Hide" : "Show"} Solution
-                        </button>
-                    )
-                } */}
-        </div>
-        <div className="row row-cols-1 row-cols-md-3 g-4 pb-3">
-          {sudoku.listOfPuzzles.map((puzzle, puzzleIndex) => (
-            <div className="col" key={puzzleIndex}>
-              <SingleSudoku
-                puzzle={puzzle}
-                styles={styles}
-                key={puzzleIndex}
-                puzzleIndex={puzzleIndex}
-                showSolution={showAllSolutions ? true : showSolution}
-              />
             </div>
           ))}
         </div>
-      </>
-    );
-}
+      ),
+    },
+  ];
 
-export default SudokuGenerator;
-
-
-// const downloadSinglePDF = (puzzle: PuzzleType, id: number) => {
-//     const componentRef = document.getElementById(`sudoku_${id}`) as HTMLElement;
-//     const dpi = 400; 
-//     html2canvas(componentRef, { scale: dpi / 96 }) 
-//         .then((canvas) => {
-//             const imgData = canvas.toDataURL("image/png");
-//             const pdf = new jsPDF({
-//                 orientation: "portrait",
-//                 unit: "mm",
-//                 format: "a4",
-//             });
-
-//             const imgWidth = 150;
-//             const imgHeight = (canvas.height * imgWidth) / canvas.width;
-            
-//             // pdf.rect(20, 15, imgWidth, imgHeight);  // for border 
-//             pdf.text(`Sudoku ${id + 1}`, 30, 10);
-//             pdf.addImage(imgData, "PNG", 30, 15, imgWidth, imgHeight);
-//             pdf.save(`Sudoku_${id + 1}.pdf`);
-//         });
-// };
-
-
-
-// const downloadPDF = (listOfPuzzles: PuzzleType[], puzzleIndex?: number) => {
-//     if (puzzleIndex !== undefined) {
-//         downloadSinglePDF(listOfPuzzles[puzzleIndex], puzzleIndex);
-//     } else {
-//         downloadAllPDF(listOfPuzzles);
-//     }
-// };
-
-const SingleSudoku: React.FC<SingleSudokuComponentProps & { showSolution: boolean }> = ({ puzzle, styles, puzzleIndex, showSolution }) => {
-    // const [localShowSolution, setLocalShowSolution] = React.useState<boolean>(false);
-    function render_cell_value(cell: number, solution_cell: number): number | string {
-        if (showSolution) {
-            return solution_cell;
-        } else {
-            if (cell === 0) {
-                return "";
-            } else {
-                return cell;
-            }
-        }  
-    }
-
-    function zip<T, U>(arr1: T[], arr2: U[]): [T, U][] {
-        const result: [T, U][] = [];
-        const length = Math.min(arr1.length, arr2.length);
-
-        for (let i = 0; i < length; i++) {
-            result.push([arr1[i], arr2[i]]);
-        }
-
-        return result;
-    }
-
-
-    return (
-        <>
-         <h4>Sudoku: {puzzleIndex + 1}</h4>
-            <div className="card">
-                <div className="card-body d-flex justify-content-center">
-                    <div id={`sudoku_${puzzleIndex}`}>
-
-                        <table className={styles.sudoku_container}>
-                            <tbody>
-                                {zip(puzzle.board, puzzle.board_solution).map(([row, solutionRow], rowIndex) => (
-                                    <tr key={rowIndex}>
-                                        {zip(row, solutionRow).map(([cell, solutionCell], colIndex) => (
-                                            <td className="" key={colIndex}>
-                                                <input
-                                                    type="text"
-                                                    maxLength={1}
-                                                    // value={cell === 0 ? "" : cell !== 0 && showSolution ? solutionCell : cell}
-                                                    value={render_cell_value(cell, solutionCell)}
-                                                    readOnly={true}
-                                                    disabled={showSolution}
-                                                    // onChange={(e) => handleCellChange(rowIndex, colIndex, puzzleIndex, e)}
-                                                    className={`form-control`}
-                                                    // onFocus={(e) => handleCellFocus(rowIndex, colIndex, e)}
-
-                                                    style={{
-                                                      padding: "13px",
-                                                        color: "black",
-                                                        width: "3rem",
-                                                        height: "3rem",
-                                                        fontSize: "1.25rem",
-                                                        textAlign: "center",
-                                                        background: cell === 0 ? "white" : cell !== 0 && cell !== solutionCell ? "red" : "darkseagreen"
-                                                    }}
-                                                />
-                                            </td>
-                                        ))}
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-
-
-                    </div>
+  const reviewQs: Question[] = [
+    {
+      key: "review",
+      wide: true,
+      title: "Check your puzzles",
+      lead: "Look through your puzzles and their solutions. Everything here is optional: if they look good, press Next.",
+      canNext: puzzles.length > 0,
+      blockedHint: "Generate puzzles first",
+      hint: plural(puzzles.length, "puzzle"),
+      nextLabel: "Choose a design",
+      body: !puzzle ? (
+        <div className="pg-empty-pointer">
+          <span className="pg-icon-badge">
+            <BsGrid3X3Gap />
+          </span>
+          <h4>No puzzles yet</h4>
+          <p>Go back to step 1 and press Generate.</p>
+        </div>
+      ) : (
+                <div className="row g-4">
+                  <div className="col-lg-7">
+                    <Panel tone="result" title="Puzzle preview" icon={<BsEye />}>
+                      <SudokuGrid id="sudoku-grid" puzzle={puzzle} showSolution={showSolution} />
+                    </Panel>
+                  </div>
+                  <div className="col-lg-5">
+                    <Panel tone="action" title="Check your puzzles" icon={<BsGrid3X3Gap />}>
+                      <div className="d-flex justify-content-between align-items-center mb-2">
+                        <span className="fw-bold">
+                          Puzzle {active + 1} of {puzzles.length.toLocaleString()}
+                        </span>
+                        <span className="pg-badge info">{capitalize(puzzle.difficulty)}</span>
+                      </div>
+                      <div className="mb-3">
+                        <ItemPager titles={puzzles.map((p, i) => (puzzles.length > 10 ? `${capitalize(p.difficulty)}` : String(i + 1)))} active={active} onSelect={setActive} label="Puzzles" />
+                      </div>
+                      <div className="form-check form-switch">
+                        <input className="form-check-input" type="checkbox" role="switch" id="sdSolution" checked={showSolution} onChange={(e) => setShowSolution(e.target.checked)} />
+                        <label className="form-check-label fw-semibold" htmlFor="sdSolution">
+                          Show solution
+                        </label>
+                      </div>
+                      <div className="d-grid gap-2 mt-3">
+                        <button type="button" className="btn btn-light" onClick={() => setPuzzles((prev) => prev.map((p, i) => (i === active ? generateSudoku(p.difficulty) : p)))}>
+                          <BsArrowRepeat /> Replace this puzzle
+                        </button>
+                        <button type="button" className="btn btn-outline-primary" onClick={() => goTo(0, "counts")}>
+                          <BsSliders /> Change difficulty or count
+                        </button>
+                      </div>
+                      <div className="form-text mt-2">Bold numbers are the starting clues. Solution numbers are shown in color.</div>
+                    </Panel>
+                  </div>
                 </div>
-            </div>
+      ),
+    },
+  ];
 
-            {/* <button
-                className="btn btn-primary mx-1 my-2"
-                onClick={() => setLocalShowSolution(!localShowSolution)} 
-            >
-             {localShowSolution ? (
-                    <>
-                    <BsEyeSlash className="me-2 top-0"  />
-                    Hide Solution
-                    </>
-                ) : (
-                    <>
-                    <BsEye className="me-2 top-0" />
-                    Show Solution
-                    </>
-                )}
-            </button> */}
-
-            {/* <button className="btn btn-primary mx-1 my-2" onClick={() => downloadPDF(sudoku.listOfPuzzles, puzzleIndex)}>
-                <BsArrowDownCircle /><span> Download </span>
-            </button> */}
-        </>
-    )
+  return (
+    <div className="container pb-4">
+      <PageHeader icon={<BsGrid3X3Gap />} title="Sudoku" lead="Generate up to 1,000 sudoku puzzles from easy to expert, each with one solution, and export a print-ready book." />
+      <Stepper steps={STEPS} current={step} maxReachable={puzzles.length ? 3 : 0} onSelect={goTo} />
+      <div className="pg-card pg-wizard-card">
+        {step === 0 && <QuestionFlow flow={stage(0)} questions={chooseQs} />}
+        {step === 1 && <QuestionFlow flow={stage(1)} questions={reviewQs} />}
+        {step === 2 && <DesignStep tool="sudoku" api={designApi} buildSample={sampleBuilder} flow={stage(2)} planList={planList} />}
+        {step === 3 && (
+          <BookExport
+            tool="sudoku"
+            toolDefaults={{ title: "Sudoku Puzzle Book", subtitle }}
+            itemNoun="puzzle"
+            itemCount={puzzles.length}
+            sectionCount={Math.max(0, levels - 1)}
+            design={designApi.design}
+            items={() => ({ tool: "sudoku", items: withShapes(designApi.design, puzzles) })}
+            fileBase="sudoku-book"
+            disabledReason={puzzles.length ? undefined : "Generate puzzles first."}
+            perPageChoice
+            defaultAnswersPerPage={6}
+            flow={stage(3)}
+          />
+        )}
+      </div>
+    </div>
+  );
 }
-
